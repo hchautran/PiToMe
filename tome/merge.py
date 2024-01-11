@@ -97,6 +97,46 @@ def bipartite_soft_matching(
     return merge, unmerge
 
 
+def pitome(
+    metric: torch.Tensor,
+    r: int=None,
+    margin:float=0.5,
+):
+    print(margin)
+
+    protected = 0
+
+    # We can only reduce by a maximum of 50% tokens
+    t = metric.shape[1]
+    r = min(r, (t - protected) // 2)
+
+    if r <= 0:
+        return do_nothing, do_nothing
+    
+    B,T,C = metric.shape
+
+    with torch.no_grad():
+        batch_idx = torch.arange(B).unsqueeze(1)
+        metric = torch.nn.functional.normalize(metric, p=2, dim=-1)
+        ori_score=metric@metric.transpose(-1,-2) - (torch.eye(T)).unsqueeze(0).to(metric.device)
+        ori_score = torch.where(ori_score > margin, ori_score, -margin)
+        _, min_indices = torch.topk(ori_score.mean(dim=-2) , k=2*r)
+        mask_to_keep = torch.ones_like(metric, dtype=torch.bool)
+        mask_to_keep[batch_idx, min_indices,  :] = False
+        a_idx, b_idx = min_indices[..., ::2], min_indices[..., 1::2]
+        a, b = metric[batch_idx, a_idx, :], metric[batch_idx,  b_idx, :]
+        scores = a@b.transpose(-1,-2) 
+        _, dst_idx = scores.max(dim=-1) 
+        dst_idx = dst_idx.unsqueeze_(2)
+
+    def merge(x: torch.Tensor, mode="mean", is_one=False) -> torch.Tensor:
+        ori = torch.masked_select(x, mask_to_keep).view(B, -1, C)
+        src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
+        dst = dst.scatter_reduce(-2, dst_idx.expand(B, r, -1), src, reduce=mode)
+        return torch.cat([ori, dst], dim=1)
+
+    return merge, None
+
 def kth_bipartite_soft_matching(
     metric: torch.Tensor, k: int
 ) -> Tuple[Callable, Callable]:
@@ -217,11 +257,12 @@ def merge_wavg(
     if size is None:
         size = torch.ones_like(x[..., 0, None])
 
-    x = merge(x * size, mode="sum")
-    size = merge(size, mode="sum")
+    x = merge(x * size, mode="mean")
+    # size = merge(size , mode="sum", is_one=True)
 
-    x = x / size
-    return x, size
+    # x = x / size
+    return x
+
 
 
 def merge_source(

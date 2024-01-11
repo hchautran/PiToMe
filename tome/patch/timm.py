@@ -13,8 +13,9 @@ from typing import Tuple
 
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
+from copy import copy
 
-from tome.merge import bipartite_soft_matching, merge_source, merge_wavg
+from tome.merge import bipartite_soft_matching, merge_source, merge_wavg, pitome
 from tome.utils import parse_r
 
 
@@ -33,15 +34,17 @@ class ToMeBlock(Block):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Note: this is copied from timm.models.vision_transformer.Block with modifications.
-        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        x_attn, metric = self.attn(self.norm1(x), attn_size)
+        # attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
+        # x_attn = self.attn(self.norm1(x), attn_size)
+        x_attn = self.attn(self.norm1(x))
         x = x + self._drop_path1(x_attn)
 
+        print(self._tome_info["r"])
         r = self._tome_info["r"].pop(0)
         if r > 0:
             # Apply ToMe here
             merge, _ = bipartite_soft_matching(
-                metric,
+                x,
                 r,
                 self._tome_info["class_token"],
                 self._tome_info["distill_token"],
@@ -50,10 +53,56 @@ class ToMeBlock(Block):
                 self._tome_info["source"] = merge_source(
                     merge, x, self._tome_info["source"]
                 )
-            x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
+            # x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
+            x = merge_wavg(merge, x, self._tome_info["size"])
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
         return x
+
+
+class PiToMeBlock(Block):
+    """
+    Modifications:
+     - Apply ToMe between the attention and mlp blocks
+     - Compute and propogate token size and potentially the token sources.
+    """
+
+    def _drop_path1(self, x):
+        return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
+
+    def _drop_path2(self, x):
+        return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Note: this is copied from timm.models.vision_transformer.Block with modifications.
+        # attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
+        x_attn  = self.attn(self.norm1(x))
+        x = x + self._drop_path1(x_attn)
+
+        r = self._tome_info["r"].pop(0)
+
+        x = x + self._drop_path2(self.mlp(self.norm2(x)))
+        # w_cls = torch.ones(x.shape[0], 1, 1).to(x.device)
+        # size = self._tome_info["size"][:,1:,:] if self._tome_info["size"] is not None else None
+        x_cls = x[:,0,:].unsqueeze_(1)
+        x = x[:,1:,:]
+        if r > 0:
+            # Apply ToMe here
+            merge, _ = pitome(
+                x,
+                r,
+                self._tome_info["margin"].pop(0),
+                # self._tome_info["class_token"],
+                # self._tome_info["distill_token"],
+            )
+            if self._tome_info["trace_source"]:
+                self._tome_info["source"] = merge_source(
+                    merge, x, self._tome_info["source"]
+                )
+            x = merge_wavg(merge, x)
+            # self._tome_info["size"] = torch.cat([w_cls, size], dim=1)
+        return torch.cat([x_cls, x], dim=1) 
+
 
 
 class ToMeAttention(Attention):
@@ -105,6 +154,8 @@ def make_tome_class(transformer_class):
 
         def forward(self, *args, **kwdargs) -> torch.Tensor:
             self._tome_info["r"] = parse_r(len(self.blocks), self.r)
+            margins = [0.75 if i < len(self.blocks)//2 else 0.75 - 0.75*(i/len(self.blocks)) for i in range(len(self.blocks))]
+            self._tome_info["margin"] = margins 
             self._tome_info["size"] = None
             self._tome_info["source"] = None
 
@@ -128,9 +179,14 @@ def apply_patch(
     ToMeVisionTransformer = make_tome_class(model.__class__)
 
     model.__class__ = ToMeVisionTransformer
+    layer_num = len(model.blocks)
     model.r = 0
+    model.compress_method = 'pitome' 
+    # model.compress_method = 'tome' 
     model._tome_info = {
         "r": model.r,
+        "compress_method": model.r,
+        "margin":  [],
         "size": None,
         "source": None,
         "trace_source": trace_source,
@@ -142,9 +198,11 @@ def apply_patch(
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tome_info["distill_token"] = True
 
+    cur_layer = 0
     for module in model.modules():
         if isinstance(module, Block):
-            module.__class__ = ToMeBlock
+            module.__class__ = ToMeBlock if model.compress_method == 'tome' else PiToMeBlock 
             module._tome_info = model._tome_info
-        elif isinstance(module, Attention):
-            module.__class__ = ToMeAttention
+            cur_layer += 1 
+        # elif isinstance(module, Attention):
+            # module.__class__ = ToMeAttention
