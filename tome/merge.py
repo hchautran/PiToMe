@@ -41,7 +41,8 @@ def bipartite_soft_matching(
 
     # We can only reduce by a maximum of 50% tokens
     t = metric.shape[1]
-    r = min(r, (t - protected) // 2)
+    # r = min(r, (t - protected) // 2)
+    r = math.floor(t- t*r)
 
     if r <= 0:
         return do_nothing, do_nothing
@@ -100,15 +101,15 @@ def bipartite_soft_matching(
 def pitome(
     metric: torch.Tensor,
     r: int=None,
-    margin:float=0.5,
+    margin:float=None,
 ):
-    print(margin)
 
     protected = 0
 
     # We can only reduce by a maximum of 50% tokens
     t = metric.shape[1]
-    r = min(r, (t - protected) // 2)
+    # r = min(r, (t - protected) // 2)
+    r = math.floor(t- t*r)
 
     if r <= 0:
         return do_nothing, do_nothing
@@ -119,6 +120,8 @@ def pitome(
         batch_idx = torch.arange(B).unsqueeze(1)
         metric = torch.nn.functional.normalize(metric, p=2, dim=-1)
         ori_score=metric@metric.transpose(-1,-2) - (torch.eye(T)).unsqueeze(0).to(metric.device)
+        if margin is None:
+            margin = ori_score.mean(-2)[..., None].expand(B, T, T)
         ori_score = torch.where(ori_score > margin, ori_score, -margin)
         _, min_indices = torch.topk(ori_score.mean(dim=-2) , k=2*r)
         mask_to_keep = torch.ones_like(metric, dtype=torch.bool)

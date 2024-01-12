@@ -4,6 +4,7 @@ from torchvision import datasets
 
 from datasets import load_dataset
 import timm
+import timm.models.vision_transformer
 from torchvision.transforms.functional import InterpolationMode
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
@@ -32,13 +33,19 @@ def evaluate(model, dataloader, device, max_step:int=None):
 # Set the device (GPU if available, otherwise use CPU)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+# model_name = "vit_huge_patch16_224"
 model_name = "vit_base_patch16_224"
+# model_name = "vit_large_patch16_384"
 
 
 # Load a pretrained model
 model = timm.create_model(model_name, pretrained=True).to(device)
-tome.patch.timm(model)
-model.r=16
+TOME = 'tome'
+PITOME = 'pitome'
+tome.patch.timm(model, TOME)
+# tome.patch.timm(model, PITOME)
+model.r=0.95
+# model.compress_method='pitome'
 input_size = model.default_cfg["input_size"][1]
 # Define the transformation for the input images
 transform = transforms.Compose([
@@ -66,4 +73,4 @@ def process_image(batch):
 dataset = load_dataset("imagenet-1k", split='validation', cache_dir="/mnt/data/mount_4TBSSD/nmduy/imagenet/")
 val_dataloader = DataLoader(dataset, batch_size=100, shuffle=False, collate_fn=process_image)
 
-evaluate(model, val_dataloader, device, max_step=100)
+evaluate(model, val_dataloader, device, max_step=None)

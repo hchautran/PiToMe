@@ -39,7 +39,6 @@ class ToMeBlock(Block):
         x_attn = self.attn(self.norm1(x))
         x = x + self._drop_path1(x_attn)
 
-        print(self._tome_info["r"])
         r = self._tome_info["r"].pop(0)
         if r > 0:
             # Apply ToMe here
@@ -153,8 +152,11 @@ def make_tome_class(transformer_class):
         """
 
         def forward(self, *args, **kwdargs) -> torch.Tensor:
-            self._tome_info["r"] = parse_r(len(self.blocks), self.r)
-            margins = [0.75 if i < len(self.blocks)//2 else 0.75 - 0.75*(i/len(self.blocks)) for i in range(len(self.blocks))]
+            margin =0.5
+            # self._tome_info["r"] = parse_r(len(self.blocks), self.r)
+            self._tome_info["r"] = [self.r]* len(self.blocks) 
+            margins = [margin if i < len(self.blocks)//2 else margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
+            # margins = [margin if i < len(self.blocks)//2 else None for i in range(len(self.blocks))]
             self._tome_info["margin"] = margins 
             self._tome_info["size"] = None
             self._tome_info["source"] = None
@@ -165,7 +167,7 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True
+   model: VisionTransformer, compress_method='tome', trace_source: bool = False, prop_attn: bool = True
 ):
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.
@@ -177,15 +179,14 @@ def apply_patch(
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
     ToMeVisionTransformer = make_tome_class(model.__class__)
+    print('using', compress_method)
 
     model.__class__ = ToMeVisionTransformer
     layer_num = len(model.blocks)
     model.r = 0
-    model.compress_method = 'pitome' 
     # model.compress_method = 'tome' 
     model._tome_info = {
         "r": model.r,
-        "compress_method": model.r,
         "margin":  [],
         "size": None,
         "source": None,
@@ -201,7 +202,7 @@ def apply_patch(
     cur_layer = 0
     for module in model.modules():
         if isinstance(module, Block):
-            module.__class__ = ToMeBlock if model.compress_method == 'tome' else PiToMeBlock 
+            module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
             module._tome_info = model._tome_info
             cur_layer += 1 
         # elif isinstance(module, Attention):
