@@ -42,8 +42,8 @@ model_name = "vit_base_patch16_224"
 model = timm.create_model(model_name, pretrained=True).to(device)
 TOME = 'tome'
 PITOME = 'pitome'
-tome.patch.timm(model, TOME)
-# tome.patch.timm(model, PITOME)
+# tome.patch.timm(model, TOME)
+tome.patch.timm(model, PITOME)
 model.r=0.95
 # model.compress_method='pitome'
 input_size = model.default_cfg["input_size"][1]
