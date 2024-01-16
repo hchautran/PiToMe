@@ -33,20 +33,23 @@ def evaluate(model, dataloader, device, max_step:int=None):
 
 
 # model_name = "vit_small_patch16_224"
-model_name = "vit_base_patch16_224"
+# model_name = "vit_base_patch16_224"
 # model_name = "vit_large_patch16_224"
+model_name = "vit_large_patch16_384"
 
 
 # Load a pretrained model
 model = timm.create_model(model_name, pretrained=True).to(device)
+
 TOME = 'tome'
 PITOME = 'pitome'
-# tome.patch.timm(model, TOME)
-tome.patch.timm(model, PITOME)
+tome.patch.timm(model, TOME)
+# model.r=23
+# tome.patch.timm(model, PITOME)
+model.r=0.925  
 
 
 
-model.r=0.90
 input_size = model.default_cfg["input_size"][1]
 transform = transforms.Compose([
     transforms.Resize(int((256 / 224) * input_size), interpolation=InterpolationMode.BICUBIC),
@@ -73,4 +76,4 @@ def process_image(batch):
 dataset = load_dataset("imagenet-1k", split='validation', cache_dir="/mnt/data/mount_4TBSSD/nmduy/imagenet/")
 val_dataloader = DataLoader(dataset, batch_size=100, shuffle=False, collate_fn=process_image)
 
-evaluate(model, val_dataloader, device, max_step=None)
+evaluate(model, val_dataloader, device, max_step=50)

@@ -17,7 +17,8 @@ def do_nothing(x, mode=None):
 
 def bipartite_soft_matching(
     metric: torch.Tensor,
-    r: int,
+    r: int=None,
+    ratio:float=0.925,    
     class_token: bool = False,
     distill_token: bool = False,
 ) -> Tuple[Callable, Callable]:
@@ -40,9 +41,11 @@ def bipartite_soft_matching(
         protected += 1
 
     # We can only reduce by a maximum of 50% tokens
-    t = metric.shape[1]
-    # r = min(r, (t - protected) // 2)
-    r = math.floor(t- t*r)
+    T = metric.shape[1]
+    if r is not None:
+        r = min(r, (T - protected) // 2)
+    else:
+        r = math.floor(T- T*ratio)
 
     if r <= 0:
         return do_nothing, do_nothing
@@ -113,15 +116,14 @@ def pitome(
     with torch.no_grad():
         batch_idx = torch.arange(B).unsqueeze_(1)
         x = F.normalize(x, p=2, dim=-1)
-        ori_score =x@x.transpose(-1,-2) - torch.eye(T).unsqueeze(0).to(x.device) - margin
-        ori_score = torch.where(ori_score > 0, ori_score, -1.0)
-        min_indices =  torch.argsort(ori_score.mean(dim=-2), descending=True)[..., :2*r]
+        ori_score =x@x.transpose(-1,-2) - torch.eye(T).unsqueeze(0).to(x.device) 
+        ori_score = torch.where(ori_score > margin, ori_score, -1.0)
+        min_indices =  torch.argsort(ori_score.mean(dim=-1), descending=True)[..., :2*r]
         mask_to_keep = torch.ones((B, T), dtype=torch.bool).to(x.device)
         mask_to_keep[batch_idx, min_indices] = False
         a_idx, b_idx = min_indices[..., ::2], min_indices[..., 1::2]
         a, b = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
         scores = a@b.transpose(-1,-2) 
-        # print(scores)
         _, dst_idx = scores.max(dim=-1) 
 
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
@@ -256,9 +258,9 @@ def merge_wavg(
     if size is None:
         size = torch.ones_like(x[..., 0, None])
 
-    x = merge(x, mode="mean")
-    # size = merge(size, mode="sum")
-    # x = x / size
+    x = merge(x, mode="sum")
+    size = merge(size, mode="sum")
+    x = x / size
 
     return x, None 
 

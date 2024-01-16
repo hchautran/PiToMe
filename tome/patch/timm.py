@@ -33,27 +33,28 @@ class ToMeBlock(Block):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-
-        x_attn = self.attn(self.norm1(x))
+        # Note: this is copied from timm.models.vision_transformer.Block with modifications.
+        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
+        x_attn, metric = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
 
         r = self._tome_info["r"].pop(0)
         if r > 0:
+            # Apply ToMe here
             merge, _ = bipartite_soft_matching(
-                x,
-                r,
-                self._tome_info["class_token"],
-                self._tome_info["distill_token"],
+                metric=metric,
+                r=None,
+                ratio=0.925,
+                class_token=self._tome_info["class_token"],
+                distill_token=self._tome_info["distill_token"],
             )
             if self._tome_info["trace_source"]:
                 self._tome_info["source"] = merge_source(
                     merge, x, self._tome_info["source"]
                 )
-            x, self._tome_info["size"] = merge_wavg(merge, x, None)
+            x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
-
-
         return x
 
 
@@ -72,7 +73,7 @@ class PiToMeBlock(Block):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x_attn = self.attn(self.norm1(x))
+        x_attn, metric = self.attn(self.norm1(x), None)
         x = x + self._drop_path1(x_attn)
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
 
@@ -91,6 +92,8 @@ class PiToMeBlock(Block):
                     merge, x, self._tome_info["source"]
                 )
             x, self._tome_info["size"] = merge_wavg(merge, x, None)
+
+
 
 
         return x 
@@ -197,5 +200,5 @@ def apply_patch(
             module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
             module._tome_info = model._tome_info
             cur_layer += 1 
-        # elif isinstance(module, Attention):
-        #     module.__class__ = ToMeAttention
+        elif isinstance(module, Attention):
+            module.__class__ = ToMeAttention
