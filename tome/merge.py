@@ -99,45 +99,36 @@ def bipartite_soft_matching(
 
 
 def pitome(
-    metric: torch.Tensor,
-    r: int=0.9,
+    x: torch.Tensor, 
+    r: int=None, 
     margin:float=0.5,
     class_token: bool = False,
     distill_token: bool = False,
 ):
-
-    t = metric.shape[1]
-    r = math.floor(t- t*r)
-
-    if class_token or distill_token:
-        metric = metric[:,1:,:]  
-    B,T,C = metric.shape
+    if class_token:
+        x=x[:,1:,:]
+    B,T,_ = x.shape
+    r = math.floor(T- T*r)
 
     with torch.no_grad():
-        batch_idx = torch.arange(B).unsqueeze(1)
-
-        metric = F.normalize(metric, p=2, dim=-1)
-        ori_score= metric@metric.transpose(-1,-2)
-
-        ori_score = torch.where(ori_score > margin, ori_score, -1.0)
-        min_indices =  torch.argsort(ori_score.mean(dim=-1), descending=True)[..., :2*r]
-
-        mask_to_keep = torch.ones((B, T), dtype=torch.bool).to(metric.device)
-
+        batch_idx = torch.arange(B).unsqueeze_(1)
+        x = F.normalize(x, p=2, dim=-1)
+        ori_score =x@x.transpose(-1,-2) - torch.eye(T).unsqueeze(0).to(x.device) - margin
+        ori_score = torch.where(ori_score > 0, ori_score, -1.0)
+        min_indices =  torch.argsort(ori_score.mean(dim=-2), descending=True)[..., :2*r]
+        mask_to_keep = torch.ones((B, T), dtype=torch.bool).to(x.device)
         mask_to_keep[batch_idx, min_indices] = False
         a_idx, b_idx = min_indices[..., ::2], min_indices[..., 1::2]
-        # a_idx, b_idx = min_indices[..., r:], min_indices[..., :r]
-        a, b = metric[batch_idx, a_idx, :], metric[batch_idx,  b_idx, :]
+        a, b = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
         scores = a@b.transpose(-1,-2) 
+        # print(scores)
         _, dst_idx = scores.max(dim=-1) 
 
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
-
-        if class_token or distill_token:
-            x_cls=x[:,0,:].unsqueeze_(1)
-            x = x[:,1:,:]  
+        if class_token:
+            x_cls=x[:,0,:].unsqueeze(1)
+            x=x[:,1:,:]
         B, T, C = x.shape
-
         ori = torch.masked_select(x, mask_to_keep.unsqueeze(2).expand(B, T, C)).view(B, -1, C)
         src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
         dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
@@ -265,11 +256,11 @@ def merge_wavg(
     if size is None:
         size = torch.ones_like(x[..., 0, None])
 
-    x = merge(x * size, mode="sum")
-    size = merge(size, mode="sum")
-    x = x / size
+    x = merge(x, mode="mean")
+    # size = merge(size, mode="sum")
+    # x = x / size
 
-    return x, size
+    return x, None 
 
 
 

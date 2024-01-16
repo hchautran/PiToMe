@@ -9,6 +9,7 @@ from torchvision.transforms.functional import InterpolationMode
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 import tome
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def evaluate(model, dataloader, device, max_step:int=None):
     model.eval()
@@ -30,12 +31,10 @@ def evaluate(model, dataloader, device, max_step:int=None):
     accuracy = correct / total
     print(f'Accuracy on the test set: {100 * accuracy:.2f}%')
 
-# Set the device (GPU if available, otherwise use CPU)
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-model_name = "vit_large_patch16_224"
-# model_name = "vit_base_patch16_224"
-# model_name = "vit_large_patch16_384"
+# model_name = "vit_small_patch16_224"
+model_name = "vit_base_patch16_224"
+# model_name = "vit_large_patch16_224"
 
 
 # Load a pretrained model
@@ -44,10 +43,11 @@ TOME = 'tome'
 PITOME = 'pitome'
 # tome.patch.timm(model, TOME)
 tome.patch.timm(model, PITOME)
-model.r=0.925
-# model.compress_method='pitome'
+
+
+
+model.r=0.90
 input_size = model.default_cfg["input_size"][1]
-# Define the transformation for the input images
 transform = transforms.Compose([
     transforms.Resize(int((256 / 224) * input_size), interpolation=InterpolationMode.BICUBIC),
     transforms.CenterCrop(input_size),
@@ -73,4 +73,4 @@ def process_image(batch):
 dataset = load_dataset("imagenet-1k", split='validation', cache_dir="/mnt/data/mount_4TBSSD/nmduy/imagenet/")
 val_dataloader = DataLoader(dataset, batch_size=100, shuffle=False, collate_fn=process_image)
 
-evaluate(model, val_dataloader, device, max_step=50)
+evaluate(model, val_dataloader, device, max_step=None)
