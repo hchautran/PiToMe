@@ -35,15 +35,14 @@ class ToMeBlock(Block):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Note: this is copied from timm.models.vision_transformer.Block with modifications.
         # attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        # x_attn = self.attn(self.norm1(x), attn_size)
-        x_attn = self.attn(self.norm1(x))
+        x_attn, metric = self.attn(self.norm1(x), None)
         x = x + self._drop_path1(x_attn)
 
         r = self._tome_info["r"].pop(0)
         if r > 0:
             # Apply ToMe here
             merge, _ = bipartite_soft_matching(
-                x,
+                metric,
                 r,
                 self._tome_info["class_token"],
                 self._tome_info["distill_token"],
@@ -52,11 +51,11 @@ class ToMeBlock(Block):
                 self._tome_info["source"] = merge_source(
                     merge, x, self._tome_info["source"]
                 )
-            # x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
-            x = merge_wavg(merge, x, self._tome_info["size"])
+            x, self._tome_info["size"] = merge_wavg(merge, x, None)
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
         return x
+
 
 
 class PiToMeBlock(Block):
@@ -75,32 +74,29 @@ class PiToMeBlock(Block):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Note: this is copied from timm.models.vision_transformer.Block with modifications.
         # attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        x_attn  = self.attn(self.norm1(x))
+        x_attn, metric = self.attn(self.norm1(x), None)
         x = x + self._drop_path1(x_attn)
 
         r = self._tome_info["r"].pop(0)
+    
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
-        # w_cls = torch.ones(x.shape[0], 1, 1).to(x.device)
-        # size = self._tome_info["size"][:,1:,:] if self._tome_info["size"] is not None else None
-        x_cls = x[:,0,:].unsqueeze_(1)
-        x = x[:,1:,:]
         if r > 0:
-            # Apply ToMe here
             merge, _ = pitome(
-                x,
+                metric,
                 r,
                 self._tome_info["margin"].pop(0),
-                # self._tome_info["class_token"],
-                # self._tome_info["distill_token"],
+                self._tome_info["class_token"],
+                self._tome_info["distill_token"],
             )
+
             if self._tome_info["trace_source"]:
                 self._tome_info["source"] = merge_source(
                     merge, x, self._tome_info["source"]
                 )
-            x = merge_wavg(merge, x)
-            # self._tome_info["size"] = torch.cat([w_cls, size], dim=1)
-        return torch.cat([x_cls, x], dim=1) 
+            # x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
+            x, self._tome_info["size"] = merge_wavg(merge, x, None)
+        return x 
 
 
 
@@ -152,11 +148,10 @@ def make_tome_class(transformer_class):
         """
 
         def forward(self, *args, **kwdargs) -> torch.Tensor:
-            margin =0.5
+            margin =0.8
             # self._tome_info["r"] = parse_r(len(self.blocks), self.r)
             self._tome_info["r"] = [self.r]* len(self.blocks) 
             margins = [margin if i < len(self.blocks)//2 else margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
-            # margins = [margin if i < len(self.blocks)//2 else None for i in range(len(self.blocks))]
             self._tome_info["margin"] = margins 
             self._tome_info["size"] = None
             self._tome_info["source"] = None
@@ -205,5 +200,5 @@ def apply_patch(
             module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
             module._tome_info = model._tome_info
             cur_layer += 1 
-        # elif isinstance(module, Attention):
-            # module.__class__ = ToMeAttention
+        elif isinstance(module, Attention):
+            module.__class__ = ToMeAttention
