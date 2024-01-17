@@ -101,6 +101,7 @@ def bipartite_soft_matching(
     return merge, unmerge
 
 
+
 def pitome(
     x: torch.Tensor, 
     r: int=None, 
@@ -110,7 +111,7 @@ def pitome(
 ):
     if class_token:
         x=x[:,1:,:]
-    B,T,_ = x.shape
+    B,T,C = x.shape
     r = math.floor(T- T*r)
 
     with torch.no_grad():
@@ -118,25 +119,31 @@ def pitome(
         x = F.normalize(x, p=2, dim=-1)
         ori_score =x@x.transpose(-1,-2) - torch.eye(T).unsqueeze(0).to(x.device) 
         ori_score = torch.where(ori_score > margin, ori_score, -1.0)
-        min_indices =  torch.argsort(ori_score.mean(dim=-1), descending=True)[..., :2*r]
+        min_indices =  torch.argsort(ori_score.mean(dim=-1), descending=True)[..., :r]
         mask_to_keep = torch.ones((B, T), dtype=torch.bool).to(x.device)
         mask_to_keep[batch_idx, min_indices] = False
-        a_idx, b_idx = min_indices[..., ::2], min_indices[..., 1::2]
-        a, b = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
-        scores = a@b.transpose(-1,-2) 
+        a, b = x[batch_idx, min_indices, :], torch.masked_select(x, mask_to_keep.unsqueeze(2).expand(B, T, C)).view(B, -1, C)
+        scores = a @ b.transpose(-1,-2) 
         _, dst_idx = scores.max(dim=-1) 
 
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
         if class_token:
             x_cls=x[:,0,:].unsqueeze(1)
             x=x[:,1:,:]
+        else:
+            x_cls = None
         B, T, C = x.shape
-        ori = torch.masked_select(x, mask_to_keep.unsqueeze(2).expand(B, T, C)).view(B, -1, C)
-        src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
-        dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
-        return torch.cat([x_cls, ori, dst], dim=1)
 
-    return merge, None
+        dst = torch.masked_select(x, mask_to_keep.unsqueeze(2).expand(B, T, C)).view(B, -1, C)
+        src = x[batch_idx, min_indices, :]
+
+        dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
+        if x_cls is not None:
+            return torch.cat([x_cls, dst], dim=1)
+        else:
+            return torch.cat([dst], dim=1)
+
+    return merge, None 
 
 def kth_bipartite_soft_matching(
     metric: torch.Tensor, k: int

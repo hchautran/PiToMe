@@ -40,11 +40,10 @@ class ToMeBlock(Block):
 
         r = self._tome_info["r"].pop(0)
         if r > 0:
-            # Apply ToMe here
             merge, _ = bipartite_soft_matching(
                 metric=metric,
-                r=None,
-                ratio=0.925,
+                # r=r,
+                ratio=r,
                 class_token=self._tome_info["class_token"],
                 distill_token=self._tome_info["distill_token"],
             )
@@ -54,7 +53,10 @@ class ToMeBlock(Block):
                 )
             x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
 
+
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
+
+
         return x
 
 
@@ -80,21 +82,20 @@ class PiToMeBlock(Block):
         r = self._tome_info["r"].pop(0)
         if r > 0:
             merge, _ = pitome(
-                x,
-                r,
-                self._tome_info["margin"].pop(0),
-                self._tome_info["class_token"],
-                self._tome_info["distill_token"],
+                x=x,
+                r=r,
+                # ratio=r,
+                margin=self._tome_info["margin"].pop(0),
+                class_token=self._tome_info["class_token"],
+                distill_token=self._tome_info["distill_token"],
             )
+            # print(x.shape)
 
             if self._tome_info["trace_source"]:
                 self._tome_info["source"] = merge_source(
                     merge, x, self._tome_info["source"]
                 )
             x, self._tome_info["size"] = merge_wavg(merge, x, None)
-
-
-
 
         return x 
 
@@ -179,9 +180,11 @@ def apply_patch(
 
     model.__class__ = ToMeVisionTransformer
     model.r = 0
+    model.ratio = 1.0 
     # model.compress_method = 'tome' 
     model._tome_info = {
         "r": model.r,
+        "ratio": model.ratio,
         "margin":  [],
         "size": None,
         "source": None,
@@ -196,6 +199,7 @@ def apply_patch(
 
     cur_layer = 0
     for module in model.modules():
+
         if isinstance(module, Block):
             module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
             module._tome_info = model._tome_info

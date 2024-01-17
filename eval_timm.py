@@ -32,33 +32,18 @@ def evaluate(model, dataloader, device, max_step:int=None):
     print(f'Accuracy on the test set: {100 * accuracy:.2f}%')
 
 
-# model_name = "vit_small_patch16_224"
-# model_name = "vit_base_patch16_224"
-# model_name = "vit_large_patch16_224"
-model_name = "vit_large_patch16_384"
 
 
-# Load a pretrained model
-model = timm.create_model(model_name, pretrained=True).to(device)
+def get_processor(model):
+    input_size = model.default_cfg["input_size"][1]
+    return transforms.Compose([
+        transforms.Resize(int((256 / 224) * input_size), interpolation=InterpolationMode.BICUBIC),
+        transforms.CenterCrop(input_size),
+        transforms.ToTensor(),
+        transforms.Normalize(model.default_cfg["mean"], model.default_cfg["std"]),
+    ])
 
-TOME = 'tome'
-PITOME = 'pitome'
-tome.patch.timm(model, TOME)
-# model.r=23
-# tome.patch.timm(model, PITOME)
-model.r=0.925  
-
-
-
-input_size = model.default_cfg["input_size"][1]
-transform = transforms.Compose([
-    transforms.Resize(int((256 / 224) * input_size), interpolation=InterpolationMode.BICUBIC),
-    transforms.CenterCrop(input_size),
-    transforms.ToTensor(),
-    transforms.Normalize(model.default_cfg["mean"], model.default_cfg["std"]),
-])
-
-def process_image(batch):
+def process_image(batch, transform):
     images = []
     labels = []
     for item in batch:
@@ -72,8 +57,25 @@ def process_image(batch):
 
     return {'image': images_tensor, 'label': labels_tensor}
 
+VIT_S_16="vit_small_patch16_224"
+VIT_B_16="vit_base_patch16_224"
+VIT_L_16="vit_large_patch16_224"
+VIT_L_16_384="vit_large_patch16_384"
+TOME = 'tome'
+PITOME = 'pitome'
 
-dataset = load_dataset("imagenet-1k", split='validation', cache_dir="/mnt/data/mount_4TBSSD/nmduy/imagenet/")
-val_dataloader = DataLoader(dataset, batch_size=100, shuffle=False, collate_fn=process_image)
 
-evaluate(model, val_dataloader, device, max_step=50)
+if __name__ == '__main__':
+
+    model_ckt = VIT_S_16 
+    model = timm.create_model(model_ckt, pretrained=True).to(device)
+    # tome.patch.timm(model, TOME)
+    tome.patch.timm(model, PITOME)
+    # model.r=7
+    model.r=0.925
+    processor = get_processor(model)
+
+    dataset = load_dataset("imagenet-1k", split='validation', cache_dir="/mnt/data/mount_4TBSSD/nmduy/imagenet/")
+    val_dataloader = DataLoader(dataset, batch_size=100, shuffle=False, collate_fn=lambda batch: process_image(batch, processor))
+    evaluate(model, val_dataloader, device, max_step=50)
+    
