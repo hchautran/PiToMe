@@ -14,14 +14,52 @@ from typing import Tuple
 
 import torch
 
-from tome.merge import bipartite_soft_matching, merge_source, merge_wavg
+from tome.merge import bipartite_soft_matching, merge_source, merge_wavg, pitome
 from tome.utils import parse_r
 
 # Since we don't necessarily have the swag code available, this patch is a little bit more involved
 
 
-def make_block_class(block_cls):
+def make_block_class(block_cls, method='tome'):
     class ToMeBlock(block_cls):
+        """
+        Modifications:
+        - Apply ToMe between the attention and mlp blocks
+        - Compute and propogate token size and potentially the token sources.
+        """
+
+        def forward(self, input: torch.Tensor) -> torch.Tensor:
+            # Note: this is copied from swag.models.vision_transformer.EncoderBlock with modifications.
+            x = self.ln_1(input)
+            attn_size = (
+                self._tome_info["size"] if self._tome_info["prop_attn"] else None
+            )
+            x_attn, _ = self.self_attention(x, size=attn_size)
+            x = self.dropout(x_attn)
+            x = x + input
+            y = self.ln_2(x)
+            y = self.mlp(y)
+            x = x + y
+            r = self._tome_info["r"].pop(0)
+
+            if r > 0:
+                merge, _ = pitome(
+                    x=x,
+                    r=r,
+                    margin=self._tome_info["margin"].pop(0),
+                    class_token=self._tome_info["class_token"],
+                    distill_token=self._tome_info["distill_token"],
+                )
+
+                if self._tome_info["trace_source"]:
+                    self._tome_info["source"] = merge_source(
+                        merge, x, self._tome_info["source"]
+                    )
+                x, self._tome_info["size"] = merge_wavg(merge, x, None)
+
+            return x + y
+        
+    class PiToMeBlock(block_cls):
         """
         Modifications:
         - Apply ToMe between the attention and mlp blocks

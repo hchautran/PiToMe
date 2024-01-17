@@ -15,7 +15,7 @@ from timm.models.vision_transformer import Attention, Block, VisionTransformer
 
 from tome.utils import parse_r
 
-from .timm import ToMeBlock, ToMeAttention
+from .timm import PiToMeBlock, ToMeBlock, ToMeAttention
 
 
 def make_tome_class(transformer_class):
@@ -68,7 +68,7 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False
+    model: VisionTransformer, compress_method='tome', trace_source: bool = False, prop_attn: bool = False
 ):
     """
     Applies ToMe to this MAE transformer. Afterward, set r using model.r.
@@ -79,6 +79,7 @@ def apply_patch(
     For MAE models, prop_attn should be set to false.
     """
     ToMeVisionTransformer = make_tome_class(model.__class__)
+    print('using', compress_method)
 
     model.__class__ = ToMeVisionTransformer
     model.r = 0
@@ -97,7 +98,7 @@ def apply_patch(
 
     for module in model.modules():
         if isinstance(module, Block):
-            module.__class__ = ToMeBlock
+            module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
             module._tome_info = model._tome_info
         elif isinstance(module, Attention):
             module.__class__ = ToMeAttention

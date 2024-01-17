@@ -116,13 +116,16 @@ def pitome(
 
     with torch.no_grad():
         batch_idx = torch.arange(B).unsqueeze_(1)
+        x_std =  x.std(-1, keepdim=True)
         x = F.normalize(x, p=2, dim=-1)
         ori_score =x@x.transpose(-1,-2) - torch.eye(T).unsqueeze(0).to(x.device) 
-        ori_score = torch.where(ori_score > margin, ori_score, -1.0)
-        min_indices =  torch.argsort(ori_score.mean(dim=-1), descending=True)[..., :r]
-        mask_to_keep = torch.ones((B, T), dtype=torch.bool).to(x.device)
-        mask_to_keep[batch_idx, min_indices] = False
-        a, b = x[batch_idx, min_indices, :], torch.masked_select(x, mask_to_keep.unsqueeze(2).expand(B, T, C)).view(B, -1, C)
+        ori_score = torch.where(ori_score > margin, ori_score, -1.0 * x_std)
+        indices =  torch.argsort(ori_score.mean(dim=-2), descending=True)
+        merged_idx =  indices[..., :2*r]
+        protected_idx =  indices[..., 2*r:]
+        a_idx, b_idx = merged_idx[...,::2], merged_idx[..., 1::2]
+        
+        a, b = x[batch_idx, a_idx, :],  x[batch_idx, b_idx, :]
         scores = a @ b.transpose(-1,-2) 
         _, dst_idx = scores.max(dim=-1) 
 
@@ -134,14 +137,14 @@ def pitome(
             x_cls = None
         B, T, C = x.shape
 
-        dst = torch.masked_select(x, mask_to_keep.unsqueeze(2).expand(B, T, C)).view(B, -1, C)
-        src = x[batch_idx, min_indices, :]
+        protected = x[batch_idx, protected_idx, :]
+        src, dst = x[batch_idx, a_idx, :], x[batch_idx, b_idx, :]
 
         dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
         if x_cls is not None:
-            return torch.cat([x_cls, dst], dim=1)
+            return torch.cat([x_cls, protected, dst], dim=1)
         else:
-            return torch.cat([dst], dim=1)
+            return torch.cat([protected, dst], dim=1)
 
     return merge, None 
 

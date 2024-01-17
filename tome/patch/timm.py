@@ -75,7 +75,8 @@ class PiToMeBlock(Block):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x_attn, metric = self.attn(self.norm1(x), None)
+        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
+        x_attn, _ = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
 
@@ -95,7 +96,7 @@ class PiToMeBlock(Block):
                 self._tome_info["source"] = merge_source(
                     merge, x, self._tome_info["source"]
                 )
-            x, self._tome_info["size"] = merge_wavg(merge, x, None)
+            x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
 
         return x 
 
@@ -203,6 +204,5 @@ def apply_patch(
         if isinstance(module, Block):
             module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
             module._tome_info = model._tome_info
-            cur_layer += 1 
         elif isinstance(module, Attention):
             module.__class__ = ToMeAttention
