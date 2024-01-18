@@ -131,7 +131,6 @@ def pitome(
         indices =  torch.argsort(ori_score.mean(dim=-2), descending=True)
         merged_idx =  indices[..., :2*r]
         protected_idx =  indices[..., 2*r:]
-        # a_idx, b_idx = merged_idx[...,:r], merged_idx[..., r:]
         a_idx, b_idx = merged_idx[...,::2], merged_idx[..., 1::2]
         
         a, b = x[batch_idx, a_idx, :],  x[batch_idx, b_idx, :]
