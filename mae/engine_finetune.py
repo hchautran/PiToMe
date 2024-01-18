@@ -106,8 +106,8 @@ def evaluate(data_loader, model, device):
     model.eval()
 
     for batch in metric_logger.log_every(data_loader, 10, header):
-        images = batch[0]
-        target = batch[-1]
+        images = batch['image']
+        target =  batch['label']
         images = images.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
 

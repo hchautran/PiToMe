@@ -19,20 +19,24 @@ from pathlib import Path
 
 import torch
 import torch.backends.cudnn as cudnn
-from torch.utils.tensorboard import SummaryWriter
+import wandb
 
 import timm
 
-assert timm.__version__ == "0.3.2" # version check
+# assert timm.__version__ == "0.3.2" # version check
 from timm.models.layers import trunc_normal_
 from timm.data.mixup import Mixup
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 
 import util.lr_decay as lrd
 import util.misc as misc
-from util.datasets import build_dataset
+from util.datasets import build_transform 
 from util.pos_embed import interpolate_pos_embed
+
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
+from torch.utils.data import DataLoader
+
+from datasets import load_dataset
 
 import models_vit
 
@@ -115,10 +119,14 @@ def get_args_parser():
     parser.set_defaults(global_pool=True)
     parser.add_argument('--cls_token', action='store_false', dest='global_pool',
                         help='Use class token instead of global pool for classification')
+    parser.add_argument('--ratio', default='0.0',
+                        help='reduce ratio')
+    parser.add_argument('--compress_method', default='tome',
+                        help='token merging algorithms')
 
     # Dataset parameters
-    parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/', type=str,
-                        help='dataset path')
+    # parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/', type=str,
+                        # help='dataset path')
     parser.add_argument('--nb_classes', default=1000, type=int,
                         help='number of the classification types')
 
@@ -154,6 +162,19 @@ def get_args_parser():
 
     return parser
 
+def process_image(batch, transform):
+    images = []
+    labels = []
+    for item in batch:
+        try:
+            images.append(transform(item['image']).unsqueeze(0))
+            labels.append(item['label'])
+        except:
+            pass
+    images_tensor = torch.cat(images)
+    labels_tensor = torch.tensor(labels)
+
+    return {'image': images_tensor, 'label': labels_tensor}
 
 def main(args):
     misc.init_distributed_mode(args)
@@ -169,49 +190,47 @@ def main(args):
     np.random.seed(seed)
 
     cudnn.benchmark = True
+    dataset = load_dataset("imagenet-1k", cache_dir="/mnt/data/mount_4TBSSD/nmduy/imagenet/")
 
-    dataset_train = build_dataset(is_train=True, args=args)
-    dataset_val = build_dataset(is_train=False, args=args)
+    dataset_train = dataset['train']
+    dataset_val = dataset['validation'] 
 
-    if True:  # args.distributed:
-        num_tasks = misc.get_world_size()
-        global_rank = misc.get_rank()
-        sampler_train = torch.utils.data.DistributedSampler(
-            dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
-        )
-        print("Sampler_train = %s" % str(sampler_train))
-        if args.dist_eval:
-            if len(dataset_val) % num_tasks != 0:
-                print('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
-                      'This will slightly alter validation results as extra duplicate entries are added to achieve '
-                      'equal num of samples per-process.')
-            sampler_val = torch.utils.data.DistributedSampler(
-                dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=True)  # shuffle=True to reduce monitor bias
-        else:
-            sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+    num_tasks = misc.get_world_size()
+    global_rank = misc.get_rank()
+    sampler_train = torch.utils.data.DistributedSampler(
+        dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
+    )
+    print("Sampler_train = %s" % str(sampler_train))
+    if args.dist_eval:
+        if len(dataset_val) % num_tasks != 0:
+            print('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
+                    'This will slightly alter validation results as extra duplicate entries are added to achieve '
+                    'equal num of samples per-process.')
+        sampler_val = torch.utils.data.DistributedSampler(
+            dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=True)  # shuffle=True to reduce monitor bias
     else:
-        sampler_train = torch.utils.data.RandomSampler(dataset_train)
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+    
 
-    if global_rank == 0 and args.log_dir is not None and not args.eval:
-        os.makedirs(args.log_dir, exist_ok=True)
-        log_writer = SummaryWriter(log_dir=args.log_dir)
-    else:
-        log_writer = None
 
-    data_loader_train = torch.utils.data.DataLoader(
-        dataset_train, sampler=sampler_train,
+
+    data_loader_train = DataLoader(
+        dataset_train, 
+        sampler=sampler_train,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
+        collate_fn=lambda batch: process_image(batch, build_transform(is_train=True, args=args)),
         drop_last=True,
     )
 
-    data_loader_val = torch.utils.data.DataLoader(
-        dataset_val, sampler=sampler_val,
+    data_loader_val = DataLoader(
+        dataset_val, 
+        sampler=sampler_val,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
+        collate_fn=lambda batch: process_image(batch, build_transform(is_train=False, args=args)),
         drop_last=False
     )
 
@@ -228,6 +247,8 @@ def main(args):
         num_classes=args.nb_classes,
         drop_path_rate=args.drop_path,
         global_pool=args.global_pool,
+        compress_method=args.compress_method,
+        r=float(args.ratio)
     )
 
     if args.finetune and not args.eval:
@@ -314,7 +335,7 @@ def main(args):
             model, criterion, data_loader_train,
             optimizer, device, epoch, loss_scaler,
             args.clip_grad, mixup_fn,
-            log_writer=log_writer,
+            log_writer=None,
             args=args
         )
         if args.output_dir:
@@ -327,21 +348,21 @@ def main(args):
         max_accuracy = max(max_accuracy, test_stats["acc1"])
         print(f'Max accuracy: {max_accuracy:.2f}%')
 
-        if log_writer is not None:
-            log_writer.add_scalar('perf/test_acc1', test_stats['acc1'], epoch)
-            log_writer.add_scalar('perf/test_acc5', test_stats['acc5'], epoch)
-            log_writer.add_scalar('perf/test_loss', test_stats['loss'], epoch)
+        # if log_writer is not None:
+        #     log_writer.add_scalar('perf/test_acc1', test_stats['acc1'], epoch)
+        #     log_writer.add_scalar('perf/test_acc5', test_stats['acc5'], epoch)
+        #     log_writer.add_scalar('perf/test_loss', test_stats['loss'], epoch)
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
                         **{f'test_{k}': v for k, v in test_stats.items()},
                         'epoch': epoch,
                         'n_parameters': n_parameters}
 
-        if args.output_dir and misc.is_main_process():
-            if log_writer is not None:
-                log_writer.flush()
-            with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
-                f.write(json.dumps(log_stats) + "\n")
+        # if args.output_dir and misc.is_main_process():
+            # if log_writer is not None:
+                # log_writer.flush()
+            # with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
+            #     f.write(json.dumps(log_stats) + "\n")
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))

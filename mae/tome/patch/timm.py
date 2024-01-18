@@ -15,7 +15,7 @@ import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 from copy import copy
 
-from tome.merge import bipartite_soft_matching, merge_source, merge_wavg, pitome
+from tome.merge import bipartite_soft_matching, merge_source, merge_wavg, pitome, merge_mean
 from tome.utils import parse_r
 
 
@@ -96,7 +96,7 @@ class PiToMeBlock(Block):
                 self._tome_info["source"] = merge_source(
                     merge, x, self._tome_info["source"]
                 )
-            x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
+            x = merge_mean(merge, x)
 
         return x 
 
@@ -182,6 +182,7 @@ def apply_patch(
     model.__class__ = ToMeVisionTransformer
     model.r = 0
     model.ratio = 1.0 
+    
     # model.compress_method = 'tome' 
     model._tome_info = {
         "r": model.r,

@@ -70,12 +70,12 @@ PITOME = 'pitome'
 
 if __name__ == '__main__':
 
-    model_ckt = VIT_L_16 
+    model_ckt = VIT_L_16_384
     model = timm.create_model(model_ckt, pretrained=True).to(device)
     # tome.patch.timm(model, TOME)
     tome.patch.timm(model, PITOME)
     # model.r=7
-    model.r=0.975
+    model.r=0.924
     processor = get_processor(model)
 
     dataset = load_dataset("imagenet-1k", split='validation', cache_dir="/mnt/data/mount_4TBSSD/nmduy/imagenet/")

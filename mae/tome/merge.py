@@ -115,20 +115,20 @@ def pitome(
     r = math.floor(T- T*r)
 
     with torch.no_grad():
-        batch_idx = torch.arange(B).unsqueeze_(1)
+        batch_idx = torch.arange(B).unsqueeze_(1).to(x.device)
         x_std =  x.std(-1, keepdim=True)
         x = F.normalize(x, p=2, dim=-1)
-        ori_score =x@x.transpose(-1,-2) - torch.eye(T).unsqueeze(0).to(x.device) 
-        ori_score = torch.where(ori_score > margin, ori_score, -1.0 * x_std)
-        indices =  torch.argsort(ori_score.mean(dim=-2), descending=True)
+        ori_score =x@x.transpose(-1,-2) 
+        ori_score = torch.where((ori_score > margin) & (ori_score < 1.0), ori_score, -1.0 * x_std)
+        indices =  torch.argsort(ori_score.mean(dim=-1), descending=True)
         merged_idx =  indices[..., :2*r]
         protected_idx =  indices[..., 2*r:]
-        a_idx, b_idx = merged_idx[...,::2], merged_idx[..., 1::2]
+        a_idx, b_idx = merged_idx[...,:r], merged_idx[..., r:]
         
         a, b = x[batch_idx, a_idx, :],  x[batch_idx, b_idx, :]
         scores = a @ b.transpose(-1,-2) 
         _, dst_idx = scores.max(dim=-1) 
-
+    
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
         if class_token:
             x_cls=x[:,0,:].unsqueeze(1)
@@ -273,6 +273,16 @@ def merge_wavg(
     x = x / size
 
     return x, None 
+
+def merge_mean(
+    merge: Callable, x: torch.Tensor
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Applies the merge function by taking a average based on token size.
+    Returns the merged tensor and the new token sizes.
+    """
+    x = merge(x, mode="mean")
+    return x
 
 
 

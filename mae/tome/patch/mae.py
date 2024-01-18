@@ -27,7 +27,11 @@ def make_tome_class(transformer_class):
         """
 
         def forward(self, *args, **kwdargs) -> torch.Tensor:
-            self._tome_info["r"] = parse_r(len(self.blocks), self.r)
+            # self._tome_info["r"] = parse_r(len(self.blocks), self.r)
+            margin = 0.75
+            self._tome_info["r"] = [self.r]* len(self.blocks) 
+            margins = [margin if i < len(self.blocks)//2 else margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
+            self._tome_info["margin"] = margins 
             self._tome_info["size"] = None
             self._tome_info["source"] = None
 
