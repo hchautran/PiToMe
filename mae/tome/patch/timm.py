@@ -42,8 +42,7 @@ class ToMeBlock(Block):
         if r > 0:
             merge, _ = bipartite_soft_matching(
                 metric=metric,
-                # r=r,
-                ratio=r,
+                r=r,
                 class_token=self._tome_info["class_token"],
                 distill_token=self._tome_info["distill_token"],
             )
@@ -55,6 +54,44 @@ class ToMeBlock(Block):
 
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
+
+        return x
+
+
+class ToMeBlockUsingRatio(Block):
+    """
+    Modifications:
+     - Apply ToMe between the attention and mlp blocks
+     - Compute and propogate token size and potentially the token sources.
+    """
+
+    def _drop_path1(self, x):
+        return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
+
+    def _drop_path2(self, x):
+        return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Note: this is copied from timm.models.vision_transformer.Block with modifications.
+        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
+        x_attn, metric = self.attn(self.norm1(x), attn_size)
+        x = x + self._drop_path1(x_attn)
+        x = x + self._drop_path2(self.mlp(self.norm2(x)))
+
+        ratio = self._tome_info["ratio"].pop(0)
+
+        if ratio <1.0:
+            merge, _ = bipartite_soft_matching(
+                metric=x,
+                ratio=ratio,
+                class_token=self._tome_info["class_token"],
+                distill_token=self._tome_info["distill_token"],
+            )
+            if self._tome_info["trace_source"]:
+                self._tome_info["source"] = merge_source(
+                    merge, x, self._tome_info["source"]
+                )
+            x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
 
 
         return x
@@ -76,16 +113,16 @@ class PiToMeBlock(Block):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        x_attn, _ = self.attn(self.norm1(x), attn_size)
+        x_attn, metric = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
 
-        r = self._tome_info["r"].pop(0)
-        if r > 0:
+        ratio = self._tome_info["ratio"].pop(0)
+        if ratio < 1.0:
+
             merge, _ = pitome(
-                x=x,
-                r=r,
-                # ratio=r,
+                x=metric,
+                ratio=ratio,
                 margin=self._tome_info["margin"].pop(0),
                 class_token=self._tome_info["class_token"],
                 distill_token=self._tome_info["distill_token"],
@@ -98,7 +135,12 @@ class PiToMeBlock(Block):
                 )
             x = merge_mean(merge, x)
 
+    
+
         return x 
+
+
+
 
 
 
@@ -152,7 +194,8 @@ def make_tome_class(transformer_class):
         def forward(self, *args, **kwdargs) -> torch.Tensor:
             margin =0.5
             # self._tome_info["r"] = parse_r(len(self.blocks), self.r)
-            self._tome_info["r"] = [self.r]* len(self.blocks) 
+            self._tome_info["r"] = [self.r] * len(self.blocks) 
+            self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
             # margins = [margin for i in range(len(self.blocks))]
             margins = [margin if i < len(self.blocks)//2 else margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
             self._tome_info["margin"] = margins 
@@ -199,11 +242,11 @@ def apply_patch(
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tome_info["distill_token"] = True
 
-    cur_layer = 0
     for module in model.modules():
 
         if isinstance(module, Block):
-            module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
+            # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
+            module.__class__ = ToMeBlockUsingRatio if compress_method == 'tome' else PiToMeBlock 
             module._tome_info = model._tome_info
         elif isinstance(module, Attention):
             module.__class__ = ToMeAttention

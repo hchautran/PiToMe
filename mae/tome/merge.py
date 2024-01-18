@@ -17,8 +17,8 @@ def do_nothing(x, mode=None):
 
 def bipartite_soft_matching(
     metric: torch.Tensor,
-    r: int=None,
-    ratio:float=0.925,    
+    r: int=0,
+    ratio:float=1.0,    
     class_token: bool = False,
     distill_token: bool = False,
 ) -> Tuple[Callable, Callable]:
@@ -42,13 +42,13 @@ def bipartite_soft_matching(
 
     # We can only reduce by a maximum of 50% tokens
     T = metric.shape[1]
-    if r is not None:
-        r = min(r, (T - protected) // 2)
-    else:
+    if r >0:
+        r = min(r, (T-protected) // 2)
+    elif ratio < 1.0:
         r = math.floor(T- T*ratio)
-
-    if r <= 0:
+    else:
         return do_nothing, do_nothing
+
 
     with torch.no_grad():
         metric = metric / metric.norm(dim=-1, keepdim=True)
@@ -104,7 +104,8 @@ def bipartite_soft_matching(
 
 def pitome(
     x: torch.Tensor, 
-    r: int=None, 
+    r: int=0, 
+    ratio:float=1.0,
     margin:float=0.5,
     class_token: bool = False,
     distill_token: bool = False,
@@ -112,18 +113,26 @@ def pitome(
     if class_token:
         x=x[:,1:,:]
     B,T,C = x.shape
-    r = math.floor(T- T*r)
+    
+    if r >0:
+        r = min(r, T // 2)
+    elif ratio < 1.0:
+        r = math.floor(T- T*ratio)
+    else:
+        return do_nothing, do_nothing
+
 
     with torch.no_grad():
         batch_idx = torch.arange(B).unsqueeze_(1).to(x.device)
         x_std =  x.std(-1, keepdim=True)
-        x = F.normalize(x, p=2, dim=-1)
-        ori_score =x@x.transpose(-1,-2) 
+        x = x / x.norm(dim=-1, keepdim=True)
+        ori_score = torch.matmul(x, x.transpose(-1,-2))
         ori_score = torch.where((ori_score > margin) & (ori_score < 1.0), ori_score, -1.0 * x_std)
-        indices =  torch.argsort(ori_score.mean(dim=-1), descending=True)
+        indices =  torch.argsort(ori_score.mean(dim=-2), descending=True)
         merged_idx =  indices[..., :2*r]
         protected_idx =  indices[..., 2*r:]
-        a_idx, b_idx = merged_idx[...,:r], merged_idx[..., r:]
+        # a_idx, b_idx = merged_idx[...,:r], merged_idx[..., r:]
+        a_idx, b_idx = merged_idx[...,::2], merged_idx[..., 1::2]
         
         a, b = x[batch_idx, a_idx, :],  x[batch_idx, b_idx, :]
         scores = a @ b.transpose(-1,-2) 

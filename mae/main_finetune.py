@@ -119,8 +119,10 @@ def get_args_parser():
     parser.set_defaults(global_pool=True)
     parser.add_argument('--cls_token', action='store_false', dest='global_pool',
                         help='Use class token instead of global pool for classification')
-    parser.add_argument('--ratio', default='0.0',
+    parser.add_argument('--ratio', default='2.0',
                         help='reduce ratio')
+    parser.add_argument('--r', default='0',
+                        help='reduce r tokens')
     parser.add_argument('--compress_method', default='tome',
                         help='token merging algorithms')
 
@@ -248,7 +250,8 @@ def main(args):
         drop_path_rate=args.drop_path,
         global_pool=args.global_pool,
         compress_method=args.compress_method,
-        r=float(args.ratio)
+        ratio=float(args.ratio),
+        r=int(args.r)
     )
 
     if args.finetune and not args.eval:

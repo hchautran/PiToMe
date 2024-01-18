@@ -55,7 +55,7 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
 
 
 
-def vit_base_patch16(compress_method, r, **kwargs):
+def vit_base_patch16(compress_method, ratio, r, **kwargs):
     print('got here')
     model = VisionTransformer(
         patch_size=16,
@@ -69,10 +69,11 @@ def vit_base_patch16(compress_method, r, **kwargs):
     )
     tome.patch.mae(model, compress_method=compress_method)
     model.r=r
+    model.ratio=ratio
     return model
 
 
-def vit_large_patch16( compress_method, r, **kwargs):
+def vit_large_patch16( compress_method, ratio, r, **kwargs):
     model = VisionTransformer(
         patch_size=16,
         embed_dim=1024,
@@ -85,10 +86,11 @@ def vit_large_patch16( compress_method, r, **kwargs):
     )
     tome.patch.mae(model, compress_method=compress_method)
     model.r=r
+    model.ratio=ratio
     return model
 
 
-def vit_huge_patch14(compress_method, r, **kwargs):
+def vit_huge_patch14(compress_method, ratio, r, **kwargs):
     model = VisionTransformer(
         patch_size=14,
         embed_dim=1280,
@@ -101,4 +103,5 @@ def vit_huge_patch14(compress_method, r, **kwargs):
     )
     tome.patch.mae(model, compress_method=compress_method)
     model.r=r
+    model.ratio=ratio
     return model

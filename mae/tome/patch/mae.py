@@ -15,7 +15,7 @@ from timm.models.vision_transformer import Attention, Block, VisionTransformer
 
 from tome.utils import parse_r
 
-from .timm import PiToMeBlock, ToMeBlock, ToMeAttention
+from .timm import PiToMeBlock, ToMeBlock, ToMeAttention, ToMeBlockUsingRatio
 
 
 def make_tome_class(transformer_class):
@@ -28,8 +28,9 @@ def make_tome_class(transformer_class):
 
         def forward(self, *args, **kwdargs) -> torch.Tensor:
             # self._tome_info["r"] = parse_r(len(self.blocks), self.r)
-            margin = 0.75
+            margin = 0.5
             self._tome_info["r"] = [self.r]* len(self.blocks) 
+            self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
             margins = [margin if i < len(self.blocks)//2 else margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
             self._tome_info["margin"] = margins 
             self._tome_info["size"] = None
@@ -87,8 +88,10 @@ def apply_patch(
 
     model.__class__ = ToMeVisionTransformer
     model.r = 0
+    model.ratio = 1.0
     model._tome_info = {
         "r": model.r,
+        "ratio": model.ratio,
         "size": None,
         "source": None,
         "trace_source": trace_source,
@@ -102,6 +105,7 @@ def apply_patch(
 
     for module in model.modules():
         if isinstance(module, Block):
+            # module.__class__ = ToMeBlockUsingRatio if compress_method == 'tome' else PiToMeBlock 
             module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
             module._tome_info = model._tome_info
         elif isinstance(module, Attention):
