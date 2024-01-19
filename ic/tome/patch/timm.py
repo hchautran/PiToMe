@@ -75,14 +75,13 @@ class ToMeBlockUsingRatio(Block):
         # Note: this is copied from timm.models.vision_transformer.Block with modifications.
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
         x_attn, metric = self.attn(self.norm1(x), attn_size)
-        x = x + self._drop_path1(x_attn)
-        x = x + self._drop_path2(self.mlp(self.norm2(x)))
 
+        x = x + self._drop_path1(x_attn)
         ratio = self._tome_info["ratio"].pop(0)
 
         if ratio <1.0:
             merge, _ = bipartite_soft_matching(
-                metric=x,
+                metric=metric,
                 ratio=ratio,
                 class_token=self._tome_info["class_token"],
                 distill_token=self._tome_info["distill_token"],
@@ -92,6 +91,8 @@ class ToMeBlockUsingRatio(Block):
                     merge, x, self._tome_info["source"]
                 )
             x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
+
+        x = x + self._drop_path2(self.mlp(self.norm2(x)))
 
 
         return x
@@ -115,12 +116,11 @@ class PiToMeBlock(Block):
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
         x_attn, metric = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
-        x = x + self._drop_path2(self.mlp(self.norm2(x)))
 
         ratio = self._tome_info["ratio"].pop(0)
         if ratio < 1.0:
             merge, _ = pitome(
-                x=x,
+                x=metric,
                 ratio=ratio,
                 margin=self._tome_info["margin"].pop(0),
                 class_token=self._tome_info["class_token"],
@@ -133,6 +133,8 @@ class PiToMeBlock(Block):
                     merge, x, self._tome_info["source"]
                 )
             x = merge_mean(merge, x)
+
+        x = x + self._drop_path2(self.mlp(self.norm2(x)))
 
     
 
@@ -191,12 +193,13 @@ def make_tome_class(transformer_class):
         """
 
         def forward(self, *args, **kwdargs) -> torch.Tensor:
-            margin =0.5
+            margin = 0.9
             # self._tome_info["r"] = parse_r(len(self.blocks), self.r)
             self._tome_info["r"] = [self.r] * len(self.blocks) 
             self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
             # margins = [margin for i in range(len(self.blocks))]
-            margins = [margin if i < len(self.blocks)//2 else margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
+            # margins = [margin if i < len(self.blocks)//2 else margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
+            margins = [margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
             self._tome_info["margin"] = margins 
             self._tome_info["size"] = None
             self._tome_info["source"] = None

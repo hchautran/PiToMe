@@ -78,12 +78,12 @@ if __name__ == '__main__':
 
 
 
-    model_ckt = DEIT_T_16
+    model_ckt = DEIT_B_16
     model = timm.create_model(model_ckt, pretrained=True).to(device)
     # tome.patch.timm(model, TOME)
     tome.patch.timm(model, PITOME)
     # model.r=7
-    model.ratio=0.95
+    model.ratio=0.90
     processor = get_processor(model)
 
     dataset = load_dataset("imagenet-1k", split='validation', cache_dir=f"{DATA_PATH}/imagenet/")

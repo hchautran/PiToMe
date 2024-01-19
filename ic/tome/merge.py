@@ -129,8 +129,6 @@ def pitome(
         # x_std =  x.std(-1, keepdim=True)
         ori_score = torch.where(ori_score > margin, ori_score - margin, -1.0)
         min_indices =  torch.argsort(ori_score.mean(dim=-2), descending=True)[..., :2*r]
-        mask_to_keep = torch.ones_like(x, dtype=torch.bool).to(x.device)
-        mask_to_keep[batch_idx, min_indices,  :] = False
         a_idx, b_idx = min_indices[..., ::2], min_indices[..., 1::2]
         a, b = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
         scores = a@b.transpose(-1,-2) 
@@ -143,6 +141,9 @@ def pitome(
         else:
             x_cls = None
         B, T, C = x.shape
+
+        mask_to_keep = torch.ones_like(x, dtype=torch.bool).to(x.device)
+        mask_to_keep[batch_idx, min_indices] = False
 
         protected = torch.masked_select(x, mask_to_keep).view(B, -1, C)
         src, dst = x[batch_idx, a_idx, :], x[batch_idx, b_idx, :]

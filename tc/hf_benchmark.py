@@ -18,7 +18,16 @@ from lra_config import (get_listops_config, get_cifar10_config, get_text_classif
 from lra_datasets import (ListOpsDataset, Cifar10Dataset, ImdbDataset)
 from argparse import ArgumentParser
 from accelerate import Accelerator
-from tc.pitome import CompressedBERT 
+from pitome import CompressedBERT 
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Access the environment variable
+DATA_PATH = os.environ.get('DATA_PATH')
+
 
 accelerator = Accelerator(
     mixed_precision='fp16',
@@ -58,11 +67,10 @@ TASKS = {
 }
 
 
-# main functions
 def get_model(model_ckt, compress_method='none', r=1.0):
-    ori_model = BertForSequenceClassification.from_pretrained(model_ckt)
+    ori_model = BertForSequenceClassification.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
     model = CompressedBERT(ori_model, compress_method=compress_method, r=r)
-    tokenizer = AutoTokenizer.from_pretrained(model_ckt)
+    tokenizer = AutoTokenizer.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
     model = accelerator.prepare(model)
 
     return model, tokenizer
@@ -138,24 +146,25 @@ if __name__ == "__main__":
     batch_size = 4 
     avg_factor = 0.95
     task_name = args.task
-    # model_ckt = 'lvwerra/bert-imdb'
     model_ckt = 'JiaqiLee/imdb-finetuned-bert-base-uncased'
-    compress_method='none' 
+    # model_ckt = 'bert-base-uncased'
+    # model_ckt = 'bert-large-uncased'
+
+    # compress_method='none' 
     # compress_method='dct'
-    # compress_method='pitome'
-    compress_method='tome'
-    print('using', compress_method)
-    model, tokenizer = get_model(
-        model_ckt, 
-        compress_method=compress_method,
-        r=0.90
-    )
-    task = TASKS[task_name]
-    config, model_config = task.config_getter()    
-    config.tokenizer = tokenizer
+    for method in ['pitome', 'tome', 'dct', 'none']:
+        print('using', method)
+        model, tokenizer = get_model(
+            model_ckt, 
+            compress_method=method,
+            r=0.90
+        )
+        task = TASKS[task_name]
+        config, model_config = task.config_getter()    
+        config.tokenizer = tokenizer
 
-    dataset = task.dataset_fn(config, split='train')
-    eval_dataset = task.dataset_fn(config, split='eval')    
-    max_train_steps = int(np.ceil(config.total_train_samples / batch_size))
+        dataset = task.dataset_fn(config, split='train')
+        eval_dataset = task.dataset_fn(config, split='eval')    
+        max_train_steps = int(np.ceil(config.total_train_samples / batch_size))
 
-    eval(model, eval_dataset, tokenizer ,batch_size=20)
+        eval(model, eval_dataset, tokenizer ,batch_size=20)

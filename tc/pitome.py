@@ -84,11 +84,10 @@ class CompressedModel(nn.Module, ModuleUtilsMixin):
         B,T,C = x.shape
         r = math.floor(T- T*self.r)
         with torch.no_grad():
-            batch_idx = torch.arange(B).unsqueeze_(1)
+            batch_idx = torch.arange(B).unsqueeze_(1).to(x.device)
             x = F.normalize(x, p=2, dim=-1)
-            x_std = x.std(-1, keepdim=True)
             ori_score =x@x.transpose(-1,-2) 
-            ori_score = torch.where(ori_score > margin, ori_score - margin, -1.0 * x_std)
+            ori_score = torch.where(ori_score > margin, ori_score - margin, -1.0)
             min_indices =  torch.argsort(ori_score.mean(dim=-2), descending=True)[..., :2*r]
             mask_to_keep = torch.ones_like(x, dtype=torch.bool).to(x.device)
             mask_to_keep[batch_idx, min_indices,  :] = False
@@ -322,10 +321,12 @@ class CompressedBERT(CompressedModel):
 
             if i in self.compress_layers:    
                 cls = hidden_states[:, 0, :].unsqueeze(1)
+                margin = 0.9
                 state, cur_energy = self.compress_hidden_state(
                     hidden_states[:, 1:, :], 
                     use_compressed_hidden_state=True,
-                    margin=(0.5 if i< self.model_len//2 else  0.5-0.5*i/self.model_len)
+                    # margin=(0.5 if i< self.model_len//2 else  0.5-0.5*i/self.model_len)
+                    margin=(margin-margin*i/self.model_len)
                 )
                 hidden_states = torch.cat([cls, state], dim=1)
                 real_mem += hidden_states.shape[1]
