@@ -1,9 +1,8 @@
-datasets==2.12.0
 geoopt==0.5.0
 pillow==10.0.0 
 accelerate==0.21.0  
-torch_geometric
 salesforce-lavis
+datasets
 wandb
 peft
 bitsandbytes

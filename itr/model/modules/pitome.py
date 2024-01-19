@@ -18,21 +18,15 @@ class CompressedModel(nn.Module):
     def __init__(self, compress_method='dct', r=0.95, window_size=2, manifold=None):
         super().__init__()
         self.r = r
-        self.mapper = None 
         self.window_size=window_size
         self.compress_method = compress_method
         self.num_reduced_token = 32 
     
     def dist_func(self, x:torch.Tensor, y:torch.Tensor): 
         dis = 0
-        if self.mapper is not None: 
-            x =  self.mapper(x)
-            y =  self.mapper(y)
-            dis = -self.manifold.dist_batch(x, y)
-        else: 
-            x = F.normalize(x,p=2, dim=-1) 
-            y = F.normalize(y,p=2, dim=-1) 
-            dis = torch.matmul(x, y.transpose(-1,-2)) 
+        x = F.normalize(x,p=2, dim=-1) 
+        y = F.normalize(y,p=2, dim=-1) 
+        dis = torch.matmul(x, y.transpose(-1,-2)) 
         return dis 
 
 
@@ -86,16 +80,17 @@ class CompressedModel(nn.Module):
         B,T,_ = x.shape
         r = math.floor(T- T*self.r)
         with torch.no_grad():
-            batch_idx = torch.arange(B).unsqueeze_(1)
-            x_std =  x.std(-1, keepdim=True)
+            batch_idx = torch.arange(B, pin_memory=True).unsqueeze_(1).to(x.device)
+            margin = torch.tensor(margin).to(x.device)
+            mask_to_keep = torch.ones_like(x, dtype=torch.bool).to(x.device)
 
             x = F.normalize(x, p=2, dim=-1)
             ori_score =x@x.transpose(-1,-2) 
-            ori_score = torch.where(ori_score > margin, ori_score - margin, -1.0 * x_std)
+            ori_score = torch.where(ori_score > margin, ori_score - margin, -1.0)
             min_indices =  torch.argsort(ori_score.mean(dim=-2), descending=True)[..., :2*r]
-            mask_to_keep = torch.ones_like(x, dtype=torch.bool).to(x.device)
-            mask_to_keep[batch_idx, min_indices,  :] = False
-            a_idx, b_idx = min_indices[..., ::2], min_indices[..., 1::2]
+
+            mask_to_keep[batch_idx, min_indices] = False
+            a_idx, b_idx = min_indices[..., r:], min_indices[..., :r]
             a, b = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
             scores = a@b.transpose(-1,-2) 
             _, dst_idx = scores.max(dim=-1) 

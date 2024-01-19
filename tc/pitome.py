@@ -8,7 +8,7 @@ from transformers import (
 )
 import math
 from lavis import BlipRetrieval, Blip2Qformer
-from transformers import BertForSequenceClassification 
+from transformers import BertForSequenceClassification, RobertaForSequenceClassification, BartForSequenceClassification 
 from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.modeling_utils import ModuleUtilsMixin 
 from dct import dct, idct
@@ -336,7 +336,6 @@ class CompressedBERT(CompressedModel):
                     attention_mask,
                 )
             else:
-
                 layer_outputs = layer_module(
                     hidden_states,
                     attention_mask,
@@ -351,7 +350,6 @@ class CompressedBERT(CompressedModel):
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)
 
-      
         pooled_output = self.model.pooler(hidden_states) if self.model.pooler is not None else None
 
         pooled_output = self.dropout(pooled_output)

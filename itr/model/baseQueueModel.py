@@ -44,14 +44,8 @@ class BaseModelWithQueue(BlipBase, MomentumDistilationMixin, SharedQueueMixin):
         self.clip_r = config.clip_radius
         self.queue_size = config.queue_size
         self.weight_i2t = config.weight_i2t
-        self.mapper = None           
         class_weight = torch.tensor([1.0, 1.0])
         self.itm_criterion = nn.CrossEntropyLoss(weight=class_weight, reduction='mean')
-        self.fourier_criterion = nn.MSELoss()
-        if not torch.is_floating_point(self.curv):
-            self.curv = self.curv.to(torch.get_default_dtype())
-
-
 
         self.model_m = None 
         self.model = None 
@@ -164,8 +158,6 @@ class BaseModelWithQueue(BlipBase, MomentumDistilationMixin, SharedQueueMixin):
             text_feat_m_all = torch.cat(
                 [text_feat_m.t(), self.text_queue.clone().detach()], dim=1
             )
-            self.manifold.assert_check_point_on_manifold(text_feat_m_all.T)
-            self.manifold.assert_check_point_on_manifold(image_feat_m_all.T)
 
         sim_i2t = self.dist_func(image_feat, text_feat_m_all.T) 
         sim_t2i = self.dist_func(text_feat, image_feat_m_all.T)
@@ -214,11 +206,11 @@ class BaseModelWithQueue(BlipBase, MomentumDistilationMixin, SharedQueueMixin):
            input_ids=input_ids, 
            attention_mask=attention_mask, 
         )
-        text_feat = self.postprocess_embeds(text_output[1])
+        text_feat = F.normalize(text_output[1], p=2, dim=-1)
         return text_feat, text_output[0]
 
     def get_vision_features(self, pixel_values:torch.Tensor):
         image_output = self.model(pixel_values=pixel_values)
-        image_feat = self.postprocess_embeds(image_output[1])
+        image_feat = F.normalize(image_output[1], p=2, dim=-1)
         return image_feat, image_output[0]
     

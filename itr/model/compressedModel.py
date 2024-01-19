@@ -4,6 +4,7 @@ from .modules.pitome import CompressedLAVISBLIP, CompressedHFCLIP, CompressedHFB
 from peft import get_peft_model, LoraConfig, TaskType
 from model.baseQueueModel import BaseModelWithQueue 
 from model.baseBlip2Model import BaseModel  as Blip2Model
+import torch.nn.functional as F
 
 EUCLID = "euclidean"
 POINCARE = "poincare"
@@ -173,7 +174,7 @@ class CompressedHFWithQueue(BaseModelWithQueue):
     
     def get_vision_features(self, pixel_values: torch.Tensor, use_compressed_hidden_state=True):
         image_output = self.model.get_vision_features(pixel_values=pixel_values, use_compressed_hidden_state=use_compressed_hidden_state)
-        image_feat = self.postprocess_embeds(image_output[1])
+        image_feat = torch.nn.functional.normalize(image_output[1], dim=-1, p=2)
         return image_feat, image_output[0],  image_output[4]
     
 class CompressedLAVISLIPWithQueue(BaseModelWithQueue):
@@ -186,7 +187,7 @@ class CompressedLAVISLIPWithQueue(BaseModelWithQueue):
     
     def get_vision_features(self, pixel_values: torch.Tensor, use_compressed_hidden_state=True):
         image_output = self.model.get_vision_features(pixel_values=pixel_values, use_compressed_hidden_state=use_compressed_hidden_state)
-        image_feat = self.postprocess_embeds(image_output[1])
+        image_feat = F.normalize(image_output[1], dim=-1, p=2)
         return image_feat, image_output[0], image_output[4]
 
 class CompressedLAVISBLIP2WithQueue(Blip2Model):
@@ -198,5 +199,5 @@ class CompressedLAVISBLIP2WithQueue(Blip2Model):
     
     def get_vision_features(self, pixel_values: torch.Tensor, use_compressed_hidden_state=True):
         image_output = self.model.get_vision_features(pixel_values=pixel_values, use_compressed_hidden_state=use_compressed_hidden_state)
-        image_feat = self.postprocess_embeds(image_output[1])
+        image_feat = F.normalize(image_output[1], dim=-1, p=2)
         return image_feat, image_output[0], image_output[4]

@@ -1,4 +1,4 @@
-from itr.model.compressedModel import CompressedLAVISBLIP2WithQueue 
+from model.compressedModel import CompressedLAVISBLIP2WithQueue 
 from lavis.datasets.builders import load_dataset
 from trainer_queue import MyTrainer as LavisTrainer 
 from trainer import MyTrainer as Blip2Trainer 
@@ -7,20 +7,17 @@ from lavis.models import load_model_and_preprocess
 
 if __name__ == "__main__":
     from config import parser
-    from config import POINCARE, EUCLID, LORENTZ, LAVIS_BLIP_BASE_FLICKR, LAVIS_BLIP_BASE_COCO, COCO, FLICKR
-    COCO_PATH = "/mnt/data/itr_dataset/dataset/coco/images"
-    FLICKR_PATH = "/mnt/data/itr_dataset/dataset/flickr30k/flickr30k_images"
+    from config import FLICKR_PATH, COCO_PATH, COCO, FLICKR
     config = parser.parse_args()
-    for dataset in [FLICKR]:
+    for dataset in [FLICKR, COCO]:
         config.dataset =dataset
 
         model, vis_processors, txt_processors = load_model_and_preprocess("blip2", "coco", is_eval=False)
         # tokenizer = model.tokenizer
+        config.model_ckt = 'blip2' 
         if "flickr" in config.dataset:
-            config.model_ckt = LAVIS_BLIP_BASE_FLICKR
             dataset = load_dataset("flickr30k", vis_path=FLICKR_PATH, cfg_path=None)
         else:
-            config.model_ckt = LAVIS_BLIP_BASE_COCO 
             dataset = load_dataset("coco_retrieval", vis_path=COCO_PATH, cfg_path=None)
 
 
@@ -56,14 +53,11 @@ if __name__ == "__main__":
 
         for distil in [False]:
             config.distil = distil 
-            # for compress_method in ['std', 'none']:
-            # for compress_method in ['std','none', 'dct','mean','random']:
             for compress_method in [
-                # 'std-mean-merge', 
                 'PiToMe', 
                 'ToMe',
-                # 'std-mean-merge',
                 'dct', 
+                'none',
             ]:
                 config.compress_method = compress_method
                 inner_training_loop(config.batch_size)

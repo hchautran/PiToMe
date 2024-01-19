@@ -126,8 +126,8 @@ def pitome(
         batch_idx = torch.arange(B).unsqueeze_(1).to(x.device)
         x = F.normalize(x, p=2, dim=-1)
         ori_score =x@x.transpose(-1,-2) 
-        x_std =  x.std(-1, keepdim=True)
-        ori_score = torch.where(ori_score > margin, ori_score - margin, -1.0 * x_std)
+        # x_std =  x.std(-1, keepdim=True)
+        ori_score = torch.where(ori_score > margin, ori_score - margin, -1.0)
         min_indices =  torch.argsort(ori_score.mean(dim=-2), descending=True)[..., :2*r]
         mask_to_keep = torch.ones_like(x, dtype=torch.bool).to(x.device)
         mask_to_keep[batch_idx, min_indices,  :] = False
@@ -144,7 +144,6 @@ def pitome(
             x_cls = None
         B, T, C = x.shape
 
-        # protected = x[batch_idx, protected_idx, :]
         protected = torch.masked_select(x, mask_to_keep).view(B, -1, C)
         src, dst = x[batch_idx, a_idx, :], x[batch_idx, b_idx, :]
 

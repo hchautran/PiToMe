@@ -3,10 +3,9 @@ from transformers import (
     CLIPProcessor,
 )
 from lavis.datasets.builders import load_dataset
-from itr.model.compressedModel import DCTHFWithQueue
-from transformers import CLIPProcessor, BlipProcessor, CLIPModel
-from trainer_queue import MyTrainer as LavisTrainer
-from accelerate import find_executable_batch_size
+from model.compressedModel import CompressedHFWithQueue
+from transformers import CLIPProcessor, BlipProcessor
+from trainer_queue import MyTrainer 
 from utils.data_utils import get_loaders 
 
 
@@ -52,10 +51,8 @@ if __name__ == "__main__":
                     eval_batch_size=20
                 )
 
-                    # model = HypGraphCLIPWithQueue(config) if "clip" in config.model_ckt else HypGraphBLIPWithQueue(config)
-                queue_model = DCTHFWithQueue(config) 
-                # model = BLIPWithQueue(config) 
-                trainer = LavisTrainer(
+                queue_model = CompressedHFWithQueue(config) 
+                trainer = MyTrainer(
                     model=queue_model,
                     config=config,
                     train_loader=train_loader,

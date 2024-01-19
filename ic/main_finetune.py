@@ -44,11 +44,13 @@ from engine_finetune import train_one_epoch, evaluate
 from dotenv import load_dotenv
 import os
 
+
 # Load environment variables from .env file
 load_dotenv()
 
 # Access the environment variable
-data_path = os.environ.get('DATA_PATH')
+DATA_PATH = os.environ.get('DATA_PATH')
+
 
 
 def get_args_parser():
@@ -135,7 +137,7 @@ def get_args_parser():
                         help='token merging algorithms')
 
     # Dataset parameters
-    # parser.add_argument('--data_path', default='/datasets01/imagenet_full_size/061417/', type=str,
+    # parser.add_argument('--DATA_PATH', default='/datasets01/imagenet_full_size/061417/', type=str,
                         # help='dataset path')
     parser.add_argument('--nb_classes', default=1000, type=int,
                         help='number of the classification types')
@@ -201,7 +203,7 @@ def main(args):
     np.random.seed(seed)
 
     cudnn.benchmark = True
-    dataset = load_dataset("imagenet-1k", cache_dir=f"{data_path}/imagenet/")
+    dataset = load_dataset("imagenet-1k", cache_dir=f"{DATA_PATH}/imagenet/")
 
     dataset_train = dataset['train']
     dataset_val = dataset['validation'] 
@@ -329,6 +331,7 @@ def main(args):
         criterion = torch.nn.CrossEntropyLoss()
 
     print("criterion = %s" % str(criterion))
+    args.resume = f'{DATA_PATH}/.vision_ckts/checkpoints/{args.resume}'
 
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
 
@@ -382,6 +385,7 @@ def main(args):
 
 
 if __name__ == '__main__':
+    torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
     args = get_args_parser()
     args = args.parse_args()
     if args.output_dir:

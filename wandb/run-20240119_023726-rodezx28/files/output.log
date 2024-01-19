@@ -1,0 +1,32 @@
+trainable parameters: 4784130
+train loader length: 2900
+  0%|                                                                                                                                                              | 0/2900 [00:04<?, ?it/s]
+Traceback (most recent call last):
+  File "/home/nmduy/PiToMe/itr/main_blip.py", line 79, in <module>
+    inner_training_loop(config.batch_size)
+  File "/home/nmduy/PiToMe/itr/main_blip.py", line 59, in inner_training_loop
+    trainer.train()
+  File "/home/nmduy/PiToMe/itr/trainer_queue.py", line 96, in train
+    loss, stats = self.model(
+                  ^^^^^^^^^^^
+  File "/home/jarvis/anaconda3/envs/HypCLIP/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jarvis/anaconda3/envs/HypCLIP/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jarvis/anaconda3/envs/HypCLIP/lib/python3.11/site-packages/accelerate/utils/operations.py", line 581, in forward
+    return model_forward(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jarvis/anaconda3/envs/HypCLIP/lib/python3.11/site-packages/accelerate/utils/operations.py", line 569, in __call__
+    return convert_to_fp32(self.model_forward(*args, **kwargs))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jarvis/anaconda3/envs/HypCLIP/lib/python3.11/site-packages/torch/amp/autocast_mode.py", line 16, in decorate_autocast
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nmduy/PiToMe/itr/model/baseQueueModel.py", line 162, in forward
+    self.manifold.assert_check_point_on_manifold(text_feat_m_all.T)
+    ^^^^^^^^^^^^^
+  File "/home/jarvis/anaconda3/envs/HypCLIP/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1695, in __getattr__
+    raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+AttributeError: 'CompressedLAVISLIPWithQueue' object has no attribute 'manifold'

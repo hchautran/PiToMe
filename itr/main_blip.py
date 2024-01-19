@@ -1,4 +1,4 @@
-from itr.model.compressedModel import CompressedLAVISLIPWithQueue 
+from model.compressedModel import CompressedLAVISLIPWithQueue 
 from lavis.datasets.builders import load_dataset
 from trainer_queue import MyTrainer as LavisTrainer 
 from trainer import MyTrainer as Blip2Trainer 
@@ -54,13 +54,13 @@ if __name__ == "__main__":
                 txt2img=test_txt2img,
                 img2txt=test_img2txt
             )
-            # print(trainer.evaluate(use_1k=False))
+            print(trainer.evaluate(use_1k=False))
             # print(trainer.evaluate('val'))
-            trainer.train()
+            # trainer.train()
 
 
         config.epochs = 1 
-        config.enable_log = True
+        config.enable_log = False
         config.use_margin_loss = False 
 
         for distil in [False]:
@@ -68,12 +68,10 @@ if __name__ == "__main__":
             # for compress_method in ['std','dct']:
             # for compress_method in ['std', 'dct', 'random', 'direct','none']:
             for compress_method in [
-                # 'none',
-                # 'random-mean-merge',
                 'PiToMe', 
                 'ToMe',
-                # 'random-std-merge',
                 'dct', 
+                'none',
             ]:
                 config.compress_method = compress_method
                 inner_training_loop(config.batch_size)

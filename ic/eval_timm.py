@@ -69,6 +69,14 @@ PITOME = 'pitome'
 
 
 if __name__ == '__main__':
+    import os
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    DATA_PATH = os.environ.get('DATA_PATH')
+    torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
+
+
 
     model_ckt = DEIT_T_16
     model = timm.create_model(model_ckt, pretrained=True).to(device)
@@ -78,7 +86,7 @@ if __name__ == '__main__':
     model.ratio=0.95
     processor = get_processor(model)
 
-    dataset = load_dataset("imagenet-1k", split='validation', cache_dir="/mnt/data/mount_4TBSSD/nmduy/imagenet/")
+    dataset = load_dataset("imagenet-1k", split='validation', cache_dir=f"{DATA_PATH}/imagenet/")
     val_dataloader = DataLoader(dataset, batch_size=100, shuffle=False, collate_fn=lambda batch: process_image(batch, processor))
     evaluate(model, val_dataloader, device, max_step=100)
     
