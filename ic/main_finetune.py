@@ -41,6 +41,14 @@ from datasets import load_dataset
 import models_vit
 
 from engine_finetune import train_one_epoch, evaluate
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Access the environment variable
+data_path = os.environ.get('DATA_PATH')
 
 
 def get_args_parser():
@@ -178,6 +186,7 @@ def process_image(batch, transform):
 
     return {'image': images_tensor, 'label': labels_tensor}
 
+
 def main(args):
     misc.init_distributed_mode(args)
 
@@ -192,7 +201,7 @@ def main(args):
     np.random.seed(seed)
 
     cudnn.benchmark = True
-    dataset = load_dataset("imagenet-1k", cache_dir="/mnt/data/mount_4TBSSD/nmduy/imagenet/")
+    dataset = load_dataset("imagenet-1k", cache_dir=f"{data_path}/imagenet/")
 
     dataset_train = dataset['train']
     dataset_val = dataset['validation'] 
