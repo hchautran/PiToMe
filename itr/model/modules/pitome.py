@@ -81,9 +81,7 @@ class CompressedModel(nn.Module):
         r = math.floor(T- T*self.r)
         with torch.no_grad():
             batch_idx = torch.arange(B, pin_memory=True).unsqueeze_(1).to(x.device)
-            margin = torch.tensor(margin).to(x.device)
             mask_to_keep = torch.ones_like(x, dtype=torch.bool).to(x.device)
-
             x = F.normalize(x, p=2, dim=-1)
             ori_score =x@x.transpose(-1,-2) 
             ori_score = torch.where(ori_score > margin, ori_score - margin, -1.0)

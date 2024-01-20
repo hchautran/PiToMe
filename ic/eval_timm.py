@@ -78,15 +78,15 @@ if __name__ == '__main__':
 
 
 
-    model_ckt = DEIT_B_16
+    model_ckt = VIT_B_16
     model = timm.create_model(model_ckt, pretrained=True).to(device)
-    # tome.patch.timm(model, TOME)
-    tome.patch.timm(model, PITOME)
+    tome.patch.timm(model, TOME)
+    # tome.patch.timm(model, PITOME)
     # model.r=7
-    model.ratio=0.90
+    model.ratio=0.9
     processor = get_processor(model)
 
     dataset = load_dataset("imagenet-1k", split='validation', cache_dir=f"{DATA_PATH}/imagenet/")
     val_dataloader = DataLoader(dataset, batch_size=100, shuffle=False, collate_fn=lambda batch: process_image(batch, processor))
-    evaluate(model, val_dataloader, device, max_step=100)
+    evaluate(model, val_dataloader, device, max_step=200)
     

@@ -14,11 +14,11 @@ if __name__ == "__main__":
     from config import EUCLID, LORENTZ
     from config import COCO_PATH, FLICKR_PATH, CLIP_LARGE_PATCH_14, CLIP_BASE_PATCH_16, BLIP_BASE_FLICKR, FLICKR, COCO
     config = parser.parse_args()
-    for dataset in [FLICKR, COCO]:
+    for dataset in [FLICKR]:
         config.dataset = dataset
         for model_ckt in [
             CLIP_LARGE_PATCH_14,
-            # CLIP_BASE_PATCH_16,
+            CLIP_BASE_PATCH_16,
         ]:
             config.model_ckt = model_ckt
             if "blip" in config.model_ckt:
@@ -61,12 +61,12 @@ if __name__ == "__main__":
                     txt2img=test_txt2img,
                     img2txt=test_img2txt
                 )
-                print(trainer.evaluate('test'))
+                # print(trainer.evaluate('test'))
                 # print(trainer.evaluate('val'))
-                # trainer.train()
+                trainer.train()
 
-            config.epochs = 1
-            config.enable_log = False 
+            config.epochs = 2
+            config.enable_log = True 
             config.use_margin_loss = False 
 
             for compress_method in [
