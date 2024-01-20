@@ -1,156 +1,174 @@
-## Masked Autoencoders: A PyTorch Implementation
-
-<p align="center">
-  <img src="https://user-images.githubusercontent.com/11435359/146857310-f258c86c-fde6-48e8-9cee-badd2b21bd2c.png" width="480">
-</p>
+# DiffRate (ICCV 2023)
+This a official Pytorch implementation of our paper "[DiffRate : Differentiable Compression Rate for Efficient Vision Transformers](https://arxiv.org/abs/2305.17997)"
 
 
-This is a PyTorch/GPU re-implementation of the paper [Masked Autoencoders Are Scalable Vision Learners](https://arxiv.org/abs/2111.06377):
+## What DiffRate Does
+![intriduction](figures/introduction.png)
+Previous methods typically focus on either pruning or merging tokens using hand-picked compression rate with the guidance of performance. But DiffRate can leverages both approaches simultaneously to achieve more effective compression using the differentiable compression rate with gradient optimization.
+
+## Requirements
 ```
-@Article{MaskedAutoencoders2021,
-  author  = {Kaiming He and Xinlei Chen and Saining Xie and Yanghao Li and Piotr Doll{\'a}r and Ross Girshick},
-  journal = {arXiv:2111.06377},
-  title   = {Masked Autoencoders Are Scalable Vision Learners},
-  year    = {2021},
+- python >= 3.8
+- pytorch >= 1.12.1  # For scatter_reduce
+- torchvision        # With matching version for your pytorch install
+- timm == 0.4.5      # Might work on other versions, but this is what we tested
+- jupyter            # For example notebooks
+- scipy              # For visualization and sometimes torchvision requires it
+- termcolor          # For logging with color
+```
+
+
+## Data Preparation
+- The ImageNet dataset should be prepared as follows:
+```
+ImageNet
+├── train
+│   ├── folder 1 (class 1)
+│   ├── folder 2 (class 2)
+│   ├── ...
+├── val
+│   ├── folder 1 (class 1)
+│   ├── folder 2 (class 2)
+│   ├── ...
+
+```
+
+## Pre-Trained Models
+Our proposed DiffRate is designed to operate utilizing the officially endorsed pre-trained models of MAE and DeiT. To facilitate seamless integration, our code is programmed to automatically download and load these pre-trained models. However, users who prefer manual downloads can acquire the pre-trained MAE models via this [link](https://github.com/facebookresearch/mae/blob/main/FINETUNE.md), and the pre-trained DeiT models through this [link](https://github.com/facebookresearch/deit/blob/main/README_deit.md).
+ 
+
+
+## Evaluation
+We provide the discovered compression rates in the [compression_rate.json](https://github.com/anonymous998899/DiffRate/blob/main/compression_rate.json) file. To evaluate these rates, utilize the `--load_compression_rate` option, which will load the appropriate compression rate from [compression_rate.json](https://github.com/anonymous998899/DiffRate/blob/main/compression_rate.json) based on the specified `model` and `target_flops`.
+
+<details>
+
+<summary>DeiT-S</summary>
+
+For the `ViT-S (DeiT)` model, we currently offer support for the `--target_flops` option with `{2.3,2.5,2.7,2.9,3.1}`. To illustrate, an example evaluating the `ViT-S (DeiT)` model with `2.9G` FLOPs would be:
+```
+python main.py --eval --load_compression_rate --data-path $path_to_imagenet$ --model vit_deit_small_patch16_224 --target_flops 2.9
+```
+This should give:
+```
+Acc@1 79.538 Acc@5 94.828 loss 0.902 flops 2.905
+```
+
+</details>
+
+<details>
+
+<summary>DeiT-B</summary>
+
+For the `ViT-B (DeiT)` model, we currently offer support for the `--target_flops` option with `{8.7,10.0,10.4,11.5,12.5}`. To illustrate, an example evaluating the `ViT-B (DeiT)` model with `11.5G` FLOPs would be:
+```
+python main.py --eval --load_compression_rate --data-path $path_to_imagenet$ --model vit_deit_base_patch16_224 --target_flops 11.5
+```
+This should give:
+```
+Acc@1 81.498 Acc@5 95.404 loss 0.861 flops 11.517
+```
+</details>
+
+<details>
+
+<summary>ViT-B (MAE)</summary>
+
+For the `ViT-B (MAE)` model, we currently offer support for the `--target_flops` option with `{8.7,10.0,10.4,11.5}`. To illustrate, an example evaluating the `ViT-B (MAE)` model with `11.5G` FLOPs would be:
+```
+python main.py --eval --load_compression_rate --data-path $path_to_imagenet$ --model vit_base_patch16_mae --target_flops 11.5
+```
+This should give:
+```
+Acc@1 82.864 Acc@5 96.148 loss 0.794 flops 11.517
+```
+</details>
+
+<details>
+
+<summary>ViT-L (MAE)</summary>
+
+For the `ViT-L (MAE)` model, we currently offer support for the `--target_flops` option with `{31.0,34.7,38.5,42.3,46.1}`. To illustrate, an example evaluating the `ViT-L (MAE)` model with `42.3G` FLOPs would be:
+```
+python main.py --eval --load_compression_rate --data-path $path_to_imagenet$ --model vit_large_patch16_mae --target_flops 42.3
+```
+This should give:
+```
+Acc@1 85.658 Acc@5 97.442 loss 0.683 flops 42.290
+```
+</details>
+
+<details>
+<summary>ViT-H (MAE)</summary>
+
+For the `ViT-H (MAE)` model, we currently offer support for the `--target_flops` option with `{83.7,93.2,103.4,124.5}`. To illustrate, an example evaluating the `ViT-H (MAE)` model with `103.4G` FLOPs would be:
+```
+python main.py --eval --load_compression_rate --data-path $path_to_imagenet$ --model vit_huge_patch14_mae --target_flops 103.4
+```
+This should give:
+```
+Acc@1 86.664 Acc@5 97.894 loss 0.602 flops 103.337
+```
+</details>
+
+<details>
+<summary>CAFormer-S36</summary>
+
+For the `CAFormer-S36` model, we currently offer support for the `--target_flops` option with `{5.2,5.6,6.0}`. To illustrate, an example evaluating the `CAFormer-S36` model with `5.6` FLOPs would be:
+```
+python main.py --eval --load_compression_rate --data-path $path_to_imagenet$ --model caformer_s36 --target_flops 5.6
+```
+This should give:
+```
+Acc@1 83.910 Acc@5 96.710 loss 0.712 flops 5.604
+```
+</details>
+
+
+
+## Training
+
+To find the optimal compression rate by proposed `DiffRate`, run the following code:
+```
+python -m torch.distributed.launch \
+--nproc_per_node=4 --use_env  \
+--master_port 29513 main.py \
+--arch-lr 0.01 --arch-min-lr 0.001 \
+--epoch 3 --batch-size 256 \
+--data-path $path_to_imagenet$ \
+--output_dir $path_to_save_log$ \
+--model $model_name$ \
+--target_flops $target_flops$
+```
+- supported `$model_name$`: `{vit_deit_tiny_patch16_224,vit_deit_small_patch16_224,vit_deit_base_patch16_224,vit_base_patch16_mae,vit_large_patch16_mae,vit_huge_patch14_mae,caformer_s36}`
+- supported `$target_flops$`: a floating point number
+
+For example, search a `2.9G` compression rate schedule for `ViT-S (DeiT)`:
+```
+python -m torch.distributed.launch \
+--nproc_per_node=4 --use_env  \
+--master_port 29513 main.py \
+--arch-lr 0.01 --arch-min-lr 0.001 \
+--epoch 3 --batch-size 256 \
+--data-path $path_to_imagenet$ \
+--output_dir $path_to_save_log$ \
+--model vit_deit_small_patch16_224 \
+--target_flops 2.9
+```
+
+## Visualization
+See [visualization.ipynb](https://github.com/anonymous998899/DiffRate/blob/main/visualization.ipynb) for more details.
+
+## Citation
+If you use DiffRate or this repository in your work, please cite:
+```
+@article{DiffRate,
+  title={DiffRate : Differentiable Compression Rate for Efficient Vision Transformers},
+  author={Mengzhao Chen, Wenqi Shao, Peng Xu, Mingbao Lin, Kaipeng Zhang, Fei Chao, Rongrong Ji, Yu Qiao, Ping Luo},
+  journal={arXiv preprint arXiv:2305.17997},
+  year={2023}
 }
 ```
 
-* The original implementation was in TensorFlow+TPU. This re-implementation is in PyTorch+GPU.
-
-* This repo is a modification on the [DeiT repo](https://github.com/facebookresearch/deit). Installation and preparation follow that repo.
-
-* This repo is based on [`timm==0.3.2`](https://github.com/rwightman/pytorch-image-models), for which a [fix](https://github.com/rwightman/pytorch-image-models/issues/420#issuecomment-776459842) is needed to work with PyTorch 1.8.1+.
-
-### Catalog
-
-- [x] Visualization demo
-- [x] Pre-trained checkpoints + fine-tuning code
-- [x] Pre-training code
-
-### Visualization demo
-
-Run our interactive visualization demo using [Colab notebook](https://colab.research.google.com/github/facebookresearch/mae/blob/main/demo/mae_visualize.ipynb) (no GPU needed):
-<p align="center">
-  <img src="https://user-images.githubusercontent.com/11435359/147859292-77341c70-2ed8-4703-b153-f505dcb6f2f8.png" width="600">
-</p>
-
-### Fine-tuning with pre-trained checkpoints
-
-The following table provides the pre-trained checkpoints used in the paper, converted from TF/TPU to PT/GPU:
-<table><tbody>
-<!-- START TABLE -->
-<!-- TABLE HEADER -->
-<th valign="bottom"></th>
-<th valign="bottom">ViT-Base</th>
-<th valign="bottom">ViT-Large</th>
-<th valign="bottom">ViT-Huge</th>
-<!-- TABLE BODY -->
-<tr><td align="left">pre-trained checkpoint</td>
-<td align="center"><a href="https://dl.fbaipublicfiles.com/mae/pretrain/mae_pretrain_vit_base.pth">download</a></td>
-<td align="center"><a href="https://dl.fbaipublicfiles.com/mae/pretrain/mae_pretrain_vit_large.pth">download</a></td>
-<td align="center"><a href="https://dl.fbaipublicfiles.com/mae/pretrain/mae_pretrain_vit_huge.pth">download</a></td>
-</tr>
-<tr><td align="left">md5</td>
-<td align="center"><tt>8cad7c</tt></td>
-<td align="center"><tt>b8b06e</tt></td>
-<td align="center"><tt>9bdbb0</tt></td>
-</tr>
-</tbody></table>
-
-The fine-tuning instruction is in [FINETUNE.md](FINETUNE.md).
-
-By fine-tuning these pre-trained models, we rank #1 in these classification tasks (detailed in the paper):
-<table><tbody>
-<!-- START TABLE -->
-<!-- TABLE HEADER -->
-<th valign="bottom"></th>
-<th valign="bottom">ViT-B</th>
-<th valign="bottom">ViT-L</th>
-<th valign="bottom">ViT-H</th>
-<th valign="bottom">ViT-H<sub>448</sub></th>
-<td valign="bottom" style="color:#C0C0C0">prev best</td>
-<!-- TABLE BODY -->
-<tr><td align="left">ImageNet-1K (no external data)</td>
-<td align="center">83.6</td>
-<td align="center">85.9</td>
-<td align="center">86.9</td>
-<td align="center"><b>87.8</b></td>
-<td align="center" style="color:#C0C0C0">87.1</td>
-</tr>
-<td colspan="5"><font size="1"><em>following are evaluation of the same model weights (fine-tuned in original ImageNet-1K):</em></font></td>
-<tr>
-</tr>
-<tr><td align="left">ImageNet-Corruption (error rate) </td>
-<td align="center">51.7</td>
-<td align="center">41.8</td>
-<td align="center"><b>33.8</b></td>
-<td align="center">36.8</td>
-<td align="center" style="color:#C0C0C0">42.5</td>
-</tr>
-<tr><td align="left">ImageNet-Adversarial</td>
-<td align="center">35.9</td>
-<td align="center">57.1</td>
-<td align="center">68.2</td>
-<td align="center"><b>76.7</b></td>
-<td align="center" style="color:#C0C0C0">35.8</td>
-</tr>
-<tr><td align="left">ImageNet-Rendition</td>
-<td align="center">48.3</td>
-<td align="center">59.9</td>
-<td align="center">64.4</td>
-<td align="center"><b>66.5</b></td>
-<td align="center" style="color:#C0C0C0">48.7</td>
-</tr>
-<tr><td align="left">ImageNet-Sketch</td>
-<td align="center">34.5</td>
-<td align="center">45.3</td>
-<td align="center">49.6</td>
-<td align="center"><b>50.9</b></td>
-<td align="center" style="color:#C0C0C0">36.0</td>
-</tr>
-<td colspan="5"><font size="1"><em>following are transfer learning by fine-tuning the pre-trained MAE on the target dataset:</em></font></td>
-</tr>
-<tr><td align="left">iNaturalists 2017</td>
-<td align="center">70.5</td>
-<td align="center">75.7</td>
-<td align="center">79.3</td>
-<td align="center"><b>83.4</b></td>
-<td align="center" style="color:#C0C0C0">75.4</td>
-</tr>
-<tr><td align="left">iNaturalists 2018</td>
-<td align="center">75.4</td>
-<td align="center">80.1</td>
-<td align="center">83.0</td>
-<td align="center"><b>86.8</b></td>
-<td align="center" style="color:#C0C0C0">81.2</td>
-</tr>
-<tr><td align="left">iNaturalists 2019</td>
-<td align="center">80.5</td>
-<td align="center">83.4</td>
-<td align="center">85.7</td>
-<td align="center"><b>88.3</b></td>
-<td align="center" style="color:#C0C0C0">84.1</td>
-</tr>
-<tr><td align="left">Places205</td>
-<td align="center">63.9</td>
-<td align="center">65.8</td>
-<td align="center">65.9</td>
-<td align="center"><b>66.8</b></td>
-<td align="center" style="color:#C0C0C0">66.0</td>
-</tr>
-<tr><td align="left">Places365</td>
-<td align="center">57.9</td>
-<td align="center">59.4</td>
-<td align="center">59.8</td>
-<td align="center"><b>60.3</b></td>
-<td align="center" style="color:#C0C0C0">58.0</td>
-</tr>
-</tbody></table>
-
-### Pre-training
-
-The pre-training instruction is in [PRETRAIN.md](PRETRAIN.md).
-
-### License
-
-This project is under the CC-BY-NC 4.0 license. See [LICENSE](LICENSE) for details.
+## Acknowledge
+This codebase borrow some code from [DeiT](https://github.com/facebookresearch/deit) and [ToMe](https://github.com/facebookresearch/ToMe). Thanks for their wonderful work.

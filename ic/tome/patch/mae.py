@@ -13,7 +13,6 @@
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 
-from tome.utils import parse_r
 
 from .timm import PiToMeBlock, ToMeBlock, ToMeAttention, ToMeBlockUsingRatio
 
@@ -26,7 +25,7 @@ def make_tome_class(transformer_class):
         - For MAE: make global average pooling proportional to token size
         """
 
-        def forward(self, *args, **kwdargs) -> torch.Tensor:
+        def forward(self, x, return_flop=True) -> torch.Tensor:
             # self._tome_info["r"] = parse_r(len(self.blocks), self.r)
             margin = 0.90
             self._tome_info["r"] = [self.r]* len(self.blocks) 
@@ -37,7 +36,15 @@ def make_tome_class(transformer_class):
             self._tome_info["size"] = None
             self._tome_info["source"] = None
 
-            return super().forward(*args, **kwdargs)
+            x = super().forward(x)
+            if return_flop:
+                if self.training:
+                    flops = self.calculate_flop_training()
+                else:
+                    flops = self.calculate_flop_inference()
+                return x, flops
+            else:
+                return x
 
         def forward_features(self, x: torch.Tensor) -> torch.Tensor:
             # From the MAE implementation
@@ -69,6 +76,44 @@ def make_tome_class(transformer_class):
                 outcome = x[:, 0]
 
             return outcome
+        
+        def calculate_flop_training(self):
+            C = self.embed_dim
+            patch_number = float(self.patch_embed.num_patches)
+            N = torch.tensor(patch_number+1).to('cuda')
+            flops = 0
+            patch_embedding_flops = N*C*(self.patch_embed.patch_size[0]*self.patch_embed.patch_size[1]*3)
+            classifier_flops = C*self.num_classes
+            with torch.cuda.amp.autocast(enabled=False):
+                for block in (self.blocks):
+                    # translate fp16 to fp32 for stable training
+                    mhsa_flops = 4*N*C*C + 2*N*N*C
+                    flops += mhsa_flops
+                    N = N * self.ratio
+                    ffn_flops = 8*N*C*C
+                    flops += ffn_flops
+            flops += patch_embedding_flops
+            flops += classifier_flops
+            return flops
+
+        def calculate_flop_inference(self):
+            C = self.embed_dim
+            patch_number = float(self.patch_embed.num_patches)
+            N = torch.tensor(patch_number+1).to('cuda')
+            flops = 0
+            patch_embedding_flops = N*C*(self.patch_embed.patch_size[0]*self.patch_embed.patch_size[1]*3)
+            classifier_flops = C*self.num_classes
+            with torch.cuda.amp.autocast(enabled=False):
+                for block in (self.blocks):
+                    mhsa_flops = 4*N*C*C + 2*N*N*C
+                    flops += mhsa_flops
+                    N = N * self.ratio
+                    ffn_flops = 8*N*C*C
+                    flops += ffn_flops
+            flops += patch_embedding_flops
+            flops += classifier_flops
+            return flops
+        
 
     return ToMeVisionTransformer
 

@@ -8,6 +8,7 @@ from config import parser
 from config import LAVIS_BLIP_BASE_FLICKR, LAVIS_BLIP_BASE_COCO, COCO, FLICKR
 from dotenv import load_dotenv
 import os
+import timm.models.vision_transformer
 
 # Load environment variables from .env file
 load_dotenv()
