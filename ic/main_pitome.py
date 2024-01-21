@@ -28,7 +28,7 @@ import warnings
 from utils import MultiEpochsDataLoader
 from timm.scheduler.cosine_lr import CosineLRScheduler
 
-import tome
+import pitome
 from dotenv import load_dotenv
 from utils import build_transform
 import os
@@ -305,11 +305,14 @@ def main(args):
     # else:
     #     raise ValueError("only support deit, mae and caformer in this codebase")
         # DiffRate Patch
-    if 'deit' or  'vit' in args.model:
-        tome.patch.deit(model, compress_method='tome')
+    if 'deit' in args.model:
+        pitome.patch.deit(model, compress_method='pitome')
+        model.ratio=float(args.ratio)
+    elif 'vit' in args.model:
+        pitome.patch.aug(model, compress_method='pitome')
         model.ratio=float(args.ratio)
     elif 'mae' in args.model:
-        tome.patch.mae(model, compress_method='tome')
+        pitome.patch.mae(model, compress_method='pitome')
         model.ratio=float(args.ratio)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")

@@ -294,7 +294,7 @@ def apply_patch(
 
         if isinstance(module, Block):
             # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
-            module.__class__ = ToMeBlockUsingRatio if compress_method == 'tome' else PiToMeBlock 
+            module.__class__ = ToMeBlockUsingRatio 
             module._tome_info = model._tome_info
         elif isinstance(module, Attention):
             module.__class__ = ToMeAttention

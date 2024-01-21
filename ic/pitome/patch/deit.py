@@ -6,31 +6,110 @@
 # --------------------------------------------------------
 # References:
 # timm: https://github.com/rwightman/pytorch-image-models/tree/master/timm
-# mae: https://github.com/facebookresearch/mae
 # --------------------------------------------------------
 
 
+from typing import Tuple
+
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
+from copy import copy
+
+from pitome.merge import merge_source, pitome, merge_mean
 
 
-from .deit import ToMeAttention, ToMeBlockUsingRatio
+
+class PiToMeBlock(Block):
+    """
+    Modifications:
+     - Apply ToMe between the attention and mlp blocks
+     - Compute and propogate token size and potentially the token sources.
+    """
+
+    def _drop_path1(self, x):
+        return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
+
+    def _drop_path2(self, x):
+        return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
+        x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
+        x = x + self._drop_path1(x_attn)
+
+        ratio = self._tome_info["ratio"].pop(0)
+        if ratio < 1.0:
+            merge, _ = pitome(
+                x=metric,
+                attn=attn,
+                ratio=ratio,
+                margin=self._tome_info["margin"].pop(0),
+                class_token=self._tome_info["class_token"]
+            )
+
+            if self._tome_info["trace_source"]:
+                self._tome_info["source"] = merge_source(
+                    merge, x, self._tome_info["source"]
+                )
+            x = merge_mean(merge, x)
+
+        x = x + self._drop_path2(self.mlp(self.norm2(x)))
+
+
+        return x 
+
+
+
+
+class PiToMeAttention(Attention):
+    """
+    Modifications:
+     - Apply proportional attention
+     - Return the mean of k over heads from attention
+    """
+
+    def forward(
+        self, x: torch.Tensor, size: torch.Tensor = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        # Note: this is copied from timm.models.vision_transformer.Attention with modifications.
+        B, N, C = x.shape
+        qkv = (
+            self.qkv(x)
+            .reshape(B, N, 3, self.num_heads, C // self.num_heads)
+            .permute(2, 0, 3, 1, 4)
+        )
+        q, k, v = (
+            qkv[0],
+            qkv[1],
+            qkv[2],
+        )  # make torchscript happy (cannot use tensor as tuple)
+
+        attn = (q @ k.transpose(-2, -1)) * self.scale
+
+        # Apply proportional attention
+        if size is not None:
+            attn = attn + size.log()[:, None, None, :, 0]
+
+        attn = attn.softmax(dim=-1)
+        attn = self.attn_drop(attn)
+
+        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+
+        return x, k.mean(1), attn.mean(-2).mean(-2)
 
 
 def make_tome_class(transformer_class):
-    class ToMeVisionTransformer(transformer_class):
+    class PiToMeVisionTransformer(transformer_class):
         """
         Modifications:
         - Initialize r, token size, and token sources.
-        - For MAE: make global average pooling proportional to token size
         """
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
-            # self._tome_info["r"] = parse_r(len(self.blocks), self.r)
             margin = 0.95
-            self._tome_info["r"] = [self.r]* len(self.blocks) 
             self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
-            # margins = [margin if i < len(self.blocks)//2 else margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
             margins = [margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
             self._tome_info["margin"] = margins 
             self._tome_info["size"] = None
@@ -45,38 +124,8 @@ def make_tome_class(transformer_class):
                 return x, flops
             else:
                 return x
+                
 
-        def forward_features(self, x: torch.Tensor) -> torch.Tensor:
-            # From the MAE implementation
-            B = x.shape[0]
-            x = self.patch_embed(x)
-
-            T = x.shape[1]
-
-            cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
-            x = torch.cat((cls_tokens, x), dim=1)
-            x = x + self.pos_embed
-            x = self.pos_drop(x)
-
-            for blk in self.blocks:
-                x = blk(x)
-
-            if self.global_pool:
-                # ---- ToMe changes this ----
-                # Global average pool proportional to token size
-                if self._tome_info["size"] is not None:
-                    x = (x * self._tome_info["size"])[:, 1:, :].sum(dim=1) / T
-                else:
-                    x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
-                # ---- End of change ----
-
-                outcome = self.fc_norm(x)
-            else:
-                x = self.norm(x)
-                outcome = x[:, 0]
-
-            return outcome
-        
         def calculate_flop_training(self):
             C = self.embed_dim
             patch_number = float(self.patch_embed.num_patches)
@@ -113,31 +162,33 @@ def make_tome_class(transformer_class):
             flops += patch_embedding_flops
             flops += classifier_flops
             return flops
-        
 
-    return ToMeVisionTransformer
+    return PiToMeVisionTransformer
+
 
 
 def apply_patch(
-    model: VisionTransformer, compress_method='tome', trace_source: bool = False, prop_attn: bool = False
+   model: VisionTransformer, compress_method='tome', trace_source: bool = False, prop_attn: bool = True
 ):
     """
-    Applies ToMe to this MAE transformer. Afterward, set r using model.r.
+    Applies ToMe to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
     The sources will be available at model._tome_info["source"] afterward.
 
-    For MAE models, prop_attn should be set to false.
+    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
+    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    ToMeVisionTransformer = make_tome_class(model.__class__)
+    PiToMeVisionTransformer = make_tome_class(model.__class__)
     print('using', compress_method)
 
-    model.__class__ = ToMeVisionTransformer
-    model.r = 0
-    model.ratio = 1.0
+    model.__class__ = PiToMeVisionTransformer
+    model.ratio = 1.0 
+    
+    # model.compress_method = 'tome' 
     model._tome_info = {
-        "r": model.r,
         "ratio": model.ratio,
+        "margin":  [],
         "size": None,
         "source": None,
         "trace_source": trace_source,
@@ -150,9 +201,10 @@ def apply_patch(
         model._tome_info["distill_token"] = True
 
     for module in model.modules():
+
         if isinstance(module, Block):
-            module.__class__ = ToMeBlockUsingRatio
             # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
+            module.__class__ = PiToMeBlock 
             module._tome_info = model._tome_info
         elif isinstance(module, Attention):
-            module.__class__ = ToMeAttention
+            module.__class__ = PiToMeAttention
