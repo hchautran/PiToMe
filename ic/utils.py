@@ -226,6 +226,15 @@ def create_logger(output_dir, dist_rank=0, name=''):
 
     return logger
 
+class Wandb:
+    _instance = None  # Class variable to store the instance
+
+    def __new__(cls):
+        if cls._instance is None:
+            import wandb
+            cls._instance = wandb 
+        return cls._instance
+
 class MetricLogger(object):
     def __init__(self, delimiter="\t"):
         self.meters = defaultdict(SmoothedValue)

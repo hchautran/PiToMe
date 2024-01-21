@@ -28,6 +28,10 @@ import warnings
 from utils import MultiEpochsDataLoader
 from timm.scheduler.cosine_lr import CosineLRScheduler
 
+from datasets import load_dataset
+from torchvision import transforms
+from PIL import Image
+import torch
 import pitome
 from dotenv import load_dotenv
 from utils import build_transform
@@ -38,7 +42,8 @@ import os
 load_dotenv()
 
 # Access the environment variable
-DATA_PATH = os.environ.get('DATA_PATH')
+# DATA_PATH = os.environ.get('DATA_PATH')
+DATA_PATH = '/media/caduser/MyBook/chau' 
 torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
 
 warnings.filterwarnings('ignore')
@@ -48,11 +53,8 @@ def process_image(batch, transform):
     images = []
     labels = []
     for item in batch:
-        try:
-            images.append(transform(item['image']).unsqueeze(0))
-            labels.append(item['label'])
-        except:
-            pass
+        images.append(transform(item['image']).unsqueeze(0))
+        labels.append(item['label'])
     images_tensor = torch.cat(images)
     labels_tensor = torch.tensor(labels)
 
@@ -60,7 +62,7 @@ def process_image(batch, transform):
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Diffrate training and evaluation script', add_help=False)
-    parser.add_argument('--batch-size', default=300, type=int)
+    parser.add_argument('--batch-size', default=100, type=int)
     parser.add_argument('--epochs', default=300, type=int)
     parser.add_argument('--ratio', default=0.940, type=float)
 
@@ -97,10 +99,8 @@ def get_args_parser():
     # Learning rate schedule parameters
     parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
                         help='LR scheduler (default: "cosine"')
-    parser.add_argument('--lr', type=float, default=5e-4, metavar='LR',
+    parser.add_argument('--lr', type=float, default=1e-4, metavar='LR',
                         help='learning rate (default: 5e-4)')
-    parser.add_argument('--arch-lr', type=float, default=0.01, metavar='LR',
-                        help='learning rate (default: 0.01)')
     parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct',
                         help='learning rate noise on/off epoch percentages')
     parser.add_argument('--lr-noise-pct', type=float, default=0.67, metavar='PERCENT',
@@ -111,8 +111,6 @@ def get_args_parser():
                         help='warmup learning rate (default: 1e-6)')
     parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
-    parser.add_argument('--arch-min-lr', type=float, default=0.001, metavar='LR',
-                        help='lower lr bound for cyclic schedulers that hit 0 (0.001)')
 
     parser.add_argument('--decay-epochs', type=float, default=30, metavar='N',
                         help='epoch interval to decay LR')
@@ -213,6 +211,7 @@ def main(args):
 
     output_dir = Path(args.output_dir)
     logger = utils.create_logger(output_dir,dist_rank=utils.get_rank())
+    wandb = utils.Wandb()
     logger.info(args)
 
     device = torch.device(args.device)
@@ -225,9 +224,24 @@ def main(args):
 
     cudnn.benchmark = True
     dataset = load_dataset("imagenet-1k", cache_dir=f"{DATA_PATH}/imagenet/")
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+    ])
+    def filter_out_grayscale(example):
+        img_tensor = transform(example['image'])
+        # Check if the image has only one channel (grayscale)
+        if img_tensor.shape[0] == 3:
+            return True
+        return False
+
+    # Filter out grayscale images
+    # dataset = dataset.filter(filter_out_grayscale, num_proc=10)
 
     dataset_train = dataset['train']
-    dataset_val = dataset['validation'] 
+    dataset_val = dataset['validation']
+    dataset_train = dataset_train.filter(filter_out_grayscale, num_proc=10)
+    dataset_val = dataset_val.filter(filter_out_grayscale, num_proc=10)
 
 
     if True:  # args.distributed:
@@ -288,7 +302,6 @@ def main(args):
         args.model,
         pretrained=True,
         num_classes=1000,
-        # checkpoint_path=f'{DATA_PATH}/.vision_ckts/checkpoints/mae_finetuned_vit_large.pth',
         drop_rate=args.drop,
         drop_path_rate=args.drop_path,
         drop_block_rate=None,
@@ -305,14 +318,14 @@ def main(args):
     # else:
     #     raise ValueError("only support deit, mae and caformer in this codebase")
         # DiffRate Patch
-    if 'deit' in args.model:
-        pitome.patch.deit(model, compress_method='pitome')
+    if 'deit'  in args.model:
+        pitome.patch.deit(model)
         model.ratio=float(args.ratio)
-    elif 'vit' in args.model:
-        pitome.patch.aug(model, compress_method='pitome')
+    if 'vit' in args.model:
+        pitome.patch.aug(model)
         model.ratio=float(args.ratio)
     elif 'mae' in args.model:
-        pitome.patch.mae(model, compress_method='pitome')
+        pitome.patch.mae(model)
         model.ratio=float(args.ratio)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
@@ -380,11 +393,20 @@ def main(args):
         test_stats = evaluate(data_loader_val, model, device,logger)
         logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
         return
+    else:
+        if utils.is_main_process():
+            wandb.init(
+                name=args.model,
+                project='ic',
+                config={
+                    'compress_method': 'pitome'
+                }
+            )
     
 
-    optimizer = torch.optim.AdamW(model_without_ddp.arch_parameters(), lr=args.arch_lr,weight_decay=0)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,weight_decay=0)
     loss_scaler = utils.NativeScalerWithGradNormCount()
-    lr_scheduler = CosineLRScheduler(optimizer, t_initial=args.epochs, lr_min=args.arch_min_lr, decay_rate=args.decay_rate )
+    lr_scheduler = CosineLRScheduler(optimizer, t_initial=args.epochs, lr_min=args.min_lr, decay_rate=args.decay_rate )
 
 
 
@@ -432,6 +454,8 @@ def main(args):
             target_flops=args.target_flops,
             warm_up=args.warmup_compression_rate
         )
+        if utils.is_main_process():
+            wandb.log(train_stats)
 
         lr_scheduler.step(epoch)
         if args.output_dir:
@@ -450,7 +474,9 @@ def main(args):
         logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
         if utils.is_main_process() and max_accuracy < test_stats['acc1'] :
             shutil.copyfile(checkpoint_path, f'{args.output_dir}/model_best.pth')
-        max_accuracy = max(max_accuracy, test_stats["acc1"])
+            max_accuracy = max(max_accuracy, test_stats["acc1"])
+            wandb.log({'acc': f'{test_stats["acc1"]}%'})
+            wandb.log({'max acc': f'{max_accuracy:.2f}%'})
         logger.info(f'Max accuracy: {max_accuracy:.2f}%')
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
@@ -458,9 +484,8 @@ def main(args):
                      'epoch': epoch,
                      'n_parameters': n_parameters}
 
-        if args.output_dir and utils.is_main_process():
-            with (output_dir / "log.txt").open("a") as f:
-                f.write(json.dumps(log_stats) + "\n")
+        if utils.is_main_process():
+            wandb.log(log_stats)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))

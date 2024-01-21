@@ -6,7 +6,8 @@ import os
 load_dotenv()
 
 # Access the environment variable
-data_path = os.environ.get('DATA_PATH')
+# data_path = os.environ.get('DATA_PATH')
+data_path = '/media/caduser/MyBook/chau' 
 
 def add_flags_from_config(parser, config_dict):
     """
@@ -83,7 +84,7 @@ config_args = {
         "use_graph":  (False, "use knowledge graph"),
         "lr": (1e-4, "learning rate"),
         "dropout": (0.0, "dropout probability"),
-        "cuda": (0, "which cuda device to use (-1 for cpu training)"),
+        "cuda": (5, "which cuda device to use (-1 for cpu training)"),
         "epochs": (10, "maximum number of epochs to train for"),
         "weight_decay": (0.0, "l2 regularization strength"),
         "optimizer": ("adam", "which optimizer to use, can be any of [sgd, adam]"),
@@ -165,7 +166,7 @@ config_args = {
         "rtol": (1e-1, "The absolute tolerance parameter"),
         "temp": (0.07, "distance temperature"),
         "clip_radius": (1.25, "clipping radius"),
-        "vision_trainable_blocks": (6, "number of trainable blocks in vision model"),
+        "vision_trainable_blocks": (12, "number of trainable blocks in vision model"),
         "text_trainable_blocks": (12, "number of trainable blocks in text model"),
         "num_vision_hidden_states": (1, "number of trainable blocks in vision model"),
         "num_text_hidden_states": (1, "number of trainable blocks in text model"),

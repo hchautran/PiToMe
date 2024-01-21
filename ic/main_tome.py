@@ -28,6 +28,10 @@ import warnings
 from utils import MultiEpochsDataLoader
 from timm.scheduler.cosine_lr import CosineLRScheduler
 
+from datasets import load_dataset
+from torchvision import transforms
+from PIL import Image
+import torch
 import tome
 from dotenv import load_dotenv
 from utils import build_transform
@@ -48,11 +52,8 @@ def process_image(batch, transform):
     images = []
     labels = []
     for item in batch:
-        try:
-            images.append(transform(item['image']).unsqueeze(0))
-            labels.append(item['label'])
-        except:
-            pass
+        images.append(transform(item['image']).unsqueeze(0))
+        labels.append(item['label'])
     images_tensor = torch.cat(images)
     labels_tensor = torch.tensor(labels)
 
@@ -60,7 +61,7 @@ def process_image(batch, transform):
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Diffrate training and evaluation script', add_help=False)
-    parser.add_argument('--batch-size', default=300, type=int)
+    parser.add_argument('--batch-size', default=100, type=int)
     parser.add_argument('--epochs', default=300, type=int)
     parser.add_argument('--ratio', default=0.940, type=float)
 
@@ -225,9 +226,24 @@ def main(args):
 
     cudnn.benchmark = True
     dataset = load_dataset("imagenet-1k", cache_dir=f"{DATA_PATH}/imagenet/")
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+    ])
+    def filter_out_grayscale(example):
+        img_tensor = transform(example['image'])
+        # Check if the image has only one channel (grayscale)
+        if img_tensor.shape[0] == 3:
+            return True
+        return False
+
+    # Filter out grayscale images
+    # dataset = dataset.filter(filter_out_grayscale, num_proc=10)
 
     dataset_train = dataset['train']
-    dataset_val = dataset['validation'] 
+    dataset_val = dataset['validation']
+    dataset_train = dataset_train.filter(filter_out_grayscale, num_proc=10)
+    dataset_val = dataset_val.filter(filter_out_grayscale, num_proc=10)
 
 
     if True:  # args.distributed:
@@ -379,7 +395,7 @@ def main(args):
         return
     
 
-    optimizer = torch.optim.AdamW(model_without_ddp.arch_parameters(), lr=args.arch_lr,weight_decay=0)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.arch_lr,weight_decay=0)
     loss_scaler = utils.NativeScalerWithGradNormCount()
     lr_scheduler = CosineLRScheduler(optimizer, t_initial=args.epochs, lr_min=args.arch_min_lr, decay_rate=args.decay_rate )
 

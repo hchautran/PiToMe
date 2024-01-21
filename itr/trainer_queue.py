@@ -40,10 +40,11 @@ class MyTrainer:
         self.accelerator = Accelerator(
             mixed_precision=config.mixed_precision,
             gradient_accumulation_steps=config.gradient_accumulation_steps,
+            device_placement=False
         )
         self.enable_log = self.config.enable_log
         self.current_epoch = 0
-        self.model = self.accelerator.prepare(model)
+        self.model = self.accelerator.prepare(model).to(self.device)
 
         self.optimizer = torch.optim.Adam(
             self.model.parameters(),
@@ -94,10 +95,10 @@ class MyTrainer:
                     # assert len(img_ids) == len(set(img_ids))
 
                     loss, stats = self.model(
-                        input_ids=data["input_ids"],
-                        attention_mask=data["attention_mask"],
-                        pixel_values=data["pixel_values"],
-                        image_id=data['img_id'],
+                        input_ids=data["input_ids"].to(self.device),
+                        attention_mask=data["attention_mask"].to(self.device),
+                        pixel_values=data["pixel_values"].to(self.device),
+                        image_id=data['img_id'].to(self.device),
                         epoch=epoch,
                         iters=current_step,
                         num_iters_per_epoch=len(self.train_loader),
@@ -198,20 +199,13 @@ class MyTrainer:
 
         with torch.no_grad():
             for data in tqdm(loader):
-                if isinstance(dataset, DataLoader): 
-                    text_embeds, _ = self.model.get_text_features(
-                        input_ids=data["input_ids"], attention_mask=data["attention_mask"]
-                    )
-                    vision_embeds, _, eval_memory = self.model.get_vision_features(
-                        pixel_values=data["pixel_values"], use_compressed_hidden_state=True
-                    )
-                else:
-                    text_embeds, _ = self.model.get_text_features(
-                        input_ids=data["input_ids"][0], attention_mask=data["attention_mask"][0]
-                    )
-                    vision_embeds, _, eval_memory = self.model.get_vision_features(
-                        pixel_values=data["pixel_values"][0], use_compressed_hidden_state=True
-                    )
+                text_embeds, _ = self.model.get_text_features(
+                    input_ids=data["input_ids"].to(self.device), attention_mask=data["attention_mask"].to(self.device)
+                )
+                vision_embeds, _, eval_memory = self.model.get_vision_features(
+                    pixel_values=data["pixel_values"].to(self.device), use_compressed_hidden_state=True
+                )
+          
                 all_text_embeds.append(text_embeds.cpu())
                 all_vision_embeds.append(vision_embeds.cpu())
                 memory_used += eval_memory

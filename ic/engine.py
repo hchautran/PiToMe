@@ -11,6 +11,7 @@ import torch
 
 from timm.data import Mixup
 from timm.utils import accuracy, ModelEma
+import wandb
 
 import utils
 
@@ -23,8 +24,6 @@ def train_one_epoch(model: torch.nn.Module, criterion,
     model.train(set_training_mode)
     # model.train(False)      # finetune
     metric_logger = utils.MetricLogger(delimiter="  ")
-    # metric_logger.add_meter('lr_weight', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
-    metric_logger.add_meter('lr_architecture', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
     logger.info_freq = 10
     compression_rate_print_freq = 100
@@ -36,9 +35,10 @@ def train_one_epoch(model: torch.nn.Module, criterion,
     else:
         lamb = 5
 
-    for data_iter_step, (samples, targets) in enumerate(metric_logger.log_every(data_loader, logger.info_freq, header,logger)):
-        samples = samples.to(device, non_blocking=True)
-        targets = targets.to(device, non_blocking=True)
+    for data_iter_step, (batch) in enumerate(metric_logger.log_every(data_loader, logger.info_freq, header,logger)):
+
+        samples = batch['image'].to(device, non_blocking=True)
+        targets = batch['label'].to(device, non_blocking=True)
 
         if mixup_fn is not None:
             samples, targets = mixup_fn(samples, targets)
@@ -49,6 +49,8 @@ def train_one_epoch(model: torch.nn.Module, criterion,
             loss_flops = ((flops/1e9)-target_flops)**2
             loss = lamb * loss_flops + loss_cls
             loss_cls_value = loss_cls.item()
+            if utils.is_main_process():
+                wandb.log({'current loss': loss_cls_value})
             loss_flops_value = loss_flops.item()
         
         
@@ -61,23 +63,15 @@ def train_one_epoch(model: torch.nn.Module, criterion,
         # this attribute is added by timm on one optimizer (adahessian)
         is_second_order = hasattr(optimizer, 'is_second_order') and optimizer.is_second_order
         grad_norm = loss_scaler(loss, optimizer, clip_grad=max_norm,
-                    parameters=model.module.arch_parameters(), create_graph=is_second_order)
+                    parameters=model.parameters(), create_graph=is_second_order)
         torch.cuda.synchronize()
 
-        if data_iter_step%compression_rate_print_freq == 0:
-            if hasattr(model, 'module'):  # for DDP 
-                prune_kept_num, merge_kept_num = model.module.get_kept_num()
-            else:
-                prune_kept_num, merge_kept_num = model.get_kept_num()
-            logger.info(f'prune kept number:{prune_kept_num}')
-            logger.info(f'merge kept number:{merge_kept_num}')
-
+        
 
         metric_logger.update(loss_cls=loss_cls_value)
         metric_logger.update(loss_flops=loss_flops_value)
         metric_logger.update(flops=flops/1e9)
         metric_logger.update(grad_norm=grad_norm)
-        metric_logger.update(lr_architecture=optimizer.param_groups[0]["lr"])
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     logger.info(f"Averaged stats:{metric_logger}")

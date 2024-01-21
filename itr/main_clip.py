@@ -14,10 +14,10 @@ if __name__ == "__main__":
     from config import EUCLID, LORENTZ
     from config import COCO_PATH, FLICKR_PATH, CLIP_LARGE_PATCH_14, CLIP_BASE_PATCH_16, BLIP_BASE_FLICKR, FLICKR, COCO
     config = parser.parse_args()
-    for dataset in [FLICKR]:
+    for dataset in [COCO]:
         config.dataset = dataset
         for model_ckt in [
-            CLIP_LARGE_PATCH_14,
+            # CLIP_LARGE_PATCH_14,
             CLIP_BASE_PATCH_16,
         ]:
             config.model_ckt = model_ckt
