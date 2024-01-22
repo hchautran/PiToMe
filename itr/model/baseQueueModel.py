@@ -116,7 +116,6 @@ class BaseModelWithQueue(BlipBase, MomentumDistilationMixin, SharedQueueMixin):
             input_ids=input_ids,
             attention_mask=attention_mask
         )
-        # print('filtered model')
         image_output = self.model(
             pixel_values=pixel_values,
             use_compressed_hidden_state=True
@@ -209,8 +208,8 @@ class BaseModelWithQueue(BlipBase, MomentumDistilationMixin, SharedQueueMixin):
         text_feat = F.normalize(text_output[1], p=2, dim=-1)
         return text_feat, text_output[0]
 
-    def get_vision_features(self, pixel_values:torch.Tensor):
-        image_output = self.model(pixel_values=pixel_values)
-        image_feat = F.normalize(image_output[1], p=2, dim=-1)
-        return image_feat, image_output[0]
+    def get_vision_features(self, pixel_values: torch.Tensor, use_compressed_hidden_state=True):
+        image_output = self.model.get_vision_features(pixel_values=pixel_values, use_compressed_hidden_state=use_compressed_hidden_state)
+        image_feat = F.normalize(image_output[1], dim=-1, p=2)
+        return image_feat, image_output[0], image_output[3], image_output[4]
     

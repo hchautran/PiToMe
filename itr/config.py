@@ -72,6 +72,8 @@ BLIP_LARGE_FLICKR = "Salesforce/blip-itm-large-flickr"
 BLIP_LARGE_FLICKR = "Salesforce/blip-itm-large-coco"
 LAVIS_BLIP_BASE_FLICKR = "lavis-blip-itm-base-flickr"
 LAVIS_BLIP_BASE_COCO= "lavis-blip-itm-base-coco"
+BLIP2 = 'blip2'
+
 FLICKR = "flickr"
 COCO = "coco"
 

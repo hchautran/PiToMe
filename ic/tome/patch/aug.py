@@ -15,7 +15,7 @@ import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 from copy import copy
 
-from tome.merge import bipartite_soft_matching, merge_source, merge_wavg, pitome, merge_mean
+from tome.merge import bipartite_soft_matching, merge_source, merge_wavg
 from tome.utils import parse_r
 
 
@@ -96,52 +96,6 @@ class ToMeBlockUsingRatio(Block):
 
 
         return x
-
-
-
-class PiToMeBlock(Block):
-    """
-    Modifications:
-     - Apply ToMe between the attention and mlp blocks
-     - Compute and propogate token size and potentially the token sources.
-    """
-
-    def _drop_path1(self, x):
-        return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
-
-    def _drop_path2(self, x):
-        return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        x_attn, metric = self.attn(self.norm1(x), attn_size)
-        x = x + self._drop_path1(x_attn)
-
-        ratio = self._tome_info["ratio"].pop(0)
-        if ratio < 1.0:
-            merge, _ = pitome(
-                x=metric,
-                ratio=ratio,
-                margin=self._tome_info["margin"].pop(0),
-                class_token=self._tome_info["class_token"],
-                distill_token=self._tome_info["distill_token"],
-            )
-            # print(x.shape)
-
-            if self._tome_info["trace_source"]:
-                self._tome_info["source"] = merge_source(
-                    merge, x, self._tome_info["source"]
-                )
-            x = merge_mean(merge, x)
-
-        x = x + self._drop_path2(self.mlp(self.norm2(x)))
-
-
-    
-
-        return x 
-
-
 
 
 

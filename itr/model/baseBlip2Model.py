@@ -189,12 +189,12 @@ class BaseModel(nn.Module):
            input_ids=input_ids, 
            attention_mask=attention_mask, 
         )
-        text_feat = self.postprocess_embeds(text_output[1])
+        text_feat = F.normalize(text_output[1], dim=-1, p=2)
         return text_feat, text_output[0]
 
-    def get_vision_features(self, pixel_values:torch.Tensor):
-        image_output = self.model(pixel_values=pixel_values)
-        image_feat = self.postprocess_embeds(image_output[1])
-        return image_feat, image_output[0]
-    
+  
+    def get_vision_features(self, pixel_values: torch.Tensor, use_compressed_hidden_state=True):
+        image_output = self.model.get_vision_features(pixel_values=pixel_values, use_compressed_hidden_state=use_compressed_hidden_state)
+        image_feat = F.normalize(image_output[1], dim=-1, p=2)
+        return image_feat, image_output[0], image_output[3], image_output[4]
 

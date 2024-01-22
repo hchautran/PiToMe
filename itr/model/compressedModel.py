@@ -168,36 +168,22 @@ class CompressedHFWithQueue(BaseModelWithQueue):
         else:
             model = get_lora_blip(config, model=model) 
             self.model = CompressedHFBLIP(model, compress_method=config.compress_method, r=config.r)
-
-        
         self._init_queue(config, model.config.projection_dim)
-    
-    def get_vision_features(self, pixel_values: torch.Tensor, use_compressed_hidden_state=True):
-        image_output = self.model.get_vision_features(pixel_values=pixel_values, use_compressed_hidden_state=use_compressed_hidden_state)
-        image_feat = torch.nn.functional.normalize(image_output[1], dim=-1, p=2)
-        return image_feat, image_output[0],  image_output[4]
+ 
     
 class CompressedLAVISLIPWithQueue(BaseModelWithQueue):
     def __init__(self, config, model) -> None:
         super(CompressedLAVISLIPWithQueue, self).__init__(config)
         model = get_lora_lavis_blip(config, model=model) 
         self.model = CompressedLAVISBLIP(model, compress_method=config.compress_method, r=config.r)
-        
         self._init_queue(config, 256)
     
-    def get_vision_features(self, pixel_values: torch.Tensor, use_compressed_hidden_state=True):
-        image_output = self.model.get_vision_features(pixel_values=pixel_values, use_compressed_hidden_state=use_compressed_hidden_state)
-        image_feat = F.normalize(image_output[1], dim=-1, p=2)
-        return image_feat, image_output[0], image_output[4]
+
 
 class CompressedLAVISBLIP2WithQueue(Blip2Model):
     def __init__(self, config, model) -> None:
         super(CompressedLAVISBLIP2WithQueue, self).__init__(config)
         model = get_lora_blip2(config, model=model) 
         self.model = CompressedLAVISBLIP2(model, compress_method=config.compress_method, r=config.r)
-        
     
-    def get_vision_features(self, pixel_values: torch.Tensor, use_compressed_hidden_state=True):
-        image_output = self.model.get_vision_features(pixel_values=pixel_values, use_compressed_hidden_state=use_compressed_hidden_state)
-        image_feat = F.normalize(image_output[1], dim=-1, p=2)
-        return image_feat, image_output[0], image_output[4]
+

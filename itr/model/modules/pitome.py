@@ -14,6 +14,9 @@ from .utils import dct, idct
 EUCLID = 'euclidean'
 POINCARE = 'poincare'
 LORENTZ = 'lorentz'
+
+
+
 class CompressedModel(nn.Module):
     def __init__(self, compress_method='dct', r=0.95, window_size=2, manifold=None):
         super().__init__()
@@ -40,11 +43,8 @@ class CompressedModel(nn.Module):
         protected = 0
         if r is None:
             r = math.floor(T- T*self.r)
-            # print(r)
         else:
-            # We can only reduce by a maximum of 50% tokens
             r = min(r, (T - protected) // 2)
-
         if r <= 0:
             return x, x
 
@@ -52,13 +52,8 @@ class CompressedModel(nn.Module):
             x = F.normalize(x, p=2, dim=-1) 
             a, b = x[..., ::2, :], x[..., 1::2, :]
             scores = a @ b.transpose(-1, -2)
-
-       
-
             node_max, node_idx = scores.max(dim=-1)
             edge_idx = node_max.argsort(dim=-1, descending=True)[..., None]
-            # print(node_max)
-
             unm_idx = edge_idx[..., r:, :]  # Unmerged Tokens
             src_idx = edge_idx[..., :r, :]  # Merged Tokens
             dst_idx = node_idx[..., None].gather(dim=-2, index=src_idx)
@@ -74,7 +69,17 @@ class CompressedModel(nn.Module):
             return torch.cat([unm, dst], dim=1)
 
         return merge
-    
+
+    def estimate_flop(self, shape:tuple):
+        with torch.no_grad():
+            flops = 0
+            _, T, C = shape 
+            C = self.embed_dim
+            mhsa_flops = 4*T*C*C + 2*T*T*C
+            ffn_flops = 8*T*C*C
+            flops = mhsa_flops + ffn_flops 
+            return flops
+
 
     def pitome(self, x: torch.Tensor, r: int=None, margin:float=0.5):
         B,T,_ = x.shape
@@ -99,11 +104,10 @@ class CompressedModel(nn.Module):
             src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
             dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, -1, C), src, reduce=mode)
             return torch.cat([ori, dst], dim=1)
-
         return merge
     
 
-    def merge_wavg(
+    def merge_mean(
         self, merge, x: torch.Tensor, size: torch.Tensor = None
     ): 
         """
@@ -114,11 +118,8 @@ class CompressedModel(nn.Module):
             size = torch.ones_like(x[..., 0, None])
 
         x = merge(x, mode="mean")
-        # print(x.shape)
-        # size = merge(size, mode="sum")
-
-        # x = x / size
-        return x, None 
+     
+        return x
             
     def forward(
         self,
@@ -143,7 +144,6 @@ class CompressedModel(nn.Module):
         if use_reconstucted_state:
             x_dct = x_dct[:k, :, :]
             x = idct(x_dct.transpose(0,2), norm='ortho').transpose(0,2)
-            # print(x)
    
         return x.permute(1,0,2), x_dct.permute(1,0,2)
 
@@ -169,10 +169,10 @@ class CompressedModel(nn.Module):
             x_reconstructed, energy = self.dc_transform(x ,use_compressed_hidden_state ) 
         elif self.compress_method == 'PiToMe':
             merge = self.pitome(x, None, margin=margin) 
-            x_reconstructed, energy = self.merge_wavg(merge, x) 
+            x_reconstructed, energy = self.merge_mean(merge, x) 
         elif self.compress_method == 'ToMe':
             merge = self.bipartite_soft_matching(x, None) 
-            x_reconstructed, energy = self.merge_wavg(merge, x) 
+            x_reconstructed, energy = self.merge_mean(merge, x) 
         else: 
             return x, x
 
@@ -188,8 +188,8 @@ class CompressedHFBLIP(CompressedModel):
         self.text_model = model.text_model 
         self.vision_proj = model.visual_projection 
         self.text_proj = model.text_projection 
-        self.compress_layers = [6, 7, 8]
-     
+        self.compress_layers = [i for i in range(1,len(self.vision_model.blocks))]
+        self.model_len = len(self.vision_model.blocks)
 
     
     def get_vision_features(self, pixel_values, use_compressed_hidden_state=True, return_all_hidden_state=False):
@@ -198,6 +198,7 @@ class CompressedHFBLIP(CompressedModel):
         energy = []
         real_mem = 0
         total_mem = 0
+        flop = 0
         ori_size = hidden_states.shape[1]
 
         for i, layer in enumerate(self.vision_model.encoder.layers):
@@ -211,11 +212,14 @@ class CompressedHFBLIP(CompressedModel):
                     margin=(0.9 - 0.9*i/len(self.visual_encoder.blocks))
                 )
                 hidden_states = torch.cat([cls, state], dim=1)
-                if return_all_hidden_state or i == len(self.vision_model.encoder.layers)-1:
-                    energy.append(cur_energy)
-                    all_hidden_states.append(hidden_states)
-                real_mem += hidden_states.shape[1]
-                total_mem += ori_size 
+
+            if return_all_hidden_state or i == len(self.vision_model.encoder.layers)-1:
+                energy.append(cur_energy)
+                all_hidden_states.append(hidden_states)
+            real_mem += hidden_states.shape[1]
+            total_mem += ori_size 
+
+            flop += self.estimate_flop(hidden_states.shape)
 
             hidden_states = layer(
                 hidden_states,
@@ -228,7 +232,7 @@ class CompressedHFBLIP(CompressedModel):
         pooled_output = last_hidden_state[:, 0, :]
         vision_embed = self.vision_proj(pooled_output)
        
-        return hidden_states, vision_embed, all_hidden_states, energy, real_mem/total_mem
+        return hidden_states, vision_embed, all_hidden_states, flop, real_mem/total_mem
 
     def get_text_features(self, input_ids, attention_mask):
         text_output = self.text_model(
@@ -252,14 +256,12 @@ class CompressedLAVISBLIP(CompressedModel):
         self.text_proj = model.text_proj 
         self.compress_layers = [i for i in range(1,len(self.vision_model.blocks))]
         self.model_len = len(self.vision_model.blocks)
-        # self.compress_layers = [1,7]
 
    
     def get_vision_features(self, pixel_values, use_compressed_hidden_state=True, return_all_hidden_state=False):
         B = pixel_values.shape[0]
         x = self.vision_model.patch_embed(pixel_values)
         hidden_states = []
-        energy = [] 
         cls_tokens = self.vision_model.cls_token.expand(
             B, -1, -1
         ) 
@@ -269,28 +271,29 @@ class CompressedLAVISBLIP(CompressedModel):
         ori_size = x.shape[1]
         real_mem = 0
         total_mem = 0
+        flop = 0
         for i, blk in enumerate(self.vision_model.blocks):
             if i in self.compress_layers: 
                 cls = x[:, 0, :].unsqueeze(1)
                 state, cur_energy = self.compress_hidden_state(
                     x[:, 1:, :], 
                     use_compressed_hidden_state=use_compressed_hidden_state,
-                    # margin=(0.5 if i< self.model_len//2 else  0.5-0.5*i/self.model_len)
                     margin=(0.9 - 0.9*i/self.model_len)
                 )
                 x = torch.cat([cls, state], dim=1)
 
-                if return_all_hidden_state or i == len(self.vision_model.blocks)-1:
-                    energy.append(cur_energy)
-                    hidden_states.append(state)
-                real_mem += x.shape[1]
-                total_mem += ori_size 
+            if return_all_hidden_state or i == len(self.vision_model.blocks)-1:
+                hidden_states.append(state)
+            real_mem += x.shape[1]
+            total_mem += ori_size 
+
+            flop += self.estimate_flop(x.shape)
             x = blk(x)
 
         # with torch.no_grad():
         x = self.vision_model.norm(x)
         vision_embed = self.vision_proj(x[:,0,:])
-        return x, vision_embed, hidden_states, energy, real_mem/total_mem
+        return x, vision_embed, hidden_states, flop, real_mem/total_mem
 
     def get_text_features(self, input_ids, attention_mask):
         # with torch.no_grad():
@@ -315,9 +318,8 @@ class CompressedHFCLIP(CompressedModel):
         self.text_model = model.text_model 
         self.vision_proj = model.visual_projection 
         self.text_proj = model.text_projection 
-        # self.compress_layers = [1, 7, 13, 19] if len(self.vision_model.encoder.layers) > 12 else [1, 7]
         self.compress_layers = [i for i in range(1,len(self.vision_model.encoder.layers))]
-        self.len_model = len(self.vision_model.encoder.layers)
+        self.model_len = len(self.vision_model.encoder.layers)
 
     def get_vision_features(self, pixel_values, use_compressed_hidden_state=True, return_all_hidden_state=False):
         energy = []
@@ -326,6 +328,7 @@ class CompressedHFCLIP(CompressedModel):
         hidden_states = self.vision_model.pre_layrnorm(hidden_states)
         real_mem = 0
         total_mem = 0
+        flop = 0
         ori_size = hidden_states.shape[1]
         for i, layer in enumerate(self.vision_model.encoder.layers):
             if i in self.compress_layers:
@@ -333,15 +336,18 @@ class CompressedHFCLIP(CompressedModel):
                 state, cur_energy = self.compress_hidden_state(
                     hidden_states[:, 1:, :], 
                     use_compressed_hidden_state=use_compressed_hidden_state,
-                    margin=(0.5 if i< self.len_model//2 else  0.5-0.5*i/self.len_model)
+                    # margin=(0.5 if i< self.len_model//2 else  0.5-0.5*i/self.len_model)
+                    margin=(0.9 - 0.9*i/self.model_len)
                 )
                 hidden_states = torch.cat([cls, state], dim=1)
                 # print(hidden_states.shape)
             if return_all_hidden_state or i == len(self.vision_model.encoder.layers)-1:
                 energy.append(cur_energy)
                 all_hidden_states.append(hidden_states)
+
             real_mem += hidden_states.shape[1]
             total_mem += ori_size 
+            flop += self.estimate_flop(hidden_states.shape)
 
             hidden_states = layer(
                 hidden_states,
@@ -353,9 +359,8 @@ class CompressedHFCLIP(CompressedModel):
         pooled_output = last_hidden_state[:, 0, :]
         pooled_output = self.vision_model.post_layernorm(pooled_output)
         vision_embed = self.vision_proj(pooled_output)
-        
 
-        return hidden_states, vision_embed, all_hidden_states, energy, real_mem/total_mem
+        return hidden_states, vision_embed, all_hidden_states, flop, real_mem/total_mem
 
     def get_text_features(self, input_ids, attention_mask):
         text_outputs = self.text_model(
@@ -380,8 +385,6 @@ class CompressedLAVISBLIP2(CompressedModel):
         self.text_proj = model.text_proj
         self.Qformer = model.Qformer
         self.itm_head = model.itm_head
-        # self.compress_layers = [20,22,24,26,28,30,32,34,36,38,40]
-        
         self.model_len = len(self.visual_encoder.blocks)
         self.compress_layers = [i for i in range(1, self.model_len)]
 
@@ -391,6 +394,7 @@ class CompressedLAVISBLIP2(CompressedModel):
         energy = []
         total_mem=0
         real_mem=0
+        flop = 0
         with torch.no_grad():
             x = self.visual_encoder.patch_embed(pixel_values.squeeze(0))
             batch_size, seq_len, _ = x.size()
@@ -418,9 +422,9 @@ class CompressedLAVISBLIP2(CompressedModel):
                     all_hidden_states.append(x)
                 real_mem += x.shape[1]
                 total_mem += ori_size 
+                flop += self.estimate_flop(x.shape)
+
             vit_embeds = self.ln_vision(x)
-
-
 
         image_atts = torch.ones(vit_embeds.size()[:-1], dtype=torch.long).to(
             pixel_values.device
@@ -433,8 +437,7 @@ class CompressedLAVISBLIP2(CompressedModel):
             return_dict=True,
         )
         pooled_output = self.vision_proj(query_output.last_hidden_state)
-        # return vit_embeds, pooled_output, all_hidden_states
-        return vit_embeds, pooled_output, all_hidden_states, energy, real_mem/total_mem 
+        return vit_embeds, pooled_output, all_hidden_states, flop, real_mem/total_mem 
 
     def get_text_features(self, input_ids, attention_mask):
         # with torch.no_grad():

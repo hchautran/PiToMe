@@ -28,12 +28,7 @@ def train_one_epoch(model: torch.nn.Module, criterion,
     logger.info_freq = 10
     compression_rate_print_freq = 100
     
-    warm_up_epoch = 1     
     
-    if warm_up and epoch < warm_up_epoch:   # for stable training and better performance
-        lamb = 0
-    else:
-        lamb = 5
 
     for data_iter_step, (batch) in enumerate(metric_logger.log_every(data_loader, logger.info_freq, header,logger)):
 
@@ -46,12 +41,11 @@ def train_one_epoch(model: torch.nn.Module, criterion,
         with torch.cuda.amp.autocast():
             outputs, flops = model(samples)
             loss_cls = criterion(outputs, targets)
-            loss_flops = ((flops/1e9)-target_flops)**2
-            loss = lamb * loss_flops + loss_cls
+            loss = loss_cls
             loss_cls_value = loss_cls.item()
             if utils.is_main_process():
                 wandb.log({'current loss': loss_cls_value})
-            loss_flops_value = loss_flops.item()
+            loss_flops_value = loss_cls.item()
         
         
         if not math.isfinite(loss_cls_value):
@@ -76,7 +70,6 @@ def train_one_epoch(model: torch.nn.Module, criterion,
     metric_logger.synchronize_between_processes()
     logger.info(f"Averaged stats:{metric_logger}")
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
-
 
 @torch.no_grad()
 def evaluate(data_loader, model, device,logger=None):

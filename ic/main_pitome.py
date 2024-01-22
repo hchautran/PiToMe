@@ -99,7 +99,7 @@ def get_args_parser():
     # Learning rate schedule parameters
     parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
                         help='LR scheduler (default: "cosine"')
-    parser.add_argument('--lr', type=float, default=1e-4, metavar='LR',
+    parser.add_argument('--lr', type=float, default=1e-5, metavar='LR',
                         help='learning rate (default: 5e-4)')
     parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct',
                         help='learning rate noise on/off epoch percentages')
@@ -109,7 +109,7 @@ def get_args_parser():
                         help='learning rate noise std-dev (default: 1.0)')
     parser.add_argument('--warmup-lr', type=float, default=1e-6, metavar='LR',
                         help='warmup learning rate (default: 1e-6)')
-    parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR',
+    parser.add_argument('--min-lr', type=float, default=1e-6, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
 
     parser.add_argument('--decay-epochs', type=float, default=30, metavar='N',
@@ -321,11 +321,11 @@ def main(args):
     if 'deit'  in args.model:
         pitome.patch.deit(model)
         model.ratio=float(args.ratio)
-    if 'vit' in args.model:
-        pitome.patch.aug(model)
-        model.ratio=float(args.ratio)
     elif 'mae' in args.model:
         pitome.patch.mae(model)
+        model.ratio=float(args.ratio)
+    elif 'vit' in args.model:
+        pitome.patch.aug(model)
         model.ratio=float(args.ratio)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")

@@ -12,9 +12,8 @@
 from typing import Tuple
 
 import torch
+import torch.nn as nn
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
-from copy import copy
-
 from pitome.merge import merge_source, pitome, merge_mean
 
 
@@ -25,6 +24,8 @@ class PiToMeBlock(Block):
      - Apply ToMe between the attention and mlp blocks
      - Compute and propogate token size and potentially the token sources.
     """
+    def init_margin(self, margin=0.5):
+        self.margin = margin
 
     def _drop_path1(self, x):
         return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
@@ -33,17 +34,17 @@ class PiToMeBlock(Block):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
+        x_attn, metric = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
 
         ratio = self._tome_info["ratio"].pop(0)
         if ratio < 1.0:
-            merge, _ = pitome(
+            merge, isolated_score = pitome(
                 x=metric,
-                attn=attn,
                 ratio=ratio,
-                margin=self._tome_info["margin"].pop(0),
+                margin=self.margin,
                 class_token=self._tome_info["class_token"]
             )
 
@@ -52,9 +53,9 @@ class PiToMeBlock(Block):
                     merge, x, self._tome_info["source"]
                 )
             x = merge_mean(merge, x)
+            # x, self._tome_info["size"] = merge_wavg(merge, x, isolated_score.unsqueeze_(-1))
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
-
 
         return x 
 
@@ -97,10 +98,10 @@ class PiToMeAttention(Attention):
         x = self.proj(x)
         x = self.proj_drop(x)
 
-        return x, k.mean(1), attn.mean(-2).mean(-2)
+        return x, k.mean(1)
 
 
-def make_tome_class(transformer_class):
+def make_pitome_class(transformer_class):
     class PiToMeVisionTransformer(transformer_class):
         """
         Modifications:
@@ -108,10 +109,8 @@ def make_tome_class(transformer_class):
         """
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
-            margin = 0.95
+      
             self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
-            margins = [margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
-            self._tome_info["margin"] = margins 
             self._tome_info["size"] = None
             self._tome_info["source"] = None
 
@@ -134,7 +133,7 @@ def make_tome_class(transformer_class):
             patch_embedding_flops = N*C*(self.patch_embed.patch_size[0]*self.patch_embed.patch_size[1]*3)
             classifier_flops = C*self.num_classes
             with torch.cuda.amp.autocast(enabled=False):
-                for block in (self.blocks):
+                for block in self.blocks:
                     # translate fp16 to fp32 for stable training
                     mhsa_flops = 4*N*C*C + 2*N*N*C
                     flops += mhsa_flops
@@ -168,8 +167,7 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, compress_method='tome', trace_source: bool = False, prop_attn: bool = True
-):
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.5):
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.
 
@@ -179,8 +177,8 @@ def apply_patch(
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    PiToMeVisionTransformer = make_tome_class(model.__class__)
-    print('using', compress_method)
+    PiToMeVisionTransformer = make_pitome_class(model.__class__)
+    print('using', 'pitome')
 
     model.__class__ = PiToMeVisionTransformer
     model.ratio = 1.0 
@@ -196,15 +194,20 @@ def apply_patch(
         "class_token": model.cls_token is not None,
         "distill_token": False,
     }
+    current_layer = 0
+    margin = margin 
+    num_layers = len(module.blocks)
+    margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tome_info["distill_token"] = True
 
     for module in model.modules():
-
         if isinstance(module, Block):
             # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
             module.__class__ = PiToMeBlock 
+            module.init_margin(margins[current_layer])
             module._tome_info = model._tome_info
+            current_layer +=1
         elif isinstance(module, Attention):
             module.__class__ = PiToMeAttention

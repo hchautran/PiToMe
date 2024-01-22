@@ -12,9 +12,8 @@ export CKT_SIZE='vit_large_patch16_mae'
 # export CKT_SIZE='vit_large_patch16_224'
 
 python -m torch.distributed.launch \
---nproc_per_node=4 --use_env  \
+--nproc_per_node=5 --use_env  \
 --master_port 29513 ic/main_tome.py \
---arch-lr 0.01 --arch-min-lr 0.001 \
---epoch 2 --batch-size 24 \
+--epoch 30 --batch-size 100 \
 --model ${CKT_SIZE} \
---ratio 0.95 
+--ratio 0.9385

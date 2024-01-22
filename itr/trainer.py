@@ -35,17 +35,18 @@ class MyTrainer:
         self.img2txt = img2txt
         self.txt2img = txt2img 
         self.device = torch.device(
-            f"cuda:0"
+            f"cuda:{config.cuda}"
             if torch.cuda.is_available() 
             else "cpu"
         )
         self.accelerator = Accelerator(
             mixed_precision=config.mixed_precision,
             gradient_accumulation_steps=config.gradient_accumulation_steps,
+            device_placement=False
         )
         self.enable_log = self.config.enable_log
         self.current_epoch = 0
-        self.model = self.accelerator.prepare(model)
+        self.model = self.accelerator.prepare(model).to(self.device)
 
         if config.optimizer == "adam":
             self.optimizer = torch.optim.Adam(
@@ -103,10 +104,10 @@ class MyTrainer:
                     current_step += 1
 
                     loss, stats = self.model(
-                        input_ids=data["input_ids"],
-                        attention_mask=data["attention_mask"],
-                        pixel_values=data["pixel_values"],
-                        image_id=data['img_id'],
+                        input_ids=data["input_ids"].to(self.device),
+                        attention_mask=data["attention_mask"].to(self.device),
+                        pixel_values=data["pixel_values"].to(self.device),
+                        image_id=data['img_id'].to(self.device),
                     )
 
                     self.accelerator.backward(loss)
@@ -205,14 +206,15 @@ class MyTrainer:
         image_embeds = []
         max_len=35
         memory_used = 0
+        total_flop = 0
 
         with torch.no_grad():
             for data in tqdm(loader):
                 text_feat, _ = self.model.get_text_features(
-                    input_ids=data["input_ids"], attention_mask=data["attention_mask"]
+                    input_ids=data["input_ids"].to(self.device), attention_mask=data["attention_mask"].to(self.device)
                 )
-                image_feat, vit_feat, eval_memory  = self.model.get_vision_features(
-                    pixel_values=data["pixel_values"], use_compressed_hidden_state=True
+                image_feat, vit_feat, flop ,eval_memory  = self.model.get_vision_features(
+                    pixel_values=data["pixel_values"].to(self.device), use_compressed_hidden_state=True
                 )
                 # cur_len = data['input_ids'].shape[-1]
                 # input_ids = F.pad(data['input_ids'][0], (0, max_len - cur_len), "constant", 0)
@@ -223,6 +225,7 @@ class MyTrainer:
                 image_embeds.append(image_feat.cpu())
                 text_embeds.append(text_feat.cpu())
                 memory_used += eval_memory
+                total_flop += flop 
 
 
         text_embeds = torch.cat(text_embeds, dim=0)
@@ -262,6 +265,7 @@ class MyTrainer:
 
         itc_metrics["epoch"] = self.current_epoch
         itc_metrics["eval memory"] = memory_used/len(loader)
+        itc_metrics["flop"] = total_flop/len(loader)
         # itm_metrics["epoch"] = self.current_epoch
         
         # return itc_metrics, itm_metrics

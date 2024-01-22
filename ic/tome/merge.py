@@ -283,16 +283,6 @@ def merge_wavg(
 
     return x, None 
 
-def merge_mean(
-    merge: Callable, x: torch.Tensor
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    """
-    Applies the merge function by taking a average based on token size.
-    Returns the merged tensor and the new token sizes.
-    """
-    x = merge(x, mode="mean")
-    return x
-
 
 
 def merge_source(

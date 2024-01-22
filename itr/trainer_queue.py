@@ -34,7 +34,7 @@ class MyTrainer:
         self.txt2img = txt2img 
         self.device = torch.device(
             f"cuda:{config.cuda}"
-            if (torch.cuda.is_available() and config.cuda >= 0)
+            if torch.cuda.is_available() 
             else "cpu"
         )
         self.accelerator = Accelerator(
@@ -195,20 +195,21 @@ class MyTrainer:
         all_text_embeds = []
         all_vision_embeds = []
         memory_used = 0
-        step = 0
+        total_flop = 0
 
         with torch.no_grad():
             for data in tqdm(loader):
                 text_embeds, _ = self.model.get_text_features(
                     input_ids=data["input_ids"].to(self.device), attention_mask=data["attention_mask"].to(self.device)
                 )
-                vision_embeds, _, eval_memory = self.model.get_vision_features(
+                vision_embeds, _, flop ,eval_memory = self.model.get_vision_features(
                     pixel_values=data["pixel_values"].to(self.device), use_compressed_hidden_state=True
                 )
           
                 all_text_embeds.append(text_embeds.cpu())
                 all_vision_embeds.append(vision_embeds.cpu())
                 memory_used += eval_memory
+                total_flop += flop 
            
 
             all_text_embeds = torch.concat(all_text_embeds, 0)
@@ -223,9 +224,8 @@ class MyTrainer:
                 mode=f'{mode}'
             )
             metrics["eval memory"] = memory_used/len(loader)
+            metrics["flop"] = total_flop/len(loader)
             self.accelerator.free_memory()
-
-  
           
 
         return metrics

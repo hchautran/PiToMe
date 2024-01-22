@@ -19,7 +19,7 @@ from pitome.merge import merge_source, pitome, merge_mean
 from .deit import PiToMeAttention, PiToMeBlock
 
 
-def make_tome_class(transformer_class):
+def make_pitome_class(transformer_class):
     class PiToMeVisionTransformer(transformer_class):
         """
         Modifications:
@@ -88,8 +88,7 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, compress_method='tome', trace_source: bool = False, prop_attn: bool = True
-):
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.5):
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.
 
@@ -99,8 +98,8 @@ def apply_patch(
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    PiToMeVisionTransformer = make_tome_class(model.__class__)
-    print('using', compress_method)
+    PiToMeVisionTransformer = make_pitome_class(model.__class__)
+    print('using', 'pitome')
 
     model.__class__ = PiToMeVisionTransformer
     model.ratio = 1.0 
@@ -116,15 +115,20 @@ def apply_patch(
         "class_token": model.cls_token is not None,
         "distill_token": False,
     }
+    current_layer = 0
+    margin = margin 
+    num_layers = len(module.blocks)
+    margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tome_info["distill_token"] = True
 
     for module in model.modules():
-
         if isinstance(module, Block):
             # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
             module.__class__ = PiToMeBlock 
+            module.init_margin(margins[current_layer])
             module._tome_info = model._tome_info
+            current_layer +=1
         elif isinstance(module, Attention):
             module.__class__ = PiToMeAttention

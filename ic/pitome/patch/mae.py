@@ -15,10 +15,11 @@ from timm.models.vision_transformer import Attention, Block, VisionTransformer
 
 
 from .deit import PiToMeBlock, PiToMeAttention
+import torch.nn as nn
 
 
-def make_tome_class(transformer_class):
-    class ToMeVisionTransformer(transformer_class):
+def make_pitome_class(transformer_class):
+    class PiToMeVisionTransformer(transformer_class):
         """
         Modifications:
         - Initialize r, token size, and token sources.
@@ -26,14 +27,10 @@ def make_tome_class(transformer_class):
         """
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
-            # self._tome_info["r"] = parse_r(len(self.blocks), self.r)
-            margin = 0.90
             self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
-            # margins = [margin if i < len(self.blocks)//2 else margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
-            margins = [margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
-            self._tome_info["margin"] = margins 
             self._tome_info["size"] = None
             self._tome_info["source"] = None
+            self._tome_info["isolate_score"] = None
 
             x = super().forward(x)
             if return_flop:
@@ -41,6 +38,7 @@ def make_tome_class(transformer_class):
                     flops = self.calculate_flop_training()
                 else:
                     flops = self.calculate_flop_inference()
+                
                 return x, flops
             else:
                 return x
@@ -114,11 +112,11 @@ def make_tome_class(transformer_class):
             return flops
         
 
-    return ToMeVisionTransformer
+    return PiToMeVisionTransformer
 
 
 def apply_patch(
-    model: VisionTransformer, compress_method='tome', trace_source: bool = False, prop_attn: bool = False
+    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False, margin=0.9
 ):
     """
     Applies ToMe to this MAE transformer. Afterward, set r using model.r.
@@ -128,10 +126,11 @@ def apply_patch(
 
     For MAE models, prop_attn should be set to false.
     """
-    ToMeVisionTransformer = make_tome_class(model.__class__)
-    print('using', compress_method)
+    PiToMeVisionTransformer = make_pitome_class(model.__class__)
+    print('using', 'pitome')
 
-    model.__class__ = ToMeVisionTransformer
+    current_layer = 0
+    model.__class__ = PiToMeVisionTransformer
     model.ratio = 1.0
     model._tome_info = {
         "ratio": model.ratio,
@@ -142,6 +141,10 @@ def apply_patch(
         "class_token": model.cls_token is not None,
         "distill_token": False,
     }
+    current_layer = 0
+    num_layers = len(model.blocks)
+    margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
+    print(margins)
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tome_info["distill_token"] = True
@@ -149,7 +152,8 @@ def apply_patch(
     for module in model.modules():
         if isinstance(module, Block):
             module.__class__ = PiToMeBlock 
-            # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
+            module.init_margin(margins[current_layer])
             module._tome_info = model._tome_info
+            current_layer +=1
         elif isinstance(module, Attention):
             module.__class__ = PiToMeAttention

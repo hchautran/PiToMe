@@ -152,7 +152,7 @@ if __name__ == "__main__":
 
     # compress_method='none' 
     # compress_method='dct'
-    for method in ['pitome', 'tome', 'dct', 'none']:
+    for method in ['tome','pitome', 'tome', 'dct', 'none']:
         print('using', method)
         model, tokenizer = get_model(
             model_ckt, 

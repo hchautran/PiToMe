@@ -8,15 +8,24 @@ from transformers import CLIPProcessor, BlipProcessor, CLIPModel
 from itr.model.compressedModel import DCTHFWithQueue
 from config import parser
 from itr.model.compressedModel import CompressedLAVISBLIP2WithQueue 
-from config import COCO_PATH, FLICKR_PATH, CLIP_LARGE_PATCH_14, CLIP_BASE_PATCH_16, BLIP_BASE_FLICKR, FLICKR, COCO
-from config import LAVIS_BLIP_BASE_FLICKR, LAVIS_BLIP_BASE_COCO, COCO, FLICKR
+from config import (
+    COCO_PATH, 
+    FLICKR_PATH, 
+    CLIP_LARGE_PATCH_14, 
+    CLIP_BASE_PATCH_16, 
+    BLIP_BASE_FLICKR, 
+    BLIP_BASE_COCO, 
+    BLIP2,
+    FLICKR, 
+    LAVIS_BLIP_BASE_FLICKR, 
+    LAVIS_BLIP_BASE_COCO, 
+    COCO, 
+    FLICKR, 
+)
 import wandb
-
-
-
  
   
-class BLIPVisualizer():
+class BLIPRunner():
     def __init__(self, config, algorithms="PiToMe"):
        # tokenizer = model.tokenizer
         config.enable_log = False
@@ -54,7 +63,7 @@ class BLIPVisualizer():
     def run(self):
         return self.trainer.evaluate()
        
-class CLIPVisualizer():
+class CLIPRunner():
     def __init__(self, config, algorithms="PiToMe"):
         print("Getting CLIP processor...")
         config.enable_log=False
@@ -96,7 +105,7 @@ class CLIPVisualizer():
         return self.trainer.evaluate()
 
      
-class BLIP2Visualizer():
+class BLIP2Runner():
     def __init__(self, config, algorithms="PiToMe"):
         print("Getting blip2 processor...")
         config.enable_log=False
@@ -137,11 +146,12 @@ class BLIP2Visualizer():
 
 if __name__ == '__main__':
     config = parser.parse_args()
-    config.dataset = FLICKR
+    config.dataset = COCO
     for model_ckt in [
-        # CLIP_BASE_PATCH_16,
-        # CLIP_LARGE_PATCH_14,
-        BLIP_BASE_FLICKR,
+        CLIP_BASE_PATCH_16,
+        CLIP_LARGE_PATCH_14,
+        BLIP_BASE_COCO,
+        BLIP2,
     ]:
         config.model_ckt = model_ckt
         for algo in [
@@ -157,7 +167,13 @@ if __name__ == '__main__':
             }, reinit=True, project='PiToMe')
             for r in [0.9, 0.925, 0.95, 0.975]:
                 config.r = r
-                visualizer = BLIP2Visualizer(config, algorithms=algo)
+                if 'clip' in model_ckt:
+                    visualizer = CLIPRunner(config, algorithms=algo)
+                elif 'blip2' in model_ckt: 
+                    visualizer = BLIP2Runner(config, algorithms=algo)
+                elif 'blip' in model_ckt: 
+                    visualizer = BLIPRunner(config, algorithms=algo)
+
                 metrics = visualizer.run()
                 print(metrics)
                 wandb.log({
