@@ -321,11 +321,11 @@ def main(args):
     if 'deit'  in args.model:
         tome.patch.deit(model)
         model.ratio=float(args.ratio)
-    if 'vit' in args.model:
-        tome.patch.aug(model)
-        model.ratio=float(args.ratio)
     elif 'mae' in args.model:
         tome.patch.mae(model)
+        model.ratio=float(args.ratio)
+    elif 'vit' in args.model:
+        tome.patch.aug(model)
         model.ratio=float(args.ratio)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")

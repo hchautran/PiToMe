@@ -14,90 +14,36 @@ import torch.nn.functional as F
 def do_nothing(x, mode=None):
     return x
 
-def bipartite_soft_matching(
-    metric: torch.Tensor,
-    r: int=0,
-    ratio:float=1.0,    
-    class_token: bool = False,
-    distill_token: bool = False,
+def get_bsm_merge(
+    node_max:torch.Tensor,
+    node_idx:torch.Tensor,
+    r:int,
+    class_token=False
 ) -> Tuple[Callable, Callable]:
-    """
-    Applies ToMe with a balanced matching set (50%, 50%).
 
-    Input size is [batch, tokens, channels].
-    r indicates the number of tokens to remove (max 50% of tokens).
-
-    Extra args:
-     - class_token: Whether or not there's a class token.
-     - distill_token: Whether or not there's also a distillation token.
-
-    When enabled, the class token and distillation tokens won't get merged.
-    """
-    protected = 0
-    if class_token:
-        protected += 1
-    if distill_token:
-        protected += 1
-
-    # We can only reduce by a maximum of 50% tokens
-    T = metric.shape[1]
-    if r >0:
-        r = min(r, (T-protected) // 2)
-    elif ratio < 1.0:
-        r = math.floor(T- T*ratio)
-    else:
-        return do_nothing, do_nothing
-
-
-    with torch.no_grad():
-        metric = metric / metric.norm(dim=-1, keepdim=True)
-        a, b = metric[..., ::2, :], metric[..., 1::2, :]
-        scores = a @ b.transpose(-1, -2)
-
-        if class_token:
-            scores[..., 0, :] = -math.inf
-        if distill_token:
-            scores[..., :, 0] = -math.inf
-
-        node_max, node_idx = scores.max(dim=-1)
-        edge_idx = node_max.argsort(dim=-1, descending=True)[..., None]
-
-        unm_idx = edge_idx[..., r:, :]  # Unmerged Tokens
-        src_idx = edge_idx[..., :r, :]  # Merged Tokens
-        dst_idx = node_idx[..., None].gather(dim=-2, index=src_idx)
-
-        if class_token:
-            # Sort to ensure the class token is at the start
-            unm_idx = unm_idx.sort(dim=1)[0]
-
+    edge_idx = node_max.argsort(dim=-1, descending=True)[..., None]
+    unm_idx = edge_idx[..., r:, :]  # Unmerged Tokens
+    src_idx = edge_idx[..., :r, :]  # Merged Tokens
+    dst_idx = node_idx[..., None].gather(dim=-2, index=src_idx)
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
+        if class_token:
+            x_cls=x[:,0,:].unsqueeze(1)
+            x=x[:,1:,:]
+        else:
+            x_cls = None
+        # x = x[batch_idx, std_idx, :] 
         src, dst = x[..., ::2, :], x[..., 1::2, :]
         n, t1, c = src.shape
         unm = src.gather(dim=-2, index=unm_idx.expand(n, t1 - r, c))
         src = src.gather(dim=-2, index=src_idx.expand(n, r, c))
         dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce=mode)
 
-        if distill_token:
-            return torch.cat([unm[:, :1], dst[:, :1], unm[:, 1:], dst[:, 1:]], dim=1)
+        if x_cls is not None:
+            return torch.cat([x_cls, unm, dst], dim=1)
         else:
             return torch.cat([unm, dst], dim=1)
 
-    def unmerge(x: torch.Tensor) -> torch.Tensor:
-        unm_len = unm_idx.shape[1]
-        unm, dst = x[..., :unm_len, :], x[..., unm_len:, :]
-        n, _, c = unm.shape
-
-        src = dst.gather(dim=-2, index=dst_idx.expand(n, r, c))
-
-        out = torch.zeros(n, metric.shape[1], c, device=x.device, dtype=x.dtype)
-
-        out[..., 1::2, :] = dst
-        out.scatter_(dim=-2, index=(2 * unm_idx).expand(n, unm_len, c), src=unm)
-        out.scatter_(dim=-2, index=(2 * src_idx).expand(n, r, c), src=src)
-
-        return out
-
-    return merge, unmerge
+    return merge, None
 
 
 
@@ -107,8 +53,6 @@ def pitome(
     margin:float=0.5,
     class_token: bool = False,
 ):
-    if margin < 0.6:
-        return bipartite_soft_matching(x)
 
     with torch.no_grad():
         if class_token:
@@ -118,10 +62,20 @@ def pitome(
             r = math.floor(T- T*ratio)
         else:
             return do_nothing, do_nothing
+
+        x = F.normalize(x, p=2, dim=-1) 
+
+        if margin >=0.45:
+            a, b = x[..., ::2, :], x[..., 1::2, :]
+            scores = a @ b.transpose(-1, -2)
+            node_max, node_idx = scores.max(dim=-1)
+            return get_bsm_merge(node_max, node_idx, r, class_token)
+        
+
+
         batch_idx = torch.arange(B).unsqueeze_(1).to(x.device)
-        x = F.normalize(x, p=2, dim=-1)
-        sim =x@x.transpose(-1,-2) - margin
-        sim  = torch.where(sim > 0, sim, -margin)
+        sim =x@x.transpose(-1,-2) 
+        sim  = torch.where(sim > margin, sim, -margin)
         isolation_score = sim.mean(dim=-2)
         indices =  torch.argsort(isolation_score, descending=True)
         min_indices = indices[..., :2*r]

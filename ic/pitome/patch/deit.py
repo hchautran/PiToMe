@@ -113,38 +113,26 @@ def make_pitome_class(transformer_class):
             self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
             self._tome_info["size"] = None
             self._tome_info["source"] = None
+            self.total_flop = 0
 
             x = super().forward(x)
             if return_flop:
-                if self.training:
-                    flops = self.calculate_flop_training()
-                else:
-                    flops = self.calculate_flop_inference()
-                return x, flops
+                return x, self.calculate_flop()
             else:
                 return x
                 
 
-        def calculate_flop_training(self):
-            C = self.embed_dim
-            patch_number = float(self.patch_embed.num_patches)
-            N = torch.tensor(patch_number+1).to('cuda')
-            flops = 0
-            patch_embedding_flops = N*C*(self.patch_embed.patch_size[0]*self.patch_embed.patch_size[1]*3)
-            classifier_flops = C*self.num_classes
-            with torch.cuda.amp.autocast(enabled=False):
-                for block in self.blocks:
-                    # translate fp16 to fp32 for stable training
-                    mhsa_flops = 4*N*C*C + 2*N*N*C
-                    flops += mhsa_flops
-                    N = N * self.ratio
-                    ffn_flops = 8*N*C*C
-                    flops += ffn_flops
-            flops += patch_embedding_flops
-            flops += classifier_flops
-            return flops
+        # def calculate_block_flop(self, shape):
+        #     flops = 0
+        #     _, N, C = shape
+        #     mhsa_flops = 4*N*C*C + 2*N*N*C
+        #     flops += mhsa_flops
+        #     ffn_flops = 8*N*C*C
+        #     flops += ffn_flops
+        #     return flops
 
-        def calculate_flop_inference(self):
+
+        def calculate_flop(self):
             C = self.embed_dim
             patch_number = float(self.patch_embed.num_patches)
             N = torch.tensor(patch_number+1).to('cuda')
@@ -161,6 +149,7 @@ def make_pitome_class(transformer_class):
             flops += patch_embedding_flops
             flops += classifier_flops
             return flops
+        
 
     return PiToMeVisionTransformer
 
@@ -196,7 +185,7 @@ def apply_patch(
     }
     current_layer = 0
     margin = margin 
-    num_layers = len(module.blocks)
+    num_layers = len(model.blocks)
     margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:

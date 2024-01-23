@@ -11,9 +11,4 @@ export CKT_SIZE='vit_large_patch16_mae'
 # export CKT_SIZE='vit_base_patch16_224'
 # export CKT_SIZE='vit_large_patch16_224'
 
-python -m torch.distributed.launch \
---nproc_per_node=6 --use_env  \
---master_port 29513 ic/main_pitome.py \
---epoch 30 --batch-size 100 \
---model ${CKT_SIZE} \
---ratio 0.9385
+python ic/main_diff.py --eval --load_compression_rate --data-path $path_to_imagenet$ --model $CKT_SIZE --target_flops 93.2 
