@@ -29,7 +29,6 @@ def make_pitome_class(transformer_class):
         def forward(self, x, return_flop=True) -> torch.Tensor:
             margin = 0.75
             self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
-            # margins = [margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
             margins = [margin if i < len(self.blocks)//2 else margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
             self._tome_info["margin"] = margins 
             self._tome_info["size"] = None

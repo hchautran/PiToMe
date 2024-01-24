@@ -76,8 +76,9 @@ def pitome(
 
         batch_idx = torch.arange(B).unsqueeze_(1).to(x.device)
         sim =x@x.transpose(-1,-2) 
-        sim  = torch.where(sim > margin, sim, -margin)
+        sim  = torch.where(sim > margin, sim, -1.0)
         isolation_score = sim.mean(dim=-2)
+        
         indices =  torch.argsort(isolation_score, descending=True)
         min_indices = indices[..., :2*r]
         protected_idx = indices[..., 2*r:]
@@ -114,6 +115,24 @@ def merge_mean(
     """
     x = merge(x, mode="mean")
     return x
+
+
+
+def merge_wavg(
+    merge: Callable, x: torch.Tensor, size: torch.Tensor = None
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Applies the merge function by taking a weighted average based on token size.
+    Returns the merged tensor and the new token sizes.
+    """
+    if size is None:
+        size = torch.ones_like(x[..., 0, None])
+
+    x = merge(x, mode="sum")
+    size = merge(size, mode="sum")
+    x = x / size
+
+    return x, None 
 
 
 

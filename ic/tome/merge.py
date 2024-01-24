@@ -101,62 +101,6 @@ def bipartite_soft_matching(
     return merge, unmerge
 
 
-
-def pitome(
-    x: torch.Tensor, 
-    r: int=0, 
-    ratio:float=1.0,
-    margin:float=0.5,
-    class_token: bool = False,
-    distill_token: bool = False,
-):
-    if class_token:
-        x=x[:,1:,:]
-    B,T,C = x.shape
-    
-    if r >0:
-        r = min(r, T // 2)
-    elif ratio < 1.0:
-        r = math.floor(T- T*ratio)
-    else:
-        return do_nothing, do_nothing
-
-
-    with torch.no_grad():
-        batch_idx = torch.arange(B).unsqueeze_(1).to(x.device)
-        x = F.normalize(x, p=2, dim=-1)
-        ori_score =x@x.transpose(-1,-2)
-        # margin = (margin+ori_score.mean(-1, keepdim=True))/2
-        ori_score = torch.where(ori_score > margin, ori_score - margin, -margin)
-        indices =  torch.argsort(ori_score.mean(dim=-1), descending=True)
-        min_indices = indices[..., :2*r]
-        protected_idx = indices[..., 2*r:]
-        
-        a_idx, b_idx = min_indices[..., ::2], min_indices[..., 1::2]
-        a, b = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
-        scores = a@b.transpose(-1,-2) 
-        _, dst_idx = scores.max(dim=-1) 
-    
-    def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
-        if class_token:
-            x_cls=x[:,0,:].unsqueeze(1)
-            x=x[:,1:,:]
-        else:
-            x_cls = None
-        B, T, C = x.shape
-
-
-        protected = x[batch_idx, protected_idx,:] 
-        src, dst = x[batch_idx, a_idx, :], x[batch_idx, b_idx, :]
-
-        dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
-        if x_cls is not None:
-            return torch.cat([x_cls, protected, dst], dim=1)
-        else:
-            return torch.cat([protected, dst], dim=1)
-
-    return merge, None 
-
 def kth_bipartite_soft_matching(
     metric: torch.Tensor, k: int
 ) -> Tuple[Callable, Callable]:

@@ -14,7 +14,7 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
-from pitome.merge import merge_source, pitome, merge_mean
+from pitome.merge import merge_source, pitome, merge_mean, merge_wavg
 
 
 
@@ -52,8 +52,8 @@ class PiToMeBlockUsingRatio(Block):
                 self._tome_info["source"] = merge_source(
                     merge, x, self._tome_info["source"]
                 )
-            x = merge_mean(merge, x)
-            # x, self._tome_info["size"] = merge_wavg(merge, x, isolated_score.unsqueeze_(-1))
+            # x = merge_mean(merge, x)
+            x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
 

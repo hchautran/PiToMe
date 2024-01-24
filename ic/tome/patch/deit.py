@@ -15,7 +15,7 @@ import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 from copy import copy
 
-from tome.merge import bipartite_soft_matching, merge_source, merge_wavg, pitome
+from tome.merge import bipartite_soft_matching, merge_source, merge_wavg
 from tome.utils import parse_r
 
 
