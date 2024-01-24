@@ -11,6 +11,7 @@ import torch
 
 from timm.data import Mixup
 from timm.utils import accuracy, ModelEma
+import time
 import wandb
 
 import utils
@@ -82,6 +83,7 @@ def evaluate(data_loader, model, device,logger=None):
     model.eval()
     
     for batch in metric_logger.log_every(data_loader, 10, header,logger):
+        start = time.time()
         
         images = batch['image'].to(device, non_blocking=True)
         target = batch['label'].to(device, non_blocking=True)
@@ -99,6 +101,8 @@ def evaluate(data_loader, model, device,logger=None):
         metric_logger.update(loss=loss.item())
         metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
         metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
+        metric_logger.meters['img/s'].update(time.time() - start, n=batch_size)
+        
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
 

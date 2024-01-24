@@ -42,8 +42,8 @@ import os
 load_dotenv()
 
 # Access the environment variable
-# DATA_PATH = os.environ.get('DATA_PATH')
-DATA_PATH = '/media/caduser/MyBook/chau' 
+DATA_PATH = os.environ.get('DATA_PATH')
+# DATA_PATH = '/media/caduser/MyBook/chau' 
 torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
 
 warnings.filterwarnings('ignore')

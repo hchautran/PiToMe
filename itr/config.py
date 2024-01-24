@@ -6,8 +6,8 @@ import os
 load_dotenv()
 
 # Access the environment variable
-# data_path = os.environ.get('DATA_PATH')
-data_path = '/media/caduser/MyBook/chau' 
+data_path = os.environ.get('DATA_PATH')
+# data_path = '/media/caduser/MyBook/chau' 
 
 def add_flags_from_config(parser, config_dict):
     """
