@@ -34,7 +34,7 @@ from PIL import Image
 import torch
 import tome 
 from dotenv import load_dotenv
-from utils import build_transform
+from utils import build_transform, DATA_PATH
 import os
 
 
@@ -42,7 +42,7 @@ import os
 load_dotenv()
 
 # Access the environment variable
-DATA_PATH = os.environ.get('DATA_PATH')
+# DATA_PATH = os.environ.get('DATA_PATH')
 # DATA_PATH = '/media/caduser/MyBook/chau' 
 torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
 
@@ -242,7 +242,7 @@ def main(args):
 
     dataset_train = dataset['train']
     dataset_val = dataset['validation']
-    dataset_train = dataset_train.filter(filter_out_grayscale, num_proc=10)
+    # dataset_train = dataset_train.filter(filter_out_grayscale, num_proc=10)
     dataset_val = dataset_val.filter(filter_out_grayscale, num_proc=10)
 
 
@@ -487,7 +487,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('DeiT training and evaluation script', parents=[get_args_parser()])
+    parser = argparse.ArgumentParser('training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)

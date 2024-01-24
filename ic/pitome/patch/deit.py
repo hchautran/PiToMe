@@ -196,7 +196,7 @@ def make_pitome_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=1.0):
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_r=False):
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.
 
@@ -234,7 +234,7 @@ def apply_patch(
     for module in model.modules():
         if isinstance(module, Block):
             # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
-            module.__class__ = PiToMeBlock 
+            module.__class__ = PiToMeBlock if use_r else PiToMeBlockUsingRatio 
             module.init_margin(margins[current_layer])
             module._tome_info = model._tome_info
             current_layer +=1

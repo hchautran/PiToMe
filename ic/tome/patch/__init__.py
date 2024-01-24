@@ -5,7 +5,6 @@
 # LICENSE file in the root directory of this source tree.
 # --------------------------------------------------------
 
-from .swag import apply_patch as swag
 from .deit import apply_patch as deit
 from .aug import apply_patch as aug 
 from .mae  import apply_patch as mae

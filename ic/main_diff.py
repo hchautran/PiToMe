@@ -32,7 +32,7 @@ import caformer
 import DiffRate
 import tome
 from dotenv import load_dotenv
-from utils import build_transform
+from utils import build_transform, DATA_PATH
 import os
 
 
@@ -40,8 +40,8 @@ import os
 load_dotenv()
 
 # Access the environment variable
-DATA_PATH = os.environ.get('DATA_PATH')
-# torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
+# DATA_PATH = os.environ.get('DATA_PATH')
+torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
 
 warnings.filterwarnings('ignore')
 
