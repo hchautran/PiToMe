@@ -11,4 +11,4 @@ export CKT_SIZE='vit_large_patch16_mae'
 # export CKT_SIZE='vit_base_patch16_224'
 # export CKT_SIZE='vit_large_patch16_224'
 
-python ic/main_pitome.py --eval --load_compression_rate --data-path $path_to_imagenet$ --model ${CKT_SIZE} --ratio $1 
+python ic/main_pitome.py --eval --load_compression_rate --data-path $path_to_imagenet$ --model ${CKT_SIZE} --r 8 --ratio 0.9385 

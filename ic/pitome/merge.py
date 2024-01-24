@@ -49,6 +49,7 @@ def get_bsm_merge(
 
 def pitome(
     x: torch.Tensor, 
+    r:int=0,
     ratio:float=1.0,
     margin:float=0.5,
     class_token: bool = False,
@@ -57,8 +58,10 @@ def pitome(
     with torch.no_grad():
         if class_token:
             x=x[:,1:,:]
-        B,T,C = x.shape
-        if ratio < 1.0:
+        B,T,_ = x.shape
+        if r > 0:
+            r = min(r, T // 2)
+        elif ratio < 1.0:
             r = math.floor(T- T*ratio)
         else:
             return do_nothing, do_nothing
@@ -70,8 +73,6 @@ def pitome(
             scores = a @ b.transpose(-1, -2)
             node_max, node_idx = scores.max(dim=-1)
             return get_bsm_merge(node_max, node_idx, r, class_token)
-        
-
 
         batch_idx = torch.arange(B).unsqueeze_(1).to(x.device)
         sim =x@x.transpose(-1,-2) 
@@ -91,7 +92,7 @@ def pitome(
             x=x[:,1:,:]
         else:
             x_cls = None
-        B, T, C = x.shape
+        B, _, C = x.shape
 
         protected = x[batch_idx, protected_idx,:] 
         src, dst = x[batch_idx, a_idx, :], x[batch_idx, b_idx, :]

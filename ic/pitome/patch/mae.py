@@ -15,7 +15,7 @@ from timm.models.vision_transformer import Attention, Block, VisionTransformer
 from copy import copy
 
 
-from .deit import PiToMeBlock, PiToMeAttention
+from .deit import PiToMeBlock, PiToMeAttention, PiToMeBlockUsingRatio
 import torch.nn as nn
 
 
@@ -28,6 +28,7 @@ def make_pitome_class(transformer_class):
         """
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
+            self._tome_info["r"] = [self.r]* len(self.blocks) 
             self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
             self._tome_info["size"] = None
             self._tome_info["source"] = None
@@ -100,7 +101,7 @@ def make_pitome_class(transformer_class):
 
 
 def apply_patch(
-    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False, margin=0.9
+    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False, margin=0.9, use_r=True
 ):
     """
     Applies ToMe to this MAE transformer. Afterward, set r using model.r.
@@ -116,6 +117,7 @@ def apply_patch(
     current_layer = 0
     model.__class__ = PiToMeVisionTransformer
     model.ratio = 1.0
+    model.r = 0 
     model._tome_info = {
         "ratio": model.ratio,
         "size": None,
@@ -135,7 +137,7 @@ def apply_patch(
 
     for module in model.modules():
         if isinstance(module, Block):
-            module.__class__ = PiToMeBlock 
+            module.__class__ = PiToMeBlockUsingRatio if not use_r else PiToMeBlock
             module.init_margin(margins[current_layer])
             module._tome_info = model._tome_info
             current_layer +=1

@@ -65,6 +65,8 @@ def get_args_parser():
     parser.add_argument('--batch-size', default=100, type=int)
     parser.add_argument('--epochs', default=300, type=int)
     parser.add_argument('--ratio', default=0.940, type=float)
+    parser.add_argument('--r', default=8, type=float)
+    parser.add_argument('--use_r', default=False, type=bool)
 
     # Model parameters
     parser.add_argument('--model', default='deit_base_patch16_224', type=str, metavar='MODEL',
@@ -99,7 +101,7 @@ def get_args_parser():
     # Learning rate schedule parameters
     parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
                         help='LR scheduler (default: "cosine"')
-    parser.add_argument('--lr', type=float, default=1e-5, metavar='LR',
+    parser.add_argument('--lr', type=float, default=5e-6, metavar='LR',
                         help='learning rate (default: 5e-4)')
     parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct',
                         help='learning rate noise on/off epoch percentages')
@@ -307,26 +309,18 @@ def main(args):
         drop_block_rate=None,
     )
     
-    
-    # DiffRate Patch
-    # if 'deit' in args.model:
-    #     DiffRate.patch.deit(model, prune_granularity=args.granularity, merge_granularity=args.granularity)
-    # elif 'mae' in args.model:
-    #     DiffRate.patch.mae(model, prune_granularity=args.granularity, merge_granularity=args.granularity)
-    # elif 'caformer' in args.model:
-    #     DiffRate.patch.caformer(model, prune_granularity=args.granularity, merge_granularity=args.granularity)
-    # else:
-    #     raise ValueError("only support deit, mae and caformer in this codebase")
-        # DiffRate Patch
     if 'deit'  in args.model:
-        tome.patch.deit(model)
+        tome.patch.deit(model,use_r=args.use_r)
         model.ratio=float(args.ratio)
+        model.r=int(args.r)
     elif 'mae' in args.model:
-        tome.patch.mae(model)
+        tome.patch.mae(model,use_r=args.use_r)
         model.ratio=float(args.ratio)
+        model.r=int(args.r)
     elif 'vit' in args.model:
         tome.patch.aug(model)
         model.ratio=float(args.ratio)
+        model.r=int(args.r)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
     

@@ -18,7 +18,7 @@ from pitome.merge import merge_source, pitome, merge_mean
 
 
 
-class PiToMeBlock(Block):
+class PiToMeBlockUsingRatio(Block):
     """
     Modifications:
      - Apply ToMe between the attention and mlp blocks
@@ -54,6 +54,45 @@ class PiToMeBlock(Block):
                 )
             x = merge_mean(merge, x)
             # x, self._tome_info["size"] = merge_wavg(merge, x, isolated_score.unsqueeze_(-1))
+
+        x = x + self._drop_path2(self.mlp(self.norm2(x)))
+
+        return x 
+
+class PiToMeBlock(Block):
+    """
+    Modifications:
+     - Apply ToMe between the attention and mlp blocks
+     - Compute and propogate token size and potentially the token sources.
+    """
+    def init_margin(self, margin=0.5):
+        self.margin = margin
+
+    def _drop_path1(self, x):
+        return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
+
+    def _drop_path2(self, x):
+        return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
+        x_attn, metric = self.attn(self.norm1(x), attn_size)
+        x = x + self._drop_path1(x_attn)
+
+        r = self._tome_info["r"].pop(0)
+        if r > 0:
+            merge, isolated_score = pitome(
+                x=metric,
+                r=r,
+                margin=self.margin,
+                class_token=self._tome_info["class_token"]
+            )
+
+            if self._tome_info["trace_source"]:
+                self._tome_info["source"] = merge_source(
+                    merge, x, self._tome_info["source"]
+                )
+            x = merge_mean(merge, x)
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
 
@@ -110,6 +149,7 @@ def make_pitome_class(transformer_class):
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
       
+            self._tome_info["r"] = [self.r]* len(self.blocks) 
             self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
             self._tome_info["size"] = None
             self._tome_info["source"] = None
@@ -122,8 +162,7 @@ def make_pitome_class(transformer_class):
                 return x
                 
 
-        # def calculate_block_flop(self, shape):
-        #     flops = 0
+         #     flops = 0
         #     _, N, C = shape
         #     mhsa_flops = 4*N*C*C + 2*N*N*C
         #     flops += mhsa_flops
@@ -131,7 +170,8 @@ def make_pitome_class(transformer_class):
         #     flops += ffn_flops
         #     return flops
 
-
+      # def calculate_block_flop(self, shape):
+ 
         def calculate_flop(self):
             C = self.embed_dim
             patch_number = float(self.patch_embed.num_patches)

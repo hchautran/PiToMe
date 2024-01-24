@@ -208,7 +208,7 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, compress_method='tome', trace_source: bool = False, prop_attn: bool = True
+   model: VisionTransformer, compress_method='tome', trace_source: bool = False, prop_attn: bool = True, use_r=True
 ):
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.
@@ -245,7 +245,7 @@ def apply_patch(
     for module in model.modules():
 
         if isinstance(module, Block):
-            # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
+            module.__class__ = ToMeBlock if use_r > 0 else ToMeBlockUsingRatio
             module.__class__ = ToMeBlockUsingRatio 
             module._tome_info = model._tome_info
         elif isinstance(module, Attention):

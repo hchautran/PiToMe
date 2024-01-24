@@ -14,7 +14,7 @@ import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 
 
-from .deit import ToMeAttention, ToMeBlockUsingRatio
+from .deit import ToMeAttention, ToMeBlockUsingRatio, ToMeBlock
 
 
 def make_tome_class(transformer_class):
@@ -26,13 +26,9 @@ def make_tome_class(transformer_class):
         """
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
-            # self._tome_info["r"] = parse_r(len(self.blocks), self.r)
             margin = 0.95
             self._tome_info["r"] = [self.r]* len(self.blocks) 
             self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
-            # margins = [margin if i < len(self.blocks)//2 else margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
-            margins = [margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
-            self._tome_info["margin"] = margins 
             self._tome_info["size"] = None
             self._tome_info["source"] = None
             self.total_flop = 0
@@ -101,7 +97,7 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-    model: VisionTransformer, compress_method='tome', trace_source: bool = False, prop_attn: bool = False
+    model: VisionTransformer, compress_method='tome', trace_source: bool = False, prop_attn: bool = False, use_r=True
 ):
     """
     Applies ToMe to this MAE transformer. Afterward, set r using model.r.
@@ -133,7 +129,7 @@ def apply_patch(
 
     for module in model.modules():
         if isinstance(module, Block):
-            module.__class__ = ToMeBlockUsingRatio
+            module.__class__ = ToMeBlockUsingRatio if not use_r else ToMeBlock
             # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
             module._tome_info = model._tome_info
         elif isinstance(module, Attention):
