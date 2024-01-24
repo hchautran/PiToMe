@@ -156,7 +156,7 @@ def make_pitome_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.5):
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=1.0):
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.
 
