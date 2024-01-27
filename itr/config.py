@@ -86,7 +86,7 @@ config_args = {
         "use_graph":  (False, "use knowledge graph"),
         "lr": (1e-4, "learning rate"),
         "dropout": (0.0, "dropout probability"),
-        "cuda": (5, "which cuda device to use (-1 for cpu training)"),
+        "cuda": (0, "which cuda device to use (-1 for cpu training)"),
         "epochs": (10, "maximum number of epochs to train for"),
         "weight_decay": (0.0, "l2 regularization strength"),
         "optimizer": ("adam", "which optimizer to use, can be any of [sgd, adam]"),
@@ -180,7 +180,7 @@ config_args = {
         "use_signal_loss": (True, "fourier"),
         "compress_method": ('std', "compress method"),
         "distil": (True, "use distil"),
-        "r": (0.95, "remain ratio")
+        "r": (0.925, "remain ratio")
     },
     "data_config": {
         "dataset": (COCO, "which dataset to use"),

@@ -224,7 +224,7 @@ class MyTrainer:
                 mode=f'{mode}'
             )
             metrics["eval memory"] = memory_used/len(loader)
-            metrics["flop"] = total_flop/len(loader)
+            metrics["gflops"] = total_flop/len(loader)
             self.accelerator.free_memory()
           
 

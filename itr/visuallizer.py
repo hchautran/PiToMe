@@ -1,13 +1,13 @@
-from itr.model.compressedModel import DCTLAVISLIPWithQueue 
+from model.compressedModel import CompressedLAVISLIPWithQueue 
 from lavis.datasets.builders import load_dataset
 from trainer_queue import MyTrainer as LavisTrainer 
 from trainer import MyTrainer as Blip2Trainer 
 from utils.data_utils import  get_loaders
 from lavis.models import load_model_and_preprocess
-from transformers import CLIPProcessor, BlipProcessor, CLIPModel
-from itr.model.compressedModel import DCTHFWithQueue
+from transformers import CLIPProcessor
+from model.compressedModel import CompressedHFWithQueue
 from config import parser
-from itr.model.compressedModel import CompressedLAVISBLIP2WithQueue 
+from model.compressedModel import CompressedLAVISBLIP2WithQueue 
 from config import (
     COCO_PATH, 
     FLICKR_PATH, 
@@ -49,7 +49,7 @@ class BLIPRunner():
             eval_batch_size=50
         )
 
-        queue_model = DCTLAVISLIPWithQueue(config, model)
+        queue_model = CompressedLAVISLIPWithQueue(config, model)
         self.trainer = LavisTrainer(
             model=queue_model,
             config=config,
@@ -88,7 +88,7 @@ class CLIPRunner():
         )
 
         # model = HypGraphCLIPWithQueue(config) if "clip" in config.model_ckt else HypGraphBLIPWithQueue(config)
-        queue_model = DCTHFWithQueue(config) 
+        queue_model = CompressedHFWithQueue(config) 
         # model = BLIPWithQueue(config) 
         self.trainer = LavisTrainer(
             model=queue_model,
@@ -146,11 +146,11 @@ class BLIP2Runner():
 
 if __name__ == '__main__':
     config = parser.parse_args()
-    config.dataset = COCO
+    config.dataset = FLICKR
     for model_ckt in [
-        CLIP_BASE_PATCH_16,
-        CLIP_LARGE_PATCH_14,
-        BLIP_BASE_COCO,
+        # CLIP_BASE_PATCH_16,
+        # CLIP_LARGE_PATCH_14,
+        # BLIP_BASE_COCO,
         BLIP2,
     ]:
         config.model_ckt = model_ckt
@@ -161,10 +161,16 @@ if __name__ == '__main__':
             'dct', 
             'none', 
         ]:
-            wandb.init(name=f'blip2_{algo}', config={
-                "model":model_ckt,
-                "algorithms": algo,
-            }, reinit=True, project='PiToMe')
+            # wandb.init(
+            #     name=f'{model_ckt}_{algo}', 
+            #     config={
+            #         "model":model_ckt,
+            #         "algorithms": algo,
+
+            #     }, 
+            #     reinit=True, 
+            #     project='itr-off-the-shell'
+            # )
             for r in [0.9, 0.925, 0.95, 0.975]:
                 config.r = r
                 if 'clip' in model_ckt:
@@ -176,10 +182,11 @@ if __name__ == '__main__':
 
                 metrics = visualizer.run()
                 print(metrics)
-                wandb.log({
-                    "r@all": metrics['test/r_all'],
-                    "remain memory": metrics['eval memory']
-                })
+                # wandb.log({
+                #     "r@all": metrics['test/r_all'],
+                #     "remain memory": metrics['eval memory'],
+                #     "gflops": metrics['gflops']
+                # })
 
         
         

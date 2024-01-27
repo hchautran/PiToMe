@@ -14,7 +14,7 @@ if __name__ == "__main__":
     from config import EUCLID, LORENTZ
     from config import COCO_PATH, FLICKR_PATH, CLIP_LARGE_PATCH_14, CLIP_BASE_PATCH_16, BLIP_BASE_FLICKR, FLICKR, COCO
     config = parser.parse_args()
-    for dataset in [COCO]:
+    for dataset in [FLICKR]:
         config.dataset = dataset
         for model_ckt in [
             # CLIP_LARGE_PATCH_14,
@@ -48,7 +48,7 @@ if __name__ == "__main__":
                     vis_processor=processor,
                     txt_processor=None,
                     tokenizer=processor,
-                    eval_batch_size=20
+                    eval_batch_size=50
                 )
 
                 queue_model = CompressedHFWithQueue(config) 
@@ -61,12 +61,12 @@ if __name__ == "__main__":
                     txt2img=test_txt2img,
                     img2txt=test_img2txt
                 )
-                # print(trainer.evaluate('test'))
+                print(trainer.evaluate('test'))
                 # print(trainer.evaluate('val'))
-                trainer.train()
+                # trainer.train()
 
             config.epochs = 2
-            config.enable_log = True 
+            config.enable_log = False 
             config.use_margin_loss = False 
 
             for compress_method in [

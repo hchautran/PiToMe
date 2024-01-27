@@ -38,6 +38,7 @@ import os
 import DiffRate
 from main_pitome import get_args_parser
 import models_mae
+import wandb
 
 def get_tome_model(model, args):
     if 'deit' in model_ckt:
@@ -143,10 +144,17 @@ def main(args, model ,logger):
 
     test_stats = evaluate(data_loader_val, model, device,logger)
     logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
-    return
+    return test_stats
 
 
-
+model_name_dict = {
+    'deit_tiny_patch16_224':'ViT-T-DeiT',
+    'deit_small_patch16_224':'ViT-S-DeiT',
+    'deit_base_patch16_224': 'ViT-B-DeiT',
+    'vit_base_patch16_mae': 'ViT-B-MAE',
+    'vit_large_patch16_mae': 'ViT-L-MAE',
+    'vit_huge_patch14_mae': 'ViT-H-MAE',
+}
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('evaluation script', parents=[get_args_parser()])
@@ -197,6 +205,8 @@ if __name__ == '__main__':
 
     # leveraging MultiEpochsDataLoader for faster data loading
 
+    args.batch_size = 100
+
     data_loader_val = MultiEpochsDataLoader(
         dataset_val, sampler=sampler_val,
         batch_size=int(1 * args.batch_size),
@@ -207,43 +217,56 @@ if __name__ == '__main__':
     )
     
     for model_ckt in [
-        # 'vit_base_patch16_mae',
-        # 'vit_large_patch16_mae',
-        # 'vit_huge_patch14_mae',
         # 'deit_tiny_patch16_224',
-        'deit_small_patch16_224',
+        # 'deit_small_patch16_224',
         # 'deit_base_patch16_224',
+        # 'vit_base_patch16_mae',
+        'vit_large_patch16_mae',
+        'vit_huge_patch14_mae',
     ]:
         for algo in [
-            'diffrate',
-            'pitome',
-            'tome',
-            'baseline',
+            'PiToMe',
+            'DiffRate',
+            'ToMe',
+            'Baseline',
         ]:
+            wandb.init(
+                name=f'{algo}_{model_name_dict[model_ckt]}',
+                project='ic_off_the_shell',
+                config={
+                   'algo': algo, 
+                   'model': model_name_dict[model_ckt], 
+                },
+                reinit=True
+            )
             args.model = model_ckt
             logger.info(f"Creating model: {args.model}")
-            model = create_model(
-                args.model,
-                pretrained=True,
-                num_classes=1000,
-                drop_rate=args.drop,
-                drop_path_rate=args.drop_path,
-                drop_block_rate=None,
-            )
-            for r in [0.85, 0.875, 0.9, 0.925, 0.95, 0.975]:
+            ratios = [0.975, 0.95, 0.925, 0.90, 0.875, 0.85] if algo != 'Baseline' else [1.0]
+
+            for ratio in ratios:
+            # for ratio in [0.975, 0.95, 0.925, 0.90, 0.875, 0.85]:
+                model = create_model(
+                    args.model,
+                    pretrained=True,
+                    num_classes=1000,
+                    drop_rate=args.drop,
+                    drop_path_rate=args.drop_path,
+                    drop_block_rate=None,
+                )
                 args.use_r = False 
-                args.ratio = 0.92
+                args.ratio = ratio 
                 args.r = 13
-                if algo == 'tome':
+                if algo == 'ToMe':
                     get_tome_model(model, args)
-                elif algo == 'pitome':
+                elif algo == 'PiToMe':
                     get_pitome_model(model, args)
-                elif algo == 'diffrate':
+                elif algo == 'DiffRate':
                     get_diffrate_model(model, args)
                 else:
                     args.ratio = 1.0 
                     get_tome_model(model, args)
-                main(args, model,logger)
+                stats = main(args, model,logger)
+                wandb.log(stats)
                 
                 
         

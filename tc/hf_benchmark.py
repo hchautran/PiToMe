@@ -18,7 +18,7 @@ from lra_config import (get_listops_config, get_cifar10_config, get_text_classif
 from lra_datasets import (ListOpsDataset, Cifar10Dataset, ImdbDataset)
 from argparse import ArgumentParser
 from accelerate import Accelerator
-from pitome import CompressedBERT 
+from model.bert import CompressedBERT 
 from dotenv import load_dotenv
 import os
 
@@ -152,12 +152,17 @@ if __name__ == "__main__":
 
     # compress_method='none' 
     # compress_method='dct'
-    for method in ['tome','pitome', 'tome', 'dct', 'none']:
+    for method in [
+        'pitome',
+        # 'tome', 
+        'dct', 
+        'none',
+    ]:
         print('using', method)
         model, tokenizer = get_model(
             model_ckt, 
             compress_method=method,
-            r=0.90
+            r=0.80
         )
         task = TASKS[task_name]
         config, model_config = task.config_getter()    

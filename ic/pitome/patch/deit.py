@@ -25,7 +25,7 @@ class PiToMeBlockUsingRatio(Block):
      - Compute and propogate token size and potentially the token sources.
     """
     def init_margin(self, margin=0.5):
-        self.margin = margin
+        self.margin = nn.Parameter(torch.tensor(margin)) 
 
     def _drop_path1(self, x):
         return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
@@ -42,18 +42,16 @@ class PiToMeBlockUsingRatio(Block):
         ratio = self._tome_info["ratio"].pop(0)
         if ratio < 1.0:
             merge, isolated_score = pitome(
-                x=metric,
+                metric=metric,
                 ratio=ratio,
                 margin=self.margin,
                 class_token=self._tome_info["class_token"]
             )
 
-            if self._tome_info["trace_source"]:
-                self._tome_info["source"] = merge_source(
-                    merge, x, self._tome_info["source"]
-                )
-            # x = merge_mean(merge, x)
-            x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
+            if isolated_score is not None and self._tome_info["size"] is not None:
+                x, self._tome_info["size"] = merge_wavg(merge, x, isolated_score + self._tome_info["size"])
+            else:
+                x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
 
@@ -66,7 +64,7 @@ class PiToMeBlock(Block):
      - Compute and propogate token size and potentially the token sources.
     """
     def init_margin(self, margin=0.5):
-        self.margin = margin
+        self.margin = nn.Parameter(torch.tensor(margin))
 
     def _drop_path1(self, x):
         return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
@@ -92,7 +90,8 @@ class PiToMeBlock(Block):
                 self._tome_info["source"] = merge_source(
                     merge, x, self._tome_info["source"]
                 )
-            x = merge_mean(merge, x)
+            # x = merge_mean(merge, x)
+            x, self._tome_info["size"] = merge_wavg(merge, x, isolated_score)
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
 
