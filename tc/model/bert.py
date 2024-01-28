@@ -1,19 +1,15 @@
-    
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from typing import Optional
 from transformers import (
     BlipConfig, 
 )
-import math
 from transformers import BertForSequenceClassification
 from transformers.modeling_outputs import SequenceClassifierOutput
-from typing import Union, Tuple
 from .pitome import CompressedModel
-
-
+from typing import Union, Tuple
+from transformers import BertLayer, BertConfig 
+import torch.nn.functional as F
 
 
 class CompressedBERT(CompressedModel):
@@ -26,7 +22,8 @@ class CompressedBERT(CompressedModel):
         self.classifier = model.classifier
         self.config = model.config
 
-        self.compress_layers = [i for i in range(1, len(self.model.encoder.layer)-1, 3)]
+        self.compress_layers = [i for i in range(1, len(self.model.encoder.layer)-1)]
+        # self.compress_layers = [1]
         self.model_len = len(self.model.encoder.layer) 
      
     
@@ -61,7 +58,6 @@ class CompressedBERT(CompressedModel):
         ori_size = seq_length
 
         head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
-        attention_mask = self.get_extended_attention_mask(attention_mask, input_ids.shape)
 
         hidden_states = self.model.embeddings(
             input_ids=input_ids,
@@ -72,31 +68,40 @@ class CompressedBERT(CompressedModel):
 
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
+        extended_attention_mask = self.get_extended_attention_mask(attention_mask, input_ids.shape)
 
         for i, layer_module in enumerate(self.model.encoder.layer):
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
             if i in self.compress_layers:    
+                B, T, _ = hidden_states.shape
                 cls = hidden_states[:, 0, :].unsqueeze(1)
-                margin = 0.9
-                state, cur_energy = self.compress_hidden_state(
+                state, merged_attention_mask = self.compress_hidden_state(
                     hidden_states[:, 1:, :], 
-                    use_compressed_hidden_state=True,
-                    margin=(margin-margin*i/self.model_len)
+                    attention_mask=attention_mask[:,1:, None],
+                    margin=0.75-0.25 * i/self.model_len,
+                    # margin=0.
                 )
+                attention_mask = torch.cat([attention_mask[:,0][..., None], merged_attention_mask], dim=1)
+                extended_attention_mask = self.get_extended_attention_mask(
+                    attention_mask,
+                    (B,T)
+                )
+                
                 hidden_states = torch.cat([cls, state], dim=1)
                 real_mem += hidden_states.shape[1]
                 total_mem += ori_size 
-                attention_mask =  attention_mask[:,:,:, :hidden_states.shape[1]]
+              
                 layer_outputs = layer_module(
                     hidden_states,
-                    attention_mask,
+                    extended_attention_mask,
                 )
             else:
+
                 layer_outputs = layer_module(
                     hidden_states,
-                    attention_mask,
+                    extended_attention_mask,
                 )
 
             hidden_states = layer_outputs[0]

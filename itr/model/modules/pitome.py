@@ -81,8 +81,8 @@ class CompressedModel(nn.Module):
 
     def pitome(self, x: torch.Tensor, r: int=None, margin:float=0.5):
 
-        if margin >= 0.45 :
-            return self.bipartite_soft_matching(x, r), None
+        # if margin >= 0.45 :
+        #     return self.bipartite_soft_matching(x, r), None
 
         with torch.no_grad():
             B,T,_ = x.shape
@@ -110,7 +110,7 @@ class CompressedModel(nn.Module):
             return torch.cat([protected, dst], dim=1)
 
 
-        isolation_score = 1 - F.softmax(isolation_score/10, dim=-1) 
+        isolation_score = 1 - F.softmax(isolation_score, dim=-1) 
         return merge,  isolation_score[..., None]
     
     

@@ -4,9 +4,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from transformers import (
-    AutoModel,
     AutoTokenizer,
-    AutoConfig,
     BertForSequenceClassification
 )
 
@@ -14,13 +12,18 @@ from tqdm import tqdm
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from ml_collections import ConfigDict
-from lra_config import (get_listops_config, get_cifar10_config, get_text_classification_config)
+from lra_config import (
+    get_listops_config, 
+    get_cifar10_config, 
+    get_text_classification_config
+)
 from lra_datasets import (ListOpsDataset, Cifar10Dataset, ImdbDataset)
 from argparse import ArgumentParser
 from accelerate import Accelerator
 from model.bert import CompressedBERT 
 from dotenv import load_dotenv
 import os
+import wandb
 
 # Load environment variables from .env file
 load_dotenv()
@@ -34,8 +37,6 @@ accelerator = Accelerator(
     gradient_accumulation_steps=4
 )
 
-# helper fns
-# TODO: bad
 
 device = torch.device(
     f"cuda:0"
@@ -110,7 +111,7 @@ def train(model, config, dataset ,use_deepspeed):
         pbar.set_postfix_str(f"loss: {avg_loss:.2f} accuracy: {avg_acc:.2f}")
 
 
-def eval(model, eval_dataset, tokenizer,batch_size=4):
+def eval(model, eval_dataset, tokenizer,batch_size=4, r=0.9):
     model.eval()
     eval_running_loss = 0.
     eval_running_acc = 0.
@@ -131,6 +132,7 @@ def eval(model, eval_dataset, tokenizer,batch_size=4):
         eval_running_acc += accuracy_score(outputs[1], target)
         eval_pbar.set_postfix_str(f"eval loss: {100*eval_running_loss/(j+1):.2f} "
                                     f"eval accuracy: {100*eval_running_acc/(j+1):.2f}")
+    return {'acc': 100*eval_running_acc/len(eval_dataloader), 'r':r}
 
 
 # main
@@ -150,19 +152,29 @@ if __name__ == "__main__":
     # model_ckt = 'bert-base-uncased'
     # model_ckt = 'bert-large-uncased'
 
-    # compress_method='none' 
+    # compress_methjod='none' 
     # compress_method='dct'
+    wandb
     for method in [
-        'pitome',
         # 'tome', 
-        'dct', 
-        'none',
+        'pitome',
+        # 'dct', 
+        # 'none',
     ]:
+        # wandb.init(
+        #     name=f'{method}_bert-base',
+        #     project='tc_off_the_shell',
+        #     config={
+        #        'algo': method, 
+        #        'model': 'bert-base', 
+        #     },
+        #     reinit=True
+        # )
         print('using', method)
         model, tokenizer = get_model(
             model_ckt, 
             compress_method=method,
-            r=0.80
+            r=0.8
         )
         task = TASKS[task_name]
         config, model_config = task.config_getter()    
@@ -172,4 +184,6 @@ if __name__ == "__main__":
         eval_dataset = task.dataset_fn(config, split='eval')    
         max_train_steps = int(np.ceil(config.total_train_samples / batch_size))
 
-        eval(model, eval_dataset, tokenizer ,batch_size=20)
+        res = eval(model, eval_dataset, tokenizer ,batch_size=20)
+        print(res)
+        # wandb.log(stats)

@@ -60,7 +60,7 @@ class PiToMeBlockUsingRatio(Block):
 class PiToMeBlock(Block):
     """
     Modifications:
-     - Apply ToMe between the attention and mlp blocks
+     - Apply PiToMe between the attention and mlp blocks
      - Compute and propogate token size and potentially the token sources.
     """
     def init_margin(self, margin=0.5):
@@ -108,7 +108,7 @@ class PiToMeAttention(Attention):
     """
 
     def forward(
-        self, x: torch.Tensor, size: torch.Tensor = None
+        self, x: torch.Tensor, isolation_score: torch.Tensor = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # Note: this is copied from timm.models.vision_transformer.Attention with modifications.
         B, N, C = x.shape
@@ -126,8 +126,8 @@ class PiToMeAttention(Attention):
         attn = (q @ k.transpose(-2, -1)) * self.scale
 
         # Apply proportional attention
-        if size is not None:
-            attn = attn + size.log()[:, None, None, :, 0]
+        if isolation_score is not None:
+            attn = attn +  isolation_score.log()[:, None, None, :, 0]
 
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)

@@ -205,7 +205,7 @@ if __name__ == '__main__':
 
     # leveraging MultiEpochsDataLoader for faster data loading
 
-    args.batch_size = 100
+    args.batch_size = 200
 
     data_loader_val = MultiEpochsDataLoader(
         dataset_val, sampler=sampler_val,
@@ -217,18 +217,18 @@ if __name__ == '__main__':
     )
     
     for model_ckt in [
-        # 'deit_tiny_patch16_224',
-        # 'deit_small_patch16_224',
-        # 'deit_base_patch16_224',
-        # 'vit_base_patch16_mae',
+        'deit_tiny_patch16_224',
+        'deit_small_patch16_224',
+        'deit_base_patch16_224',
+        'vit_base_patch16_mae',
         'vit_large_patch16_mae',
         'vit_huge_patch14_mae',
     ]:
         for algo in [
             'PiToMe',
-            'DiffRate',
-            'ToMe',
-            'Baseline',
+            # 'DiffRate',
+            # 'ToMe',
+            # 'Baseline',
         ]:
             wandb.init(
                 name=f'{algo}_{model_name_dict[model_ckt]}',

@@ -74,14 +74,18 @@ def pitome(
             return get_bsm_merge(node_max, node_idx, r, class_token)
 
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
-        sim = metric@metric.transpose(-1,-2)
+        # sim = metric@metric.transpose(-1,-2)
+        sim = F.elu((metric@metric.transpose(-1,-2)-0.5)/0.001)
         isolation_score = sim.mean(dim=-1)
+
         indices =  torch.argsort(isolation_score, descending=True)
         merge_idx = indices[..., :2*r]
-        even_m_idx, odd_m_idx = merge_idx[..., ::2], merge_idx[...,1::2]
-        protected_idx = torch.cat([indices[..., 2*r:], odd_m_idx], dim=1)
-        scores = sim.gather(dim=-1, index=protected_idx.unsqueeze(-2).expand(B, T, T-r)) 
-        scores = scores.gather(dim=-2, index=even_m_idx.unsqueeze(-1).expand(B, r, T-r))
+        protected_idx = indices[..., 2*r:]
+
+
+        a_idx, b_idx = merge_idx[..., ::2], merge_idx[...,1::2]
+        scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
+        scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r))
         _, dst_idx = scores.max(dim=-1) 
     
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
@@ -90,19 +94,20 @@ def pitome(
             x=x[:,1:,:]
         else:
             x_cls = None
-        B, _, C = x.shape
+        B, T, C = x.shape
 
-        protected = x[batch_idx, protected_idx,:] 
-        src = x[batch_idx, even_m_idx, :]
-        protected = protected.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
+        protected = x[batch_idx, protected_idx, :]
+        src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
+        dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
 
         if x_cls is not None:
-            return torch.cat([x_cls, protected], dim=1)
+            return torch.cat([x_cls, protected, dst], dim=1)
         else:
-            return protected
+            return torch.cat([protected, dst], dim=1)
 
-    # print(isolation_score)
-    isolation_score = 1 - F.softmax(isolation_score/margin, dim=-1) 
+
+    isolation_score = 1 - F.softmax(isolation_score, dim=-1) 
+
     if class_token:
         return merge, torch.cat([torch.ones(B,1, 1).to(metric.device), isolation_score[..., None]],dim=1)
     return merge, isolation_score[..., None]
