@@ -217,12 +217,12 @@ if __name__ == '__main__':
     )
     
     for model_ckt in [
-        'deit_tiny_patch16_224',
-        'deit_small_patch16_224',
-        'deit_base_patch16_224',
         'vit_base_patch16_mae',
         'vit_large_patch16_mae',
         'vit_huge_patch14_mae',
+        'deit_tiny_patch16_224',
+        'deit_small_patch16_224',
+        'deit_base_patch16_224',
     ]:
         for algo in [
             'PiToMe',

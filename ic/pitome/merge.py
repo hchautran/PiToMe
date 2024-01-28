@@ -75,7 +75,7 @@ def pitome(
 
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
         # sim = metric@metric.transpose(-1,-2)
-        sim = F.elu((metric@metric.transpose(-1,-2)-0.5)/0.001)
+        sim = F.elu((metric@metric.transpose(-1,-2)-margin)/0.01, alpha=2.0)
         isolation_score = sim.mean(dim=-1)
 
         indices =  torch.argsort(isolation_score, descending=True)
