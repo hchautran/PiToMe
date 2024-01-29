@@ -24,6 +24,7 @@ class CompressedModel(nn.Module):
         self.window_size=window_size
         self.compress_method = compress_method
         self.num_reduced_token = 32 
+        self.temp = nn.Parameter(torch.tensor(0.01))
     
     def dist_func(self, x:torch.Tensor, y:torch.Tensor): 
         dis = 0
@@ -40,14 +41,8 @@ class CompressedModel(nn.Module):
     ):
         T = x.shape[1]
 
-        protected = 0
-        if r is None:
-            r = math.floor(T- T*self.r)
-        else:
-            r = min(r, (T - protected) // 2)
-        if r <= 0:
-            return x, x
-
+        r = math.floor(T- T*self.r)
+    
         with torch.no_grad():
             x = F.normalize(x, p=2, dim=-1) 
             a, b = x[..., ::2, :], x[..., 1::2, :]
@@ -79,24 +74,25 @@ class CompressedModel(nn.Module):
             flops = mhsa_flops + ffn_flops 
             return flops
 
-    def pitome(self, x: torch.Tensor, r: int=None, margin:float=0.5):
+    def pitome(self, x: torch.Tensor, r: int=None, margin:torch.Tensor=0.5):
 
-        # if margin >= 0.45 :
-        #     return self.bipartite_soft_matching(x, r), None
+        if margin >= 0.45 :
+            return self.bipartite_soft_matching(x, r), None
 
         with torch.no_grad():
             B,T,_ = x.shape
             r = math.floor(T- T*self.r)
             batch_idx = torch.arange(B, pin_memory=True)[..., None].to(x.device)
-
             x = F.normalize(x, p=2, dim=-1)
             sim =x@x.transpose(-1,-2) 
-            isolation_score = sim.mean(dim=-1) 
-
+            margin = margin.clamp_(min=0.0, max=0.9)
+            temp= self.temp.clamp(min=0.001, max=0.05)
+        sim = F.elu((sim - margin)/temp)
+        isolation_score = sim.mean(dim=-1) 
+        with torch.no_grad():
             indices =  torch.argsort(isolation_score, descending=True)
             merge_idx = indices[..., :2*r]
             protected_idx = indices[..., 2*r:]
-
             a_idx, b_idx = merge_idx[..., ::2], merge_idx[...,1::2]
             scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
             scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r))
@@ -110,11 +106,9 @@ class CompressedModel(nn.Module):
             return torch.cat([protected, dst], dim=1)
 
 
-        isolation_score = 1 - F.softmax(isolation_score, dim=-1) 
-        return merge,  isolation_score[..., None]
+        isolation_score = 1 - F.softmax(isolation_score, dim=-1)
+        return merge, isolation_score[..., None] 
     
-    
-
     def merge_wavg(
         self, merge: Callable, x: torch.Tensor, size: torch.Tensor = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -130,7 +124,6 @@ class CompressedModel(nn.Module):
         x = x / size
 
         return x
-
 
             
     def forward(
@@ -202,6 +195,7 @@ class CompressedHFBLIP(CompressedModel):
         self.text_proj = model.text_projection 
         self.compress_layers = [i for i in range(1,len(self.vision_model.blocks))]
         self.model_len = len(self.vision_model.blocks)
+        self.margins = nn.ParameterList([0.9 - i/self.model_len * 0.9 for i in range(self.model_len)])
 
     
     def get_vision_features(self, pixel_values, use_compressed_hidden_state=True, return_all_hidden_state=False):
@@ -218,7 +212,7 @@ class CompressedHFBLIP(CompressedModel):
                 state = self.compress_hidden_state(
                     hidden_states[:, 1:, :], 
                     use_compressed_hidden_state=use_compressed_hidden_state,
-                    margin=(0.9 - 0.9*i/len(self.visual_encoder.blocks))
+                    margin=self.margins[i]
                 )
                 hidden_states = torch.cat([cls, state], dim=1)
 
@@ -264,6 +258,7 @@ class CompressedLAVISBLIP(CompressedModel):
         self.text_proj = model.text_proj 
         self.compress_layers = [i for i in range(1,len(self.vision_model.blocks))]
         self.model_len = len(self.vision_model.blocks)
+        self.margins = nn.ParameterList([nn.Parameter(torch.tensor(0.9 - i/self.model_len * 0.9), requires_grad=True) for i in range(self.model_len)])
 
    
     def get_vision_features(self, pixel_values, use_compressed_hidden_state=True, return_all_hidden_state=False):
@@ -286,7 +281,7 @@ class CompressedLAVISBLIP(CompressedModel):
                 state = self.compress_hidden_state(
                     x[:, 1:, :], 
                     use_compressed_hidden_state=use_compressed_hidden_state,
-                    margin=(0.9 - 0.9*i/self.model_len)
+                    margin = self.margins[i]
                 )
                 x = torch.cat([cls, state], dim=1)
 
@@ -328,6 +323,7 @@ class CompressedHFCLIP(CompressedModel):
         self.text_proj = model.text_projection 
         self.compress_layers = [i for i in range(1,len(self.vision_model.encoder.layers))]
         self.model_len = len(self.vision_model.encoder.layers)
+        self.margins = nn.ParameterList([0.9 - i/self.model_len * 0.9 for i in range(self.model_len)])
 
     def get_vision_features(self, pixel_values, use_compressed_hidden_state=True, return_all_hidden_state=False):
         all_hidden_states = []
@@ -343,8 +339,7 @@ class CompressedHFCLIP(CompressedModel):
                 state = self.compress_hidden_state(
                     hidden_states[:, 1:, :], 
                     use_compressed_hidden_state=use_compressed_hidden_state,
-                    # margin=(0.5 if i< self.len_model//2 else  0.5-0.5*i/self.len_model)
-                    margin=(0.9 - 0.9*i/self.model_len)
+                    margin=self.margins[i]
                 )
                 hidden_states = torch.cat([cls, state], dim=1)
                 # print(hidden_states.shape)
@@ -393,6 +388,7 @@ class CompressedLAVISBLIP2(CompressedModel):
         self.Qformer = model.Qformer
         self.itm_head = model.itm_head
         self.model_len = len(self.visual_encoder.blocks)
+        self.margins = nn.ParameterList([0.75 - i/self.model_len * 0.5 for i in range(self.model_len)])
         self.compress_layers = [i for i in range(1, self.model_len)]
 
    
@@ -415,13 +411,11 @@ class CompressedLAVISBLIP2(CompressedModel):
 
             rel_pos_bias = self.visual_encoder.rel_pos_bias() if self.visual_encoder.rel_pos_bias is not None else None
             for i, blk in enumerate(self.visual_encoder.blocks):
-                margin = 0.9
                 if i in self.compress_layers:
                     x = self.compress_hidden_state(
                         x, 
                         use_compressed_hidden_state=use_compressed_hidden_state,
-                        # margin=(margin if i< len(self.visual_encoder.blocks)//2 else  margin-margin*i/len(self.visual_encoder.blocks))
-                        margin=(margin - margin*i/self.model_len)
+                        margin=self.margins[i]
                     )
                 x = blk(x, rel_pos_bias)
                 if return_all_hidden_state or i == len(self.visual_encoder.blocks) - 1:

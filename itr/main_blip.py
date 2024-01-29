@@ -26,10 +26,10 @@ if __name__ == "__main__":
         # tokenizer = model.tokenizer
         if "flickr" in config.dataset:
             config.model_ckt = LAVIS_BLIP_BASE_FLICKR
-            model, vis_processors, txt_processors = load_model_and_preprocess("blip_retrieval", "flickr", is_eval=False)
+            model, vis_processors, txt_processors = load_model_and_preprocess("blip_retrieval", "coco", is_eval=False)
             dataset = load_dataset("flickr30k", vis_path=FLICKR_PATH, cfg_path=None)
         else:
-            model, vis_processors, txt_processors = load_model_and_preprocess("blip_retrieval", "coco", is_eval=False)
+            model, vis_processors, txt_processors = load_model_and_preprocess("blip_retrieval", "flickr", is_eval=False)
             config.model_ckt = LAVIS_BLIP_BASE_COCO 
             dataset = load_dataset("coco_retrieval", vis_path=COCO_PATH, cfg_path=None)
 
@@ -55,13 +55,13 @@ if __name__ == "__main__":
                 txt2img=test_txt2img,
                 img2txt=test_img2txt
             )
-            print(trainer.evaluate(use_1k=False))
+            # print(trainer.evaluate(use_1k=False))
             # print(trainer.evaluate('val'))
-            # trainer.train()
+            trainer.train()
 
 
         config.epochs = 2 
-        config.enable_log = False
+        config.enable_log = True
         config.use_margin_loss = False 
 
         for distil in [False]:
