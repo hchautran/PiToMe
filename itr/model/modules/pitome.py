@@ -93,7 +93,7 @@ class CompressedModel(nn.Module):
             indices =  torch.argsort(isolation_score, descending=True)
             merge_idx = indices[..., :2*r]
             protected_idx = indices[..., 2*r:]
-            a_idx, b_idx = merge_idx[..., ::2], merge_idx[...,1::2]
+            a_idx, b_idx = merge_idx[..., :r], merge_idx[...,r:]
             scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
             scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r))
             _, dst_idx = scores.max(dim=-1) 
@@ -258,7 +258,8 @@ class CompressedLAVISBLIP(CompressedModel):
         self.text_proj = model.text_proj 
         self.compress_layers = [i for i in range(1,len(self.vision_model.blocks))]
         self.model_len = len(self.vision_model.blocks)
-        self.margins = nn.ParameterList([nn.Parameter(torch.tensor(0.9 - i/self.model_len * 0.9), requires_grad=True) for i in range(self.model_len)])
+        self.margins = nn.ParameterList([
+            nn.Parameter(torch.tensor(0.75 - i/self.model_len * 0.75), requires_grad=True) for i in range(self.model_len)])
 
    
     def get_vision_features(self, pixel_values, use_compressed_hidden_state=True, return_all_hidden_state=False):

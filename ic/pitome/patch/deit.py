@@ -47,6 +47,10 @@ class PiToMeBlockUsingRatio(Block):
                 margin=self.margin,
                 class_token=self._tome_info["class_token"]
             )
+            if self._tome_info["trace_source"]:
+                self._tome_info["source"] = merge_source(
+                    merge, x, self._tome_info["source"]
+                )
 
             if isolated_score is not None and self._tome_info["size"] is not None:
                 x, self._tome_info["size"] = merge_wavg(merge, x, isolated_score + self._tome_info["size"])
@@ -210,6 +214,7 @@ def apply_patch(
 
     model.__class__ = PiToMeVisionTransformer
     model.ratio = 1.0 
+    model.r=0.0
     
     # model.compress_method = 'tome' 
     model._tome_info = {
@@ -226,7 +231,7 @@ def apply_patch(
     margin = margin 
     num_layers = len(model.blocks)
     # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
-    margins = [0.8- 0.3*(i/num_layers) for i in range(num_layers)]
+    margins = [0.8- 0.8*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tome_info["distill_token"] = True

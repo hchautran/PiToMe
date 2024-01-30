@@ -51,21 +51,25 @@ def make_visualization(
 
     if class_token:
         source = source[:, :, 1:]
-
     vis = source.argmax(dim=1)
     num_groups = vis.max().item() + 1
+    print('num_group',num_groups)
 
     cmap = generate_colormap(num_groups)
     vis_img = 0
 
     for i in range(num_groups):
+        print('vis', vis.shape)
         mask = (vis == i).float().view(1, 1, ph, pw)
+        print('mask', mask.shape)
         mask = F.interpolate(mask, size=(h, w), mode="nearest")
         mask = mask.view(h, w, 1).numpy()
 
         color = (mask * img).sum(axis=(0, 1)) / mask.sum()
+        print('color', color.shape)
         mask_eroded = binary_erosion(mask[..., 0])[..., None]
         mask_edge = mask - mask_eroded
+        print('mask edge', mask_edge.shape)
 
         if not np.isfinite(color).all():
             color = np.zeros(3)

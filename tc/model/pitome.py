@@ -28,18 +28,15 @@ class CompressedModel(nn.Module, ModuleUtilsMixin):
 
             x = F.normalize(x, p=2, dim=-1)
             
-            # print(sim)
             if margin is not None:
-                sim = F.selu((x@x.transpose(-1,-2)-margin)/0.001)
-                # sim = torch.where(sim > margin, sim-margin*10, -20)
+                sim = F.elu((x@x.transpose(-1,-2)-margin)/0.01)
             else:
                 sim = x@x.transpose(-1,-2) 
             isolation_score = sim.mean(-1) 
             indices =  torch.argsort(isolation_score, descending=True)
             min_indices = indices[..., :2*r]
             protected_idx = indices[..., 2*r:]
-
-            a_idx, b_idx = min_indices[..., ::2], min_indices[..., 1::2]
+            a_idx, b_idx = min_indices[..., :r], min_indices[..., r:]
             scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
             scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r))
             _, dst_idx = scores.max(dim=-1) 

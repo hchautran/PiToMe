@@ -67,7 +67,7 @@ def pitome(
 
         metric = F.normalize(metric, p=2, dim=-1) 
 
-        if margin >=0.45:
+        if margin >=0.6:
             a, b = metric[..., ::2, :], metric[..., 1::2, :]
             scores = a @ b.transpose(-1, -2)
             node_max, node_idx = scores.max(dim=-1)
@@ -75,7 +75,7 @@ def pitome(
 
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
         # sim = metric@metric.transpose(-1,-2)
-        sim = F.elu((metric@metric.transpose(-1,-2)-margin)/0.01, alpha=2.0)
+        sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
         isolation_score = sim.mean(dim=-1)
 
         indices =  torch.argsort(isolation_score, descending=True)
@@ -83,7 +83,7 @@ def pitome(
         protected_idx = indices[..., 2*r:]
 
 
-        a_idx, b_idx = merge_idx[..., ::2], merge_idx[...,1::2]
+        a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2]
         scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
         scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r))
         _, dst_idx = scores.max(dim=-1) 

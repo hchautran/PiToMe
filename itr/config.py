@@ -180,7 +180,7 @@ config_args = {
         "use_signal_loss": (True, "fourier"),
         "compress_method": ('std', "compress method"),
         "distil": (True, "use distil"),
-        "r": (0.90, "remain ratio")
+        "r": (0.925, "remain ratio")
     },
     "data_config": {
         "dataset": (COCO, "which dataset to use"),

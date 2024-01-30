@@ -174,7 +174,7 @@ if __name__ == "__main__":
         model, tokenizer = get_model(
             model_ckt, 
             compress_method=method,
-            r=0.8
+            r=0.505
         )
         task = TASKS[task_name]
         config, model_config = task.config_getter()    

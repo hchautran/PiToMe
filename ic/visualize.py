@@ -230,15 +230,15 @@ if __name__ == '__main__':
             # 'ToMe',
             # 'Baseline',
         ]:
-            wandb.init(
-                name=f'{algo}_{model_name_dict[model_ckt]}',
-                project='ic_off_the_shell',
-                config={
-                   'algo': algo, 
-                   'model': model_name_dict[model_ckt], 
-                },
-                reinit=True
-            )
+            # wandb.init(
+            #     name=f'{algo}_{model_name_dict[model_ckt]}',
+            #     project='ic_off_the_shell',
+            #     config={
+            #        'algo': algo, 
+            #        'model': model_name_dict[model_ckt], 
+            #     },
+            #     reinit=True
+            # )
             args.model = model_ckt
             logger.info(f"Creating model: {args.model}")
             ratios = [0.975, 0.95, 0.925, 0.90, 0.875, 0.85] if algo != 'Baseline' else [1.0]
@@ -266,7 +266,7 @@ if __name__ == '__main__':
                     args.ratio = 1.0 
                     get_tome_model(model, args)
                 stats = main(args, model,logger)
-                wandb.log(stats)
+                # wandb.log(stats)
                 
                 
         
