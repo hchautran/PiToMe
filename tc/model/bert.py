@@ -22,7 +22,6 @@ class CompressedBERT(CompressedModel):
         self.classifier = model.classifier
         self.config = model.config
 
-        # self.compress_layers = [i for i in range(1, len(self.model.encoder.layer)-1)]
         self.compress_layers = [1,5]
         self.model_len = len(self.model.encoder.layer) 
      

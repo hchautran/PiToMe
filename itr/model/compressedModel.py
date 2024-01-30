@@ -1,6 +1,6 @@
 import torch
 from transformers import AutoModel 
-from .modules.pitome import CompressedLAVISBLIP, CompressedHFCLIP, CompressedHFBLIP, CompressedLAVISBLIP2
+from .modules import blip2, blip, clip 
 from peft import get_peft_model, LoraConfig, TaskType
 from model.baseQueueModel import BaseModelWithQueue 
 from model.baseBlip2Model import BaseModel  as Blip2Model
@@ -162,12 +162,8 @@ class CompressedHFWithQueue(BaseModelWithQueue):
     def __init__(self, config) -> None:
         super(CompressedHFWithQueue, self).__init__(config)
         model = AutoModel.from_pretrained(config.model_ckt, cache_dir=config.cache_dir)
-        if 'clip' in config.model_ckt:
-            model = get_lora_clip(config, model=model) 
-            self.model = CompressedHFCLIP(model, compress_method=config.compress_method, r=config.r)
-        else:
-            model = get_lora_blip(config, model=model) 
-            self.model = CompressedHFBLIP(model, compress_method=config.compress_method, r=config.r)
+        clip_model = get_lora_clip(config, model=model) 
+        self.model = clip(clip_model, compress_method=config.compress_method, r=config.r)
         self._init_queue(config, model.config.projection_dim)
  
     
@@ -175,7 +171,7 @@ class CompressedLAVISLIPWithQueue(BaseModelWithQueue):
     def __init__(self, config, model) -> None:
         super(CompressedLAVISLIPWithQueue, self).__init__(config)
         model = get_lora_lavis_blip(config, model=model) 
-        self.model = CompressedLAVISBLIP(model, compress_method=config.compress_method, r=config.r)
+        self.model = blip(model, compress_method=config.compress_method, r=config.r)
         self._init_queue(config, 256)
     
 
@@ -184,6 +180,6 @@ class CompressedLAVISBLIP2WithQueue(Blip2Model):
     def __init__(self, config, model) -> None:
         super(CompressedLAVISBLIP2WithQueue, self).__init__(config)
         model = get_lora_blip2(config, model=model) 
-        self.model = CompressedLAVISBLIP2(model, compress_method=config.compress_method, r=config.r)
+        self.model = blip2(model, compress_method=config.compress_method, r=config.r)
     
 

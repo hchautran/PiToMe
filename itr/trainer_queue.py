@@ -92,7 +92,6 @@ class MyTrainer:
                     self.accelerator.free_memory()
                     self.optimizer.zero_grad()
                     current_step += 1
-                    # assert len(img_ids) == len(set(img_ids))
 
                     loss, stats = self.model(
                         input_ids=data["input_ids"].to(self.device),
@@ -120,11 +119,8 @@ class MyTrainer:
                     if self.eval_freq != -1 and (current_step + 1) % self.eval_freq == 0:
 
                         test_metrics = self.evaluate(mode='test')
-                        # val_metrics = self.evaluate(mode='val')
                         self.log(test_metrics)
-                        # self.log(val_metrics)
                         print(test_metrics)
-                        # print(val_metrics)
 
                         self.scheduler.step(test_metrics["test/r_all"])
                         if best_r_all < test_metrics["test/r_all"]:
@@ -202,8 +198,8 @@ class MyTrainer:
                 text_embeds, _ = self.model.get_text_features(
                     input_ids=data["input_ids"].to(self.device), attention_mask=data["attention_mask"].to(self.device)
                 )
-                vision_embeds, _, flop ,eval_memory = self.model.get_vision_features(
-                    pixel_values=data["pixel_values"].to(self.device), use_compressed_hidden_state=True
+                vision_embeds, _, flop ,eval_memory, _ = self.model.get_vision_features(
+                    pixel_values=data["pixel_values"].to(self.device)
                 )
           
                 all_text_embeds.append(text_embeds.cpu())

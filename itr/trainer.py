@@ -213,8 +213,8 @@ class MyTrainer:
                 text_feat, _ = self.model.get_text_features(
                     input_ids=data["input_ids"].to(self.device), attention_mask=data["attention_mask"].to(self.device)
                 )
-                image_feat, vit_feat, flop ,eval_memory  = self.model.get_vision_features(
-                    pixel_values=data["pixel_values"].to(self.device), use_compressed_hidden_state=True
+                image_feat, vit_feat, flop ,eval_memory, _  = self.model.get_vision_features(
+                    pixel_values=data["pixel_values"].to(self.device)
                 )
                 # cur_len = data['input_ids'].shape[-1]
                 # input_ids = F.pad(data['input_ids'][0], (0, max_len - cur_len), "constant", 0)

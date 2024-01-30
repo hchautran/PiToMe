@@ -93,6 +93,7 @@ class CompressedBartEncoder(BartEncoder, CompressedModel):
                 hidden_states = layer_outputs[0]
                 hidden_states = self.compress_hidden_state(
                     hidden_states,
+                    attention_mask=attention_mask
                 )
 
             if output_attentions:

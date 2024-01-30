@@ -105,12 +105,7 @@ class BaseModelWithQueue(BlipBase, MomentumDistilationMixin, SharedQueueMixin):
         num_iters_per_epoch:int=None,
     ):
         idx = image_id
-
-        alpha = self.alpha * self._rampup_factor(
-            epoch=epoch,
-            iters=iters,
-            num_iters_per_epoch=num_iters_per_epoch,
-        )
+    
         
         text_output = self.model(
             input_ids=input_ids,
@@ -118,7 +113,6 @@ class BaseModelWithQueue(BlipBase, MomentumDistilationMixin, SharedQueueMixin):
         )
         image_output = self.model(
             pixel_values=pixel_values,
-            use_compressed_hidden_state=True
         )
         text_feat = text_output[1] 
         image_feat = image_output[1] 
@@ -139,7 +133,6 @@ class BaseModelWithQueue(BlipBase, MomentumDistilationMixin, SharedQueueMixin):
             self._momentum_update()
             image_embeds_m = self.model_m(
                 pixel_values=pixel_values, 
-                use_compressed_hidden_state=True,
             )
 
             text_embeds_m = self.model_m(
@@ -160,8 +153,6 @@ class BaseModelWithQueue(BlipBase, MomentumDistilationMixin, SharedQueueMixin):
 
         sim_i2t = self.dist_func(image_feat, text_feat_m_all.T) 
         sim_t2i = self.dist_func(text_feat, image_feat_m_all.T)
-      
-
 
 
         loss_i2t = -torch.sum(
@@ -208,8 +199,8 @@ class BaseModelWithQueue(BlipBase, MomentumDistilationMixin, SharedQueueMixin):
         text_feat = F.normalize(text_output[1], p=2, dim=-1)
         return text_feat, text_output[0]
 
-    def get_vision_features(self, pixel_values: torch.Tensor, use_compressed_hidden_state=True):
-        image_output = self.model.get_vision_features(pixel_values=pixel_values, use_compressed_hidden_state=use_compressed_hidden_state)
+    def get_vision_features(self, pixel_values: torch.Tensor, return_source:bool=False):
+        image_output = self.model.get_vision_features(pixel_values=pixel_values, return_source=return_source)
         image_feat = F.normalize(image_output[1], dim=-1, p=2)
-        return image_feat, image_output[0], image_output[3], image_output[4]
+        return image_feat, image_output[0], image_output[3], image_output[4], image_output[5]
     

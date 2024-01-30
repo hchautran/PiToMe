@@ -29,7 +29,7 @@ class CompressedModel(nn.Module, ModuleUtilsMixin):
             x = F.normalize(x, p=2, dim=-1)
             
             if margin is not None:
-                sim = F.elu((x@x.transpose(-1,-2)-margin)/0.01)
+                sim = F.elu((x@x.transpose(-1,-2) - margin)/0.01)
             else:
                 sim = x@x.transpose(-1,-2) 
             isolation_score = sim.mean(-1) 
