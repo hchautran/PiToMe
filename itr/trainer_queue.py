@@ -199,7 +199,7 @@ class MyTrainer:
                     input_ids=data["input_ids"].to(self.device), attention_mask=data["attention_mask"].to(self.device)
                 )
                 vision_embeds, _, flop ,eval_memory, _ = self.model.get_vision_features(
-                    pixel_values=data["pixel_values"].to(self.device)
+                    pixel_values=data["pixel_values"].to(self.device), return_source=False
                 )
           
                 all_text_embeds.append(text_embeds.cpu())

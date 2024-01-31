@@ -19,18 +19,25 @@ except ImportError:
     pass  # Don't fail if scipy is not installed. It's only necessary for this one file.
 
 
-def generate_colormap(N: int, seed: int = 0) -> List[Tuple[float, float, float]]:
-    """Generates a equidistant colormap with N elements."""
-    random.seed(seed)
+def generate_colormap(N: int, attn_scores: torch.Tensor) -> List[Tuple[float, float, float]]:
+    """Generates a colormap with N elements based on attention scores."""
 
-    def generate_color():
-        return (random.random(), random.random(), random.random())
+    # Normalize attention scores to [0, 1]
+    normalized_scores = (attn_scores - attn_scores.min()) / (attn_scores.max() - attn_scores.min())
 
-    return [generate_color() for _ in range(N)]
+    def generate_color(score):
+        # Use a gradient from light to dark (e.g., white to blue)
+        return (1.0 - score, 1.0 - score, 1.0)
+
+    return [generate_color(score) for score in normalized_scores]
 
 
 def make_visualization(
-    img: Image, source: torch.Tensor, patch_size: int = 16, class_token: bool = True
+    img: Image, 
+    source: torch.Tensor, 
+    patch_size: int = 16, 
+    class_token: bool = True,
+    attention_score:torch.Tensor=None
 ) -> Image:
     """
     Create a visualization like in the paper.
@@ -53,9 +60,12 @@ def make_visualization(
         source = source[:, :, 1:]
 
     vis = source.argmax(dim=1)
+    print(source.shape)
+    print(vis.shape)
     num_groups = vis.max().item() + 1
 
-    cmap = generate_colormap(num_groups)
+    cmap = generate_colormap(num_groups, attention_score)
+    print(len(cmap))
     vis_img = 0
 
     for i in range(num_groups):

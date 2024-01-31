@@ -8,7 +8,6 @@ from config import parser
 from config import LAVIS_BLIP_BASE_FLICKR, LAVIS_BLIP_BASE_COCO, COCO, FLICKR, DATA_PATH
 from dotenv import load_dotenv
 import os
-import timm.models.vision_transformer
 
 # Load environment variables from .env file
 load_dotenv()
@@ -66,8 +65,6 @@ if __name__ == "__main__":
 
         for distil in [False]:
             config.distil = distil 
-            # for compress_method in ['std','dct']:
-            # for compress_method in ['std', 'dct', 'random', 'direct','none']:
             for compress_method in [
                 'PiToMe', 
                 'ToMe',

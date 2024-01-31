@@ -36,7 +36,7 @@ class CompressedLAVISBLIP(CompressedModel):
         ])
 
    
-    def get_vision_features(self, pixel_values, return_source:bool=False, return_all_hidden_state=False):
+    def get_vision_features(self, pixel_values, return_source:bool=False, return_attention_map=False):
         B = pixel_values.shape[0]
         x = self.vision_model.patch_embed(pixel_values)
         hidden_states = []
@@ -50,7 +50,8 @@ class CompressedLAVISBLIP(CompressedModel):
         real_mem = 0
         total_mem = 0
         flop = 0
-        source = None 
+        sources = [] 
+        source = None
         for i, blk in enumerate(self.vision_model.blocks):
             if i in self.compress_layers: 
                 cls = x[:, 0, :].unsqueeze(1)
@@ -62,18 +63,18 @@ class CompressedLAVISBLIP(CompressedModel):
                 )
                 x = torch.cat([cls, state], dim=1)
 
-            if return_all_hidden_state or i == len(self.vision_model.blocks)-1:
-                hidden_states.append(state)
+            if return_source:
+                hidden_states.append(x)
+                sources.append(source)
             real_mem += x.shape[1]
             total_mem += ori_size 
 
             flop += self.estimate_flop(x.shape)
-            x = blk(x)
+            x = blk(x, register_hook=return_attention_map)
 
-        # with torch.no_grad():
         x = self.vision_model.norm(x)
         vision_embed = self.vision_proj(x[:,0,:])
-        return x, vision_embed, hidden_states, flop, real_mem/total_mem, source
+        return x, vision_embed, hidden_states, flop, real_mem/total_mem, sources
 
     def get_text_features(self, input_ids, attention_mask):
         # with torch.no_grad():
@@ -87,5 +88,11 @@ class CompressedLAVISBLIP(CompressedModel):
         text_embed = self.text_proj(last_hidden_state[:,0,:])
 
         return  last_hidden_state, text_embed
+    
+    def get_attention_scores(self):
+        attn_score = []
+        for i, blk in enumerate(self.vision_model.blocks): 
+            attn_score.append(blk.attn.get_attention_map())
+        return attn_score
 
         

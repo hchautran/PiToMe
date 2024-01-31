@@ -19,13 +19,14 @@ class CompressedHFCLIP(CompressedModel):
             nn.Parameter(torch.tensor(0.9 - i/self.model_len * 0.9)) for i in range(self.model_len)
         ])
 
-    def get_vision_features(self, pixel_values, return_source:bool=False, return_all_hidden_state=False):
+    def get_vision_features(self, pixel_values, return_source:bool=False, return_attention_map=False):
         all_hidden_states = []
         hidden_states = self.vision_model.embeddings(pixel_values)
         hidden_states = self.vision_model.pre_layrnorm(hidden_states)
         real_mem = 0
         total_mem = 0
         flop = 0
+        sources = [] 
         source = None
         ori_size = hidden_states.shape[1]
         for i, layer in enumerate(self.vision_model.encoder.layers):
@@ -38,8 +39,9 @@ class CompressedHFCLIP(CompressedModel):
                     return_source=return_source
                 )
                 hidden_states = torch.cat([cls, state], dim=1)
-            if return_all_hidden_state or i == len(self.vision_model.encoder.layers)-1:
+            if return_attention_map or i == len(self.vision_model.encoder.layers)-1:
                 all_hidden_states.append(hidden_states)
+                sources.append(source)
 
             real_mem += hidden_states.shape[1]
             total_mem += ori_size 
@@ -56,7 +58,7 @@ class CompressedHFCLIP(CompressedModel):
         pooled_output = self.vision_model.post_layernorm(pooled_output)
         vision_embed = self.vision_proj(pooled_output)
 
-        return hidden_states, vision_embed, all_hidden_states, flop, real_mem/total_mem, source
+        return hidden_states, vision_embed, all_hidden_states, flop, real_mem/total_mem, sources
 
     def get_text_features(self, input_ids, attention_mask):
         text_output = self.text_model(input_ids, attention_mask)

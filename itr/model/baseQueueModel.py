@@ -41,7 +41,6 @@ class BaseModelWithQueue(BlipBase, MomentumDistilationMixin, SharedQueueMixin):
         super().__init__()
         self.config = config
         self.model_ckt = config.model_ckt
-        self.clip_r = config.clip_radius
         self.queue_size = config.queue_size
         self.weight_i2t = config.weight_i2t
         class_weight = torch.tensor([1.0, 1.0])
@@ -199,8 +198,8 @@ class BaseModelWithQueue(BlipBase, MomentumDistilationMixin, SharedQueueMixin):
         text_feat = F.normalize(text_output[1], p=2, dim=-1)
         return text_feat, text_output[0]
 
-    def get_vision_features(self, pixel_values: torch.Tensor, return_source:bool=False):
-        image_output = self.model.get_vision_features(pixel_values=pixel_values, return_source=return_source)
+    def get_vision_features(self, pixel_values: torch.Tensor, return_source:bool=False, return_attention_map=False):
+        image_output = self.model.get_vision_features(pixel_values=pixel_values, return_source=return_source, return_attention_map=return_attention_map)
         image_feat = F.normalize(image_output[1], dim=-1, p=2)
         return image_feat, image_output[0], image_output[3], image_output[4], image_output[5]
     

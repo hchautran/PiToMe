@@ -10,10 +10,10 @@ EUCLID = 'euclidean'
 POINCARE = 'poincare'
 LORENTZ = 'lorentz'
 
-
+from .vis import make_visualization
 
 class CompressedModel(nn.Module):
-    def __init__(self, compress_method='dct', r=0.95, window_size=2, manifold=None):
+    def __init__(self, compress_method='dct', r=0.95, window_size=2):
         super().__init__()
         self.r = r
         self.window_size=window_size
@@ -82,8 +82,8 @@ class CompressedModel(nn.Module):
             temp= self.temp.clamp(min=0.001, max=0.05)
 
         sim =x@x.transpose(-1,-2)
-        isolation_score = sim.mean(-1) + F.elu((sim - margin)/temp).mean(-1)
-        # isolation_score = norm_sim.mean(-1)
+        # isolation_score = sim.mean(-1) + F.elu((sim - margin)/temp).mean(-1)
+        isolation_score = sim.mean(-1)
 
         with torch.no_grad():
             indices =  torch.argsort(isolation_score, descending=True)
@@ -145,7 +145,7 @@ class CompressedModel(nn.Module):
         x = idct(x_dct.transpose(0,2), norm='ortho').transpose(0,2)
         return x.permute(1,0,2)
    
-    def get_vision_features(self, pixel_values, return_all_hidden_state=False):
+    def get_vision_features(self, pixel_values, return_attention_map=False):
         raise NotImplementedError("This method is not implemented yet")
 
     def get_text_features(self, input_ids, attention_mask):
@@ -167,6 +167,9 @@ class CompressedModel(nn.Module):
 
         return  x_reconstructed, source
 
+    def make_visualization(self, img, source, attention_score, patch_size=16, class_token=True):
+        return make_visualization(img, source, patch_size=patch_size, class_token=class_token, attention_score=attention_score)
+
     def forward(
         self,
         input_ids: torch.LongTensor=None,
@@ -178,5 +181,6 @@ class CompressedModel(nn.Module):
             return self.get_text_features(input_ids=input_ids, attention_mask=attention_mask)
         else:
             return self.get_vision_features(pixel_values=pixel_values)
+        
 
 

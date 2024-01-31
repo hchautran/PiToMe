@@ -1,6 +1,7 @@
 import argparse
 from dotenv import load_dotenv
 import os
+import torch
 
 # Load environment variables from .env file
 load_dotenv()
@@ -8,6 +9,7 @@ load_dotenv()
 # Access the environment variable
 # DATA_PATH = os.environ.get('DATA_PATH')
 DATA_PATH = '/media/caduser/MyBook/chau' 
+torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
 
 def add_flags_from_config(parser, config_dict):
     """
@@ -82,8 +84,7 @@ COCO_PATH = f"{DATA_PATH}/coco/images"
 FLICKR_PATH = f"{DATA_PATH}/flickr30k/flickr30k_images"
 
 config_args = {
-    "training_config": {
-        "use_graph":  (False, "use knowledge graph"),
+    "config": {
         "lr": (1e-4, "learning rate"),
         "dropout": (0.0, "dropout probability"),
         "cuda": (0, "which cuda device to use (-1 for cpu training)"),
@@ -118,23 +119,6 @@ config_args = {
             1,
             "The number of steps that should pass before gradients are accumulated",
         ),
-        "lorentz_pos_margin": (
-            0.0,
-            "decision margin for hyperbolic maninfold (0.0 for no margin)",
-        ),
-        "lorentz_neg_margin": (
-            0.8,
-            "decision margin for hyperbolic manifold (0.0 for no margin)",
-        ),
-
-        "euclid_pos_margin": (
-            1.0,
-            "decision margin for euclid manifold (1.0 for no margin)",
-        ),
-        "euclid_neg_margin": (
-            0.8,
-            "decision margin for euclid manifold (1.0 for no margin)",
-        ),
         "max_txt_len": (35, "max_txt_len"),
         "negative_all_rank": (False, "negative_all_rank"),
         "alpha": (0.4, "alpha"),
@@ -143,61 +127,18 @@ config_args = {
         "eval_freq": (1450, "how often to compute val metrics (in epochs)"),
         "weight_i2t": (0.5, "weight image to text"),
         "enable_log": (False, "enable log"),
-        "use_margin_loss": (True, "use margin loss"),
-        "use_graph_loss": (False, "use margin loss for graph"),
-        "use_entailment_loss": (False, "use entailment loss"),
-        "hyp_margin_loss_weight": (0.0, "hyperbolic margin loss weight"),
-        "num_proj_layers": (6, "number of project layers"),
-        "proj_layer_hidden_sizes": (64, "hidden size of proj layers"),
-        "normalize_text_embed": (False,""),
-        "normalize_image_embed": (False,""),
-        "shared_proj_layers": (False, "number of project layers"),
         "use_itm_head": (True, "use itm head"),
-        "use_fused_features": (False, "use fused features"),
-        "use_root": (False, "use graph root"),
-        "graph_hidden_channels": (512, "graph size"),
-    },
-    "hybrid_model_config": {
         "model_ckt": (CLIP_BASE_PATCH_16, "model checkpoint on Hugging Face"),
-        "manifold": (
-            EUCLID,
-            "which manifold to use [euclidean, lorentz]",
-        ),
-        "curv": (1.0, "hyperbolic curvature"),
-        "atol": (1e-1, "The relative tolerance parameter"),
-        "rtol": (1e-1, "The absolute tolerance parameter"),
         "temp": (0.07, "distance temperature"),
-        "clip_radius": (1.25, "clipping radius"),
-        "vision_trainable_blocks": (16, "number of trainable blocks in vision model"),
+        "vision_trainable_blocks": (12, "number of trainable blocks in vision model"),
         "text_trainable_blocks": (12, "number of trainable blocks in text model"),
-        "num_vision_hidden_states": (1, "number of trainable blocks in vision model"),
-        "num_text_hidden_states": (1, "number of trainable blocks in text model"),
-        "ft_out": (768, "final project dimension"),
         "curv_learnable": (False, "is curvature learnable"),
-        "freeze_embedding": (True, "freeze embedding layers"),
-        "fourier": (False, "fourier"),
-        "use_last_signal": (False, "fourier"),
-        "use_signal_loss": (True, "fourier"),
-        "compress_method": ('std', "compress method"),
-        "distil": (True, "use distil"),
-        "r": (0.95, "remain ratio")
-    },
-    "data_config": {
+        "compress_method": ('pitome', "compress method"),
+        "r": (0.95, "remain ratio"),
         "dataset": (COCO, "which dataset to use"),
         "cache_dir": (CACHE_DIR, "cache_dir"),
     },
-    "perceiver": {
-        "num_latents": (12, "which dataset to use"),
-        "d_latents": (1024, "d latent"),
-        "num_blocks": (1, "d out"),
-        "num_self_attends_per_block": (3, "cache_dir"),
-        "num_cross_attention_heads": (4, "cache_dir"),
-        "num_self_attention_heads": (4, "cache_dir"),
-        "cross_attention_widening_factor": (4, "cache_dir"),
-        "attention_probs_dropout_prob": (0.2, "cache_dir"),
-        "num_hidden_states": (2, "num_hidden_state"),
-        "use_first_layers": (True, "num_hidden_state")
-    }
+   
 }
 
 parser = argparse.ArgumentParser()
