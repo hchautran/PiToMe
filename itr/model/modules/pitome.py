@@ -70,8 +70,8 @@ class CompressedModel(nn.Module):
 
     def pitome(self, x: torch.Tensor, r: int=None, margin:torch.Tensor=None):
 
-        # if margin >= 0.45 :
-            # return self.bipartite_soft_matching(x, r), None
+        if margin >= 0.45 :
+            return self.bipartite_soft_matching(x, r), None
 
         with torch.no_grad():
             B,T,_ = x.shape
@@ -80,11 +80,9 @@ class CompressedModel(nn.Module):
             x = F.normalize(x, p=2, dim=-1)
             margin = margin.clamp_(min=0.0, max=0.9)
             temp= self.temp.clamp(min=0.001, max=0.05)
-            sim =x@x.transpose(-1,-2)
-            isolation_score = sim.mean(-1)
-        
-        if margin is not None:
-            isolation_score += F.elu((sim - margin)/temp).mean(-1)
+
+        sim =x@x.transpose(-1,-2)
+        isolation_score = sim.mean(-1) + F.elu((sim - margin)/temp).mean(-1)
         # isolation_score = norm_sim.mean(-1)
 
         with torch.no_grad():

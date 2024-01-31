@@ -12,7 +12,7 @@ export CKT_SIZE='vit_large_patch16_mae'
 # export CKT_SIZE='vit_large_patch16_224'
 
 python -m torch.distributed.launch \
---nproc_per_node=6 --use_env  \
+--nproc_per_node=5 --use_env  \
 --master_port 29513 ic/main_tome.py \
 --epoch 30 --batch-size 100 \
 --model ${CKT_SIZE} \

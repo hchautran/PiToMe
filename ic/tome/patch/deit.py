@@ -208,7 +208,7 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, compress_method='tome', trace_source: bool = False, prop_attn: bool = True, use_r=True
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, use_r=True
 ):
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.
@@ -220,7 +220,7 @@ def apply_patch(
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
     ToMeVisionTransformer = make_tome_class(model.__class__)
-    print('using', compress_method)
+    print('using', 'tome')
 
     model.__class__ = ToMeVisionTransformer
     model.r = 0

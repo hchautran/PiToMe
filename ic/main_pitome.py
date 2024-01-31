@@ -36,6 +36,7 @@ import pitome
 from dotenv import load_dotenv
 from utils import build_transform, DATA_PATH
 import os
+import wandb
 
 
 # Load environment variables from .env file
@@ -43,7 +44,6 @@ load_dotenv()
 
 # Access the environment variable
 # DATA_PATH = os.environ.get('DATA_PATH')
-# DATA_PATH = '/media/caduser/MyBook/chau' 
 torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
 
 warnings.filterwarnings('ignore')
@@ -65,7 +65,7 @@ def get_args_parser():
     parser.add_argument('--batch-size', default=100, type=int)
     parser.add_argument('--epochs', default=300, type=int)
     parser.add_argument('--ratio', default=0.940, type=float)
-    parser.add_argument('--r', default=8, type=int)
+    parser.add_argument('--reduced_token', default=8, type=int)
     parser.add_argument('--use_r', default=False, type=bool)
 
     # Model parameters
@@ -213,7 +213,6 @@ def main(args):
 
     output_dir = Path(args.output_dir)
     logger = utils.create_logger(output_dir,dist_rank=utils.get_rank())
-    wandb = utils.Wandb()
     logger.info(args)
 
     device = torch.device(args.device)
@@ -242,8 +241,8 @@ def main(args):
 
     dataset_train = dataset['train']
     dataset_val = dataset['validation']
-    # dataset_train = dataset_train.filter(filter_out_grayscale, num_proc=5)
-    dataset_val = dataset_val.filter(filter_out_grayscale, num_proc=5)
+    dataset_train = dataset_train.filter(filter_out_grayscale, num_proc=10)
+    dataset_val = dataset_val.filter(filter_out_grayscale, num_proc=10)
 
 
     if True:  # args.distributed:
@@ -308,20 +307,21 @@ def main(args):
         drop_path_rate=args.drop_path,
         drop_block_rate=None,
     )
+    args.use_r=False
     
     
     if 'deit'  in args.model:
         pitome.patch.deit(model,use_r=args.use_r)
         model.ratio=float(args.ratio)
-        model.r=int(args.r)
+        model.r=int(args.reduced_token)
     elif 'mae' in args.model:
         pitome.patch.mae(model,use_r=args.use_r)
         model.ratio=float(args.ratio)
-        model.r=int(args.r)
+        model.r=int(args.reduced_token)
     elif 'vit' in args.model:
         pitome.patch.aug(model)
         model.ratio=float(args.ratio)
-        model.r =int(args.r)
+        model.r =int(args.reduced_token)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
     

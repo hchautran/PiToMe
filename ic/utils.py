@@ -36,7 +36,8 @@ from torchvision import datasets, transforms
 from timm.data import create_transform
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
-DATA_PATH = '/mnt/data/mount_4TBSSD/nmduy/pitome' 
+# DATA_PATH = '/mnt/data/mount_4TBSSD/nmduy/pitome' 
+DATA_PATH = '/media/caduser/MyBook/chau' 
 
 def dist_init(port=2333):
     if multiprocessing.get_start_method(allow_none=True) != 'spawn':
@@ -432,6 +433,7 @@ def accuracy(output, target, topk=(1,)):
     return correct_k
 
 def ampscaler_get_grad_norm(parameters, norm_type: float = 2.0) -> torch.Tensor:
+    # print('start')
     if isinstance(parameters, torch.Tensor):
         parameters = [parameters]
     parameters = [p for p in parameters if p.grad is not None]
@@ -444,6 +446,7 @@ def ampscaler_get_grad_norm(parameters, norm_type: float = 2.0) -> torch.Tensor:
     else:
         total_norm = torch.norm(torch.stack([torch.norm(p.grad.detach(),
                                                         norm_type).to(device) for p in parameters]), norm_type)
+    # print('end')
     return total_norm
 
 

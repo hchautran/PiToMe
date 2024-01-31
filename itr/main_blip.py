@@ -5,7 +5,7 @@ from trainer import MyTrainer as Blip2Trainer
 from utils.data_utils import  get_loaders
 from lavis.models import load_model_and_preprocess
 from config import parser
-from config import LAVIS_BLIP_BASE_FLICKR, LAVIS_BLIP_BASE_COCO, COCO, FLICKR
+from config import LAVIS_BLIP_BASE_FLICKR, LAVIS_BLIP_BASE_COCO, COCO, FLICKR, DATA_PATH
 from dotenv import load_dotenv
 import os
 import timm.models.vision_transformer
@@ -14,13 +14,13 @@ import timm.models.vision_transformer
 load_dotenv()
 
 # Access the environment variable
-DATA_PATH = os.environ.get('DATA_PATH')
+# DATA_PATH = os.environ.get('DATA_PATH')
 COCO_PATH = f"{DATA_PATH}/coco/images"
 FLICKR_PATH = f"{DATA_PATH}/flickr30k/flickr30k_images"
 
 if __name__ == "__main__":
     config = parser.parse_args()
-    for dataset in [FLICKR, COCO]:
+    for dataset in [COCO]:
         config.dataset = dataset
 
         # tokenizer = model.tokenizer
@@ -55,13 +55,13 @@ if __name__ == "__main__":
                 txt2img=test_txt2img,
                 img2txt=test_img2txt
             )
-            print(trainer.evaluate(use_1k=False))
+            # print(trainer.evaluate(use_1k=False))
             # print(trainer.evaluate('val'))
-            # trainer.train()
+            trainer.train()
 
 
         config.epochs = 2 
-        config.enable_log = False
+        config.enable_log = True
         config.use_margin_loss = False 
 
         for distil in [False]:

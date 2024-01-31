@@ -6,8 +6,8 @@ import os
 load_dotenv()
 
 # Access the environment variable
-data_path = os.environ.get('DATA_PATH')
-# data_path = '/media/caduser/MyBook/chau' 
+# DATA_PATH = os.environ.get('DATA_PATH')
+DATA_PATH = '/media/caduser/MyBook/chau' 
 
 def add_flags_from_config(parser, config_dict):
     """
@@ -77,9 +77,9 @@ BLIP2 = 'blip2'
 FLICKR = "flickr"
 COCO = "coco"
 
-CACHE_DIR = f"{data_path}/.cache"
-COCO_PATH = f"{data_path}/coco/images"
-FLICKR_PATH = f"{data_path}/flickr30k/flickr30k_images"
+CACHE_DIR = f"{DATA_PATH}/.cache"
+COCO_PATH = f"{DATA_PATH}/coco/images"
+FLICKR_PATH = f"{DATA_PATH}/flickr30k/flickr30k_images"
 
 config_args = {
     "training_config": {
@@ -168,7 +168,7 @@ config_args = {
         "rtol": (1e-1, "The absolute tolerance parameter"),
         "temp": (0.07, "distance temperature"),
         "clip_radius": (1.25, "clipping radius"),
-        "vision_trainable_blocks": (6, "number of trainable blocks in vision model"),
+        "vision_trainable_blocks": (16, "number of trainable blocks in vision model"),
         "text_trainable_blocks": (12, "number of trainable blocks in text model"),
         "num_vision_hidden_states": (1, "number of trainable blocks in vision model"),
         "num_text_hidden_states": (1, "number of trainable blocks in text model"),
@@ -180,7 +180,7 @@ config_args = {
         "use_signal_loss": (True, "fourier"),
         "compress_method": ('std', "compress method"),
         "distil": (True, "use distil"),
-        "r": (0.925, "remain ratio")
+        "r": (0.95, "remain ratio")
     },
     "data_config": {
         "dataset": (COCO, "which dataset to use"),

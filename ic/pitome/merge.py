@@ -50,7 +50,7 @@ def pitome(
     metric: torch.Tensor, 
     r:int=0,
     ratio:float=1.0,
-    margin:float=0.5,
+    margin:torch.Tensor=0.5,
     class_token: bool = False,
 ):
     with torch.no_grad():
@@ -67,22 +67,23 @@ def pitome(
 
         metric = F.normalize(metric, p=2, dim=-1) 
 
-        if margin >=0.6:
+        if margin >=0.45:
             a, b = metric[..., ::2, :], metric[..., 1::2, :]
             scores = a @ b.transpose(-1, -2)
             node_max, node_idx = scores.max(dim=-1)
             return get_bsm_merge(node_max, node_idx, r, class_token)
 
+        # margin.clamp_(max=0.9, min=0.1)
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
-        # sim = metric@metric.transpose(-1,-2)
-        sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
-        isolation_score = sim.mean(dim=-1)
 
+    # sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
+    sim = metric@metric.transpose(-1,-2)
+    isolation_score = sim.mean(dim=-1)
+
+    with torch.no_grad():
         indices =  torch.argsort(isolation_score, descending=True)
         merge_idx = indices[..., :2*r]
         protected_idx = indices[..., 2*r:]
-
-
         a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2]
         scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
         scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r))
@@ -109,8 +110,8 @@ def pitome(
     isolation_score = 1 - F.softmax(isolation_score, dim=-1) 
 
     if class_token:
-        return merge, torch.cat([torch.ones(B,1, 1).to(metric.device), isolation_score[..., None]],dim=1)
-    return merge, isolation_score[..., None]
+        return merge, isolation_score
+    return merge, isolation_score 
 
 
 def merge_mean(

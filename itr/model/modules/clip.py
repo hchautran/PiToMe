@@ -16,7 +16,7 @@ class CompressedHFCLIP(CompressedModel):
         self.compress_layers = [i for i in range(1,len(self.vision_model.encoder.layers))]
         self.model_len = len(self.vision_model.encoder.layers)
         self.margins = nn.ParameterList([
-            nn.Parameter(0.9 - i/self.model_len * 0.9) for i in range(self.model_len)
+            nn.Parameter(torch.tensor(0.9 - i/self.model_len * 0.9)) for i in range(self.model_len)
         ])
 
     def get_vision_features(self, pixel_values, return_source:bool=False, return_all_hidden_state=False):
@@ -57,3 +57,10 @@ class CompressedHFCLIP(CompressedModel):
         vision_embed = self.vision_proj(pooled_output)
 
         return hidden_states, vision_embed, all_hidden_states, flop, real_mem/total_mem, source
+
+    def get_text_features(self, input_ids, attention_mask):
+        text_output = self.text_model(input_ids, attention_mask)
+        last_hidden_state = text_output[1] 
+        text_embed = self.text_proj(last_hidden_state)
+
+        return  last_hidden_state, text_embed

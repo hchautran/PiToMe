@@ -222,7 +222,7 @@ def apply_patch(
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
     ToMeVisionTransformer = make_tome_class(model.__class__)
-    print('using', compress_method)
+    print('using', 'tome')
 
     model.__class__ = ToMeVisionTransformer
     model.r = 0

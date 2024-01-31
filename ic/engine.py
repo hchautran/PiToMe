@@ -27,9 +27,6 @@ def train_one_epoch(model: torch.nn.Module, criterion,
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}]'.format(epoch)
     logger.info_freq = 10
-    compression_rate_print_freq = 100
-    
-    
 
     for data_iter_step, (batch) in enumerate(metric_logger.log_every(data_loader, logger.info_freq, header,logger)):
 
