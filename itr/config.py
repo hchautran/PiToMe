@@ -134,7 +134,7 @@ config_args = {
         "text_trainable_blocks": (12, "number of trainable blocks in text model"),
         "curv_learnable": (False, "is curvature learnable"),
         "compress_method": ('pitome', "compress method"),
-        "r": (0.95, "remain ratio"),
+        "r": (0.925, "remain ratio"),
         "dataset": (COCO, "which dataset to use"),
         "cache_dir": (CACHE_DIR, "cache_dir"),
     },
