@@ -30,6 +30,8 @@ load_dotenv()
 
 # Access the environment variable
 DATA_PATH = os.environ.get('DATA_PATH')
+DATA_PATH = '/mnt/data/mount_4TBSSD/nmduy/pitome'
+
 
 
 accelerator = Accelerator(
@@ -132,7 +134,7 @@ def eval(model, eval_dataset, tokenizer,batch_size=4, r=0.9):
         eval_running_acc += accuracy_score(outputs[1], target)
         eval_pbar.set_postfix_str(f"eval loss: {100*eval_running_loss/(j+1):.2f} "
                                     f"eval accuracy: {100*eval_running_acc/(j+1):.2f}")
-    return {'acc': 100*eval_running_acc/len(eval_dataloader), 'r':r}
+    return {'acc': 100*eval_running_acc/len(eval_dataloader), 'r':model.r}
 
 
 # main

@@ -21,20 +21,25 @@ class CompressedModel(nn.Module):
         self.num_reduced_token = 32 
         self.temp = nn.Parameter(torch.tensor(0.01))
     
+    def do_nothing(self, x, mode='none'):
+        return x
+
     def dist_func(self, x:torch.Tensor, y:torch.Tensor): 
         dis = 0
         x = F.normalize(x,p=2, dim=-1) 
         y = F.normalize(y,p=2, dim=-1) 
         dis = torch.matmul(x, y.transpose(-1,-2)) 
         return dis 
+    
 
     def bipartite_soft_matching(
         self,
         x: torch.Tensor,
         r: int=None,
     ):
+        if self.r == 1.0:
+            return self.do_nothing
         T = x.shape[1]
-
         r = math.floor(T- T*self.r)
     
         with torch.no_grad():
@@ -70,6 +75,9 @@ class CompressedModel(nn.Module):
 
     def pitome(self, x: torch.Tensor, r: int=None, margin:torch.Tensor=None):
 
+        if self.r == 1.0:
+            return self.do_nothing, None
+
         if margin >= 0.45 :
             return self.bipartite_soft_matching(x, r), None
 
@@ -80,11 +88,10 @@ class CompressedModel(nn.Module):
             x = F.normalize(x, p=2, dim=-1)
 
         sim =x@x.transpose(-1,-2)
-        isolation_score = sim.mean(-1) + F.elu((sim - margin)/0.01).mean(-1)
-        isolation_score = sim.mean(-1)
+        isolation_score = F.softmin(sim, dim=-1).mean(-2) 
 
         with torch.no_grad():
-            indices =  torch.argsort(isolation_score, descending=True)
+            indices =  torch.argsort(isolation_score)
             merge_idx = indices[..., :2*r]
             protected_idx = indices[..., 2*r:]
             a_idx, b_idx = merge_idx[..., ::2], merge_idx[...,1::2]
@@ -100,7 +107,7 @@ class CompressedModel(nn.Module):
             return torch.cat([protected, dst], dim=1)
 
 
-        isolation_score = 1 - F.softmax(isolation_score, dim=-1)
+        # isolation_score = 1 - F.softmax(isolation_score, dim=-1)
         return merge, isolation_score[..., None] 
     
     def merge_wavg(
@@ -158,7 +165,7 @@ class CompressedModel(nn.Module):
         elif self.compress_method == 'ToMe':
             merge = self.bipartite_soft_matching(x, None) 
             x_reconstructed = self.merge_wavg(merge, x) 
-        else: 
+        else:
             return x, x
         if return_source:
             source = self.merge_source(merge, x, source)

@@ -130,7 +130,6 @@ class BLIP2Runner():
         )
         blip2_model = CompressedLAVISBLIP2WithQueue(config, model)
 
-        # model = HypGraphCLIPWithQueue(config) if "clip" in config.model_ckt else HypGraphBLIPWithQueue(config)
         self.trainer = Blip2Trainer(
             model=blip2_model,
             config=config,
@@ -146,47 +145,49 @@ class BLIP2Runner():
 
 if __name__ == '__main__':
     config = parser.parse_args()
-    config.dataset = FLICKR
-    for model_ckt in [
-        # CLIP_BASE_PATCH_16,
-        # CLIP_LARGE_PATCH_14,
-        # BLIP_BASE_COCO,
-        BLIP2,
-    ]:
-        config.model_ckt = model_ckt
-        for algo in [
-            # 'none', 
-            'PiToMe', 
-            'ToMe',
-            'dct', 
-            'none', 
+    for dataset in [FLICKR, COCO]:
+        config.dataset = dataset
+        for model_ckt in [
+            # CLIP_BASE_PATCH_16,
+            # CLIP_LARGE_PATCH_14,
+            BLIP_BASE_COCO,
+            # BLIP2,
         ]:
-            # wandb.init(
-            #     name=f'{model_ckt}_{algo}', 
-            #     config={
-            #         "model":model_ckt,
-            #         "algorithms": algo,
+            config.model_ckt = model_ckt
+            for algo in [
+                # 'none', 
+                'PiToMe', 
+                'ToMe',
+                'dct', 
+                'none', 
+            ]:
+                # wandb.init(
+                #     name=f'{model_ckt}_{algo}', 
+                #     config={
+                #         "model":model_ckt,
+                #         "algorithms": algo,
 
-            #     }, 
-            #     reinit=True, 
-            #     project='itr-off-the-shell'
-            # )
-            for r in [0.9, 0.925, 0.95, 0.975]:
-                config.r = r
-                if 'clip' in model_ckt:
-                    visualizer = CLIPRunner(config, algorithms=algo)
-                elif 'blip2' in model_ckt: 
-                    visualizer = BLIP2Runner(config, algorithms=algo)
-                elif 'blip' in model_ckt: 
-                    visualizer = BLIPRunner(config, algorithms=algo)
+                #     }, 
+                #     reinit=True, 
+                #     project=f'itr-{dataset}-ots'
+                # )
+                ratios = [1.0] if algo == 'none' else [0.875, 0.9, 0.925, 0.95, 0.975]
+                for r in ratios:
+                    config.r = r
+                    if 'clip' in model_ckt:
+                        visualizer = CLIPRunner(config, algorithms=algo)
+                    elif 'blip2' in model_ckt: 
+                        visualizer = BLIP2Runner(config, algorithms=algo)
+                    elif 'blip' in model_ckt: 
+                        visualizer = BLIPRunner(config, algorithms=algo)
 
-                metrics = visualizer.run()
-                print(metrics)
-                # wandb.log({
-                #     "r@all": metrics['test/r_all'],
-                #     "remain memory": metrics['eval memory'],
-                #     "gflops": metrics['gflops']
-                # })
+                    metrics = visualizer.run()
+                    print(metrics)
+                    # wandb.log({
+                    #     "r@all": metrics['test/r_all'],
+                    #     "remain memory": metrics['eval memory'],
+                    #     "gflops": metrics['gflops']/1024*1024
+                    # })
 
         
         
