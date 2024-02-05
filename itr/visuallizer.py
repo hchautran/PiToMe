@@ -130,7 +130,6 @@ class BLIP2Runner():
         )
         blip2_model = CompressedLAVISBLIP2WithQueue(config, model)
 
-        # model = HypGraphCLIPWithQueue(config) if "clip" in config.model_ckt else HypGraphBLIPWithQueue(config)
         self.trainer = Blip2Trainer(
             model=blip2_model,
             config=config,

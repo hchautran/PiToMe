@@ -8,18 +8,20 @@ from config import parser
 from config import LAVIS_BLIP_BASE_FLICKR, LAVIS_BLIP_BASE_COCO, COCO, FLICKR, DATA_PATH
 from dotenv import load_dotenv
 import os
+import torch
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Access the environment variable
 # DATA_PATH = os.environ.get('DATA_PATH')
+torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
 COCO_PATH = f"{DATA_PATH}/coco/images"
 FLICKR_PATH = f"{DATA_PATH}/flickr30k/flickr30k_images"
 
 if __name__ == "__main__":
     config = parser.parse_args()
-    for dataset in [COCO]:
+    for dataset in [FLICKR, COCO]:
         config.dataset = dataset
 
         # tokenizer = model.tokenizer

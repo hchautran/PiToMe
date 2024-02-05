@@ -14,6 +14,8 @@ load_dotenv()
 
 # Access the environment variable
 DATA_PATH = os.environ.get('DATA_PATH')
+DATA_PATH =  '/mnt/data/mount_4TBSSD/nmduy/pitome'
+
 
 class ImdbDataset:
     def __init__(self, config, split='train'):       

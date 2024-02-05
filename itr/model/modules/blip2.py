@@ -23,7 +23,7 @@ class CompressedLAVISBLIP2(CompressedModel):
         self.margins = nn.ParameterList([
             nn.Parameter(torch.tensor(0.75 - i/self.model_len * 0.5)) for i in range(self.model_len)
         ])
-        self.compress_layers = [i for i in range(1, self.model_len,3)]
+        self.compress_layers = [i for i in range(1, self.model_len)]
 
    
     def get_vision_features(self, pixel_values:torch.Tensor, return_source=False, return_attention_map=False):
