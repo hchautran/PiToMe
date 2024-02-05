@@ -70,12 +70,12 @@ if __name__ == "__main__":
             config.use_margin_loss = False 
 
             for compress_method in [
-                # 'none', 
+                'none', 
                 # 'std-mean-merge', 
-                'PiToMe', 
-                'ToMe',
+                # 'PiToMe', 
+                # 'ToMe',
                 # 'random-mean-merge',
-                'dct', 
+                # 'dct', 
             ]:
             # for compress_method in ['mean']:
                 config.compress_method = compress_method

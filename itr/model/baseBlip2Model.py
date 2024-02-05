@@ -17,23 +17,12 @@ class BaseModel(nn.Module):
         super().__init__()
         self.config = config
         self.model_ckt = config.model_ckt
-        self.ft_out = config.ft_out
-        self.clip_r = config.clip_radius
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        self.mapper = None
         self.temp = nn.Parameter(torch.tensor(config.temp))
 
-        manifold = config.manifold
     
-        assert manifold in [EUCLID, POINCARE, LORENTZ]
-
         self.logit_scale = nn.Parameter(torch.tensor(config.temp))
         self.weight_i2t = self.config.weight_i2t 
-        self.curv = torch.as_tensor(config.curv if manifold != EUCLID else 0)
-        if not torch.is_floating_point(self.curv):
-            self.curv = self.curv.to(torch.get_default_dtype())
-        
-    
 
         self.model = None 
 

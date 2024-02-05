@@ -66,10 +66,10 @@ if __name__ == "__main__":
         for distil in [False]:
             config.distil = distil 
             for compress_method in [
-                'PiToMe', 
-                'ToMe',
-                'dct', 
-                # 'none',
+                # 'PiToMe', 
+                # 'ToMe',
+                # 'dct', 
+                'none',
             ]:
                 config.compress_method = compress_method
                 inner_training_loop(config.batch_size)

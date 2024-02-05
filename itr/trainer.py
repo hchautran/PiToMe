@@ -265,7 +265,7 @@ class MyTrainer:
 
         itc_metrics["epoch"] = self.current_epoch
         itc_metrics["eval memory"] = memory_used/len(loader)
-        itc_metrics["gflops"] = total_flop/len(loader)
+        itc_metrics["gflops"] = total_flop/(len(loader)*1024**2)
         # itm_metrics["epoch"] = self.current_epoch
         
         # return itc_metrics, itm_metrics

@@ -67,8 +67,14 @@ class CompressedModel(nn.Module):
             ffn_flops = 8*T*C*C
             flops = mhsa_flops + ffn_flops 
             return flops
+    
+    def do_nothing(self, x, mode=None):
+        return x
 
     def pitome(self, x: torch.Tensor, r: int=None, margin:torch.Tensor=None):
+
+        if self.r == 1.0:
+            return self.do_nothing, None
 
         if margin >= 0.45 :
             return self.bipartite_soft_matching(x, r), None

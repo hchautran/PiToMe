@@ -9,7 +9,7 @@ if __name__ == "__main__":
     from config import parser
     from config import FLICKR_PATH, COCO_PATH, COCO, FLICKR
     config = parser.parse_args()
-    for dataset in [FLICKR]:
+    for dataset in [COCO]:
         config.dataset =dataset
 
         model, vis_processors, txt_processors = load_model_and_preprocess("blip2", "coco", is_eval=False)
@@ -55,9 +55,9 @@ if __name__ == "__main__":
             config.distil = distil 
             for compress_method in [
                 'PiToMe', 
-                'ToMe',
-                'dct', 
-                'none',
+                # 'ToMe',
+                # 'dct', 
+                # 'none',
             ]:
                 config.compress_method = compress_method
                 inner_training_loop(config.batch_size)

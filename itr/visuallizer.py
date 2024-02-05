@@ -155,7 +155,6 @@ if __name__ == '__main__':
     ]:
         config.model_ckt = model_ckt
         for algo in [
-            # 'none', 
             'PiToMe', 
             'ToMe',
             'dct', 
@@ -171,7 +170,7 @@ if __name__ == '__main__':
             #     reinit=True, 
             #     project='itr-off-the-shell'
             # )
-            for r in [0.9, 0.925, 0.95, 0.975]:
+            for r in [0.875, 0.9, 0.925, 0.95, 0.975]:
                 config.r = r
                 if 'clip' in model_ckt:
                     visualizer = CLIPRunner(config, algorithms=algo)
