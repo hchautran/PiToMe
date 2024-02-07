@@ -100,9 +100,9 @@ def main(args, model ,logger):
     if args.finetune:
         if args.finetune.startswith('https'):
             checkpoint = torch.hub.load_state_dict_from_url(
-                args.finetune, map_location='cpu', check_hash=True)
+                args.finetune, map_location='cuda', check_hash=True)
         else:
-            checkpoint = torch.load(args.finetune, map_location='cpu')
+            checkpoint = torch.load(args.finetune, map_location='cuda')
 
         checkpoint_model = checkpoint['model']
         state_dict = model.state_dict()
@@ -132,7 +132,7 @@ def main(args, model ,logger):
         checkpoint_model['pos_embed'] = new_pos_embed
         model.load_state_dict(checkpoint_model, strict=False)
 
-    model.to(device)
+    model = model.to(device)
 
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
@@ -206,7 +206,7 @@ if __name__ == '__main__':
 
     # leveraging MultiEpochsDataLoader for faster data loading
 
-    args.batch_size = 200
+    args.batch_size = 50
 
     data_loader_val = MultiEpochsDataLoader(
         dataset_val, sampler=sampler_val,
@@ -237,9 +237,9 @@ if __name__ == '__main__':
         # 'deit_base_patch16_224',
     ]:
         for algo in [
-            'DiffRate',
-            'PiToMe',
-            'ToMe',
+            # 'DiffRate',
+            # 'PiToMe',
+            # 'ToMe',
             'Baseline',
         ]:
             # wandb.init(
@@ -253,7 +253,7 @@ if __name__ == '__main__':
             # )
             args.model = model_ckt
             logger.info(f"Creating model: {args.model}")
-            ratios = [0.975, 0.95, 0.925, 0.90, 0.875, 0.85] if algo != 'Baseline' else [1.0]
+            ratios = [0.90, 0.925, 0.95, 0.975] if algo != 'Baseline' else [1.0]
 
             # for ratio in ratios:
             for ratio in ratios:
@@ -268,20 +268,20 @@ if __name__ == '__main__':
                 args.use_r = False 
                 args.ratio = ratio 
                 args.r = 13
-                if algo == 'ToMe':
-                    get_tome_model(model, args)
-                elif algo == 'PiToMe':
-                    get_pitome_model(model, args)
-                elif algo == 'DiffRate':
-                    get_diffrate_model(model, args)
-                else:
-                    args.ratio = 1.0 
-                    get_tome_model(model, args)
+                # if algo == 'ToMe':
+                #     get_tome_model(model, args)
+                # elif algo == 'PiToMe':
+                #     get_pitome_model(model, args)
+                # elif algo == 'DiffRate':
+                #     get_diffrate_model(model, args)
+                # else:
+                #     args.ratio = 1.0 
+                #     get_tome_model(model, args)
                 stats = main(args, model,logger)
                 stats['algo']= algo
                 stats['model']=model_dict[model_ckt] 
-                df = pd.concat([df, pd.DataFrame(stats, index=[0])])
-                print(stats)
+                # df = pd.concat([df, pd.DataFrame(stats, index=[0])])
+                # print(stats)
                 # wandb.log(stats)
     df.to_csv('mae_ost.csv') 
     # df.to_csv('deit_ost.csv') 

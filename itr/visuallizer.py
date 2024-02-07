@@ -4,7 +4,7 @@ from trainer_queue import MyTrainer as LavisTrainer
 from trainer import MyTrainer as Blip2Trainer 
 from utils.data_utils import  get_loaders
 from lavis.models import load_model_and_preprocess
-from transformers import CLIPProcessor
+from transformers import CLIPProcessor, CLIPModel
 from model.compressedModel import CompressedHFWithQueue
 from config import parser
 from model.compressedModel import CompressedLAVISBLIP2WithQueue 
@@ -25,30 +25,14 @@ from config import (
 )
 import wandb
  
-  
+
 class BLIPRunner():
-    def __init__(self, config, algorithms="PiToMe"):
+    def __init__(self, config, model, train_loader, val_loader, test_loader, algorithms="PiToMe" ):
        # tokenizer = model.tokenizer
         config.enable_log = False
         config.compress_method = algorithms 
-        if "flickr" in config.dataset:
-            config.model_ckt = LAVIS_BLIP_BASE_FLICKR
-            model, vis_processors, txt_processors = load_model_and_preprocess("blip_retrieval", "flickr", is_eval=False)
-            dataset = load_dataset("flickr30k", vis_path=FLICKR_PATH, cfg_path=None)
-        else:
-            model, vis_processors, txt_processors = load_model_and_preprocess("blip_retrieval", "coco", is_eval=False)
-            config.model_ckt = LAVIS_BLIP_BASE_COCO 
-            dataset = load_dataset("coco_retrieval", vis_path=COCO_PATH, cfg_path=None)
 
 
-        train_loader, val_loader, test_loader, test_img2txt, test_txt2img, _, _ = get_loaders(
-            config.batch_size, 
-            dataset,
-            vis_processor=vis_processors['eval'],
-            txt_processor=txt_processors['eval'],
-            tokenizer=model.tokenizer,
-            eval_batch_size=50
-        )
 
         queue_model = CompressedLAVISLIPWithQueue(config, model)
         self.trainer = LavisTrainer(
@@ -65,34 +49,13 @@ class BLIPRunner():
         return self.trainer.evaluate()
        
 class CLIPRunner():
-    def __init__(self, config, algorithms="PiToMe"):
+    def __init__(self, config, model,train_loader, val_loader, test_loader, algorithms="PiToMe" ):
         print("Getting CLIP processor...")
         config.enable_log=False
         config.compress_method = algorithms 
-        processor = CLIPProcessor.from_pretrained(
-            config.model_ckt, cache_dir=config.cache_dir
-        )
-
-        if "flickr" in config.dataset:
-            dataset = load_dataset("flickr30k", vis_path=FLICKR_PATH, cfg_path=None)
-        else:
-            dataset = load_dataset("coco_retrieval", vis_path=COCO_PATH, cfg_path=None)
-
-
-        train_loader, val_loader, test_loader, test_img2txt, test_txt2img, _, _ = get_loaders(
-            config.batch_size, 
-            dataset,
-            vis_processor=processor,
-            txt_processor=None,
-            tokenizer=processor,
-            eval_batch_size=50
-        )
-
-        # model = HypGraphCLIPWithQueue(config) if "clip" in config.model_ckt else HypGraphBLIPWithQueue(config)
-        queue_model = CompressedHFWithQueue(config) 
-        # model = BLIPWithQueue(config) 
+        model = CompressedHFWithQueue(config, model) 
         self.trainer = LavisTrainer(
-            model=queue_model,
+            model=model,
             config=config,
                 train_loader=train_loader,
                 val_loader=val_loader,
@@ -112,23 +75,8 @@ class BLIP2Runner():
         config.enable_log=False
         config.model_ckt = 'blip2'
         config.compress_method = algorithms 
-        model, vis_processors, txt_processors = load_model_and_preprocess("blip2", "coco", is_eval=False)
-        # tokenizer = model.tokenizer
-        if "flickr" in config.dataset:
-            config.model_ckt = LAVIS_BLIP_BASE_FLICKR
-            dataset = load_dataset("flickr30k", vis_path=FLICKR_PATH, cfg_path=None)
-        else:
-            config.model_ckt = LAVIS_BLIP_BASE_COCO 
-            dataset = load_dataset("coco_retrieval", vis_path=COCO_PATH, cfg_path=None)
 
-        train_loader, val_loader, test_loader, test_img2txt, test_txt2img, _, _ = get_loaders(
-            20, 
-            dataset,
-            vis_processor=vis_processors['eval'],
-            txt_processor=txt_processors['eval'],
-            tokenizer=model.tokenizer,
-            eval_batch_size=50
-        )
+
         blip2_model = CompressedLAVISBLIP2WithQueue(config, model)
 
         self.trainer = Blip2Trainer(
@@ -153,13 +101,52 @@ model_dict = {
 }
 if __name__ == '__main__':
     config = parser.parse_args()
-    config.dataset = COCO
+    config.dataset = FLICKR 
+
+    if "flickr" in config.dataset:
+        dataset = load_dataset("flickr30k", vis_path=FLICKR_PATH, cfg_path=None)
+    else:
+        dataset = load_dataset("coco_retrieval", vis_path=COCO_PATH, cfg_path=None)
+
     for model_ckt in [
         CLIP_BASE_PATCH_16,
         CLIP_LARGE_PATCH_14,
         BLIP_BASE_COCO,
         BLIP2,
     ]:
+        if 'clip' in model_ckt:
+            processor = CLIPProcessor.from_pretrained(
+                config.model_ckt, cache_dir=config.cache_dir
+            )
+            model = CLIPModel.from_pretrained(config.model_ckt, cache_dir=config.cache_dir)
+            train_loader, val_loader, test_loader, test_img2txt, test_txt2img, _, _ = get_loaders(
+                config.batch_size, 
+                dataset,
+                vis_processor=processor,
+                txt_processor=None,
+                tokenizer=processor,
+                eval_batch_size=50
+            )
+        elif 'blip2' in model_ckt: 
+            model, vis_processors, txt_processors = load_model_and_preprocess("blip2", 'coco', is_eval=False)
+            train_loader, val_loader, test_loader, test_img2txt, test_txt2img, _, _ = get_loaders(
+                20, 
+                dataset,
+                vis_processor=vis_processors['eval'],
+                txt_processor=txt_processors['eval'],
+                tokenizer=model.tokenizer,
+                eval_batch_size=50
+            )
+        elif 'blip' in model_ckt: 
+            model, vis_processors, txt_processors = load_model_and_preprocess("blip_retrieval", config.dataset, is_eval=False)
+            train_loader, val_loader, test_loader, test_img2txt, test_txt2img, _, _ = get_loaders(
+                20, 
+                dataset,
+                vis_processor=vis_processors['eval'],
+                txt_processor=txt_processors['eval'],
+                tokenizer=model.tokenizer,
+                eval_batch_size=50
+            )
         config.model_ckt = model_ckt
         for algo in [
             'PiToMe', 
@@ -167,27 +154,18 @@ if __name__ == '__main__':
             'dct', 
             'baseline', 
         ]:
-            # wandb.init(
-            #     name=f'{model_ckt}_{algo}', 
-            #     config={
-            #         "model":model_ckt,
-            #         "algorithms": algo,
-
-            #     }, 
-            #     reinit=True, 
-            #     project='itr-off-the-shell'
-            # )
+     
             ratios = [1.0] if algo == 'baseline' else [
                 0.9, 0.925, 0.95, 0.975
             ] 
             for r in ratios:
                 config.r = r
                 if 'clip' in model_ckt:
-                    visualizer = CLIPRunner(config, algorithms=algo)
+                    visualizer = CLIPRunner(config, algorithms=algo, model=model, train_loader=train_loader, test_loader=test_loader, val_loader=val_loader)
                 elif 'blip2' in model_ckt: 
-                    visualizer = BLIP2Runner(config, algorithms=algo)
+                    visualizer = BLIP2Runner(config, algorithms=algo, model=model, train_loader=train_loader, test_loader=test_loader, val_loader=val_loader)
                 elif 'blip' in model_ckt: 
-                    visualizer = BLIPRunner(config, algorithms=algo)
+                    visualizer = BLIPRunner(config, algorithms=algo, model=model, train_loader=train_loader, test_loader=test_loader, val_loader=val_loader)
 
                 metrics = visualizer.run()
                 metrics['algo'] = algo 
@@ -195,13 +173,11 @@ if __name__ == '__main__':
                 df = pd.concat([df, pd.DataFrame(metrics,index=[0])]) 
 
                 print(metrics)
-                # wandb.log({
-                #     "r@all": metrics['test/r_all'],
-                #     "remain memory": metrics['eval memory'],
-                #     "gflops": metrics['gflops']
-                # })
+        model = None
+        train_loader = None
+        va= None
 
-    df.to_csv('coco_ots.csv')
+    df.to_csv('flickr_ots.csv')
 
         
         

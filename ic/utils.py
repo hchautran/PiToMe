@@ -36,8 +36,8 @@ from torchvision import datasets, transforms
 from timm.data import create_transform
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
-# DATA_PATH = '/mnt/data/mount_4TBSSD/nmduy/pitome' 
-DATA_PATH = '/media/caduser/MyBook/chau' 
+DATA_PATH = '/mnt/data/mount_4TBSSD/nmduy/pitome' 
+# DATA_PATH = '/media/caduser/MyBook/chau' 
 
 def dist_init(port=2333):
     if multiprocessing.get_start_method(allow_none=True) != 'spawn':

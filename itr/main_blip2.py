@@ -12,7 +12,7 @@ if __name__ == "__main__":
     for dataset in [COCO]:
         config.dataset =dataset
 
-        model, vis_processors, txt_processors = load_model_and_preprocess("blip2", "coco", is_eval=False)
+        model, vis_processors, txt_processors = load_model_and_preprocess("blip2", "coco", is_eval=False, device="cuda")
         # tokenizer = model.tokenizer
         config.model_ckt = 'blip2' 
         if "flickr" in config.dataset:
@@ -50,15 +50,15 @@ if __name__ == "__main__":
         config.epochs = 2 
         config.enable_log = False
         config.use_margin_loss = False 
-        config.r=0.975
+        config.r=0.95
 
         for distil in [False]:
             config.distil = distil 
             for compress_method in [
-                # 'PiToMe', 
+                'PiToMe', 
                 # 'ToMe',
                 # 'dct', 
-                'none',
+                # 'none',
             ]:
                 config.compress_method = compress_method
                 inner_training_loop(config.batch_size)

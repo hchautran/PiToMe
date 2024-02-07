@@ -13,6 +13,7 @@ from timm.data import Mixup
 from timm.utils import accuracy, ModelEma
 import time
 import wandb
+from tqdm.auto import tqdm
 
 import utils
 
@@ -29,6 +30,7 @@ def train_one_epoch(model: torch.nn.Module, criterion,
     logger.info_freq = 10
 
     for data_iter_step, (batch) in enumerate(metric_logger.log_every(data_loader, logger.info_freq, header,logger)):
+        print(device)
 
         samples = batch['image'].to(device, non_blocking=True)
         targets = batch['label'].to(device, non_blocking=True)
@@ -71,39 +73,38 @@ def train_one_epoch(model: torch.nn.Module, criterion,
 
 @torch.no_grad()
 def evaluate(data_loader, model, device,logger=None):
-    criterion = torch.nn.CrossEntropyLoss()
+    with torch.no_grad():
+        criterion = torch.nn.CrossEntropyLoss()
 
-    metric_logger = utils.MetricLogger(delimiter="  ")
-    header = 'Test:'
+        # metric_logger = utils.MetricLogger(delimiter="  ")
+        # header = 'Test:'
 
-    # switch to evaluation mode
-    model.eval()
-    
-    for batch in metric_logger.log_every(data_loader, 10, header,logger):
-        start = time.time()
+        # switch to evaluation mode
+        model.eval()
         
-        images = batch['image'].to(device, non_blocking=True)
-        target = batch['label'].to(device, non_blocking=True)
+        for batch in tqdm(data_loader):
+            # print(device)
+            images = batch['image'].to(device, non_blocking=True)
+            target = batch['label'].to(device, non_blocking=True)
 
-        # compute output
-        with torch.cuda.amp.autocast():
-            output, flops = model(images)
-            loss = criterion(output, target)
+            # compute output
+            with torch.cuda.amp.autocast():
+                output, flops = model(images)
+                loss = criterion(output, target)
 
-        acc1, acc5 = accuracy(output, target, topk=(1, 5))
-        torch.cuda.synchronize()
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            torch.cuda.synchronize()
 
-        batch_size = images.shape[0]
-        metric_logger.update(flops=flops/1e9)
-        metric_logger.update(loss=loss.item())
-        metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
-        metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
-        metric_logger.meters['img_per_s'].update(batch_size/(time.time() - start), n=batch_size)
-        
-    # gather the stats from all processes
-    metric_logger.synchronize_between_processes()
+            batch_size = images.shape[0]
+            # metric_logger.update(flops=flops/1e9)
+            # metric_logger.update(loss=loss.item())
+            # metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
+            # metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
+            print(acc1.item)
+        # gather the stats from all processes
+        # metric_logger.synchronize_between_processes()
 
-    logger.info('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f} flops {flops.global_avg:.3f} img/s {img_per_s.global_avg:.3f}'
-          .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss, flops=metric_logger.flops, img_per_s=metric_logger.img_per_s))
+    # logger.info('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f} flops {flops.global_avg:.3f}'
+        #   .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss, flops=metric_logger.flops))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}

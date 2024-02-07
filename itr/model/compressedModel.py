@@ -159,9 +159,8 @@ def get_lora_blip2(config, model):
     return model
 
 class CompressedHFWithQueue(BaseModelWithQueue):
-    def __init__(self, config) -> None:
+    def __init__(self, config, model) -> None:
         super(CompressedHFWithQueue, self).__init__(config)
-        model = AutoModel.from_pretrained(config.model_ckt, cache_dir=config.cache_dir)
         clip_model = get_lora_clip(config, model=model) 
         self.model = clip(clip_model, compress_method=config.compress_method, r=config.r)
         self._init_queue(config, model.config.projection_dim)

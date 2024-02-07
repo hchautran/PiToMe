@@ -53,8 +53,11 @@ def process_image(batch, transform):
     images = []
     labels = []
     for item in batch:
-        images.append(transform(item['image']).unsqueeze(0))
-        labels.append(item['label'])
+        try:
+            images.append(transform(item['image']).unsqueeze(0))
+            labels.append(item['label'])
+        except:
+            pass 
     images_tensor = torch.cat(images)
     labels_tensor = torch.tensor(labels)
 
