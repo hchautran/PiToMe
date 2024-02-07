@@ -8,6 +8,7 @@ from transformers import CLIPProcessor
 from model.compressedModel import CompressedHFWithQueue
 from config import parser
 from model.compressedModel import CompressedLAVISBLIP2WithQueue 
+import pandas as pd
 from config import (
     COCO_PATH, 
     FLICKR_PATH, 
@@ -142,14 +143,21 @@ class BLIP2Runner():
     def run(self):
         return self.trainer.evaluate()
 
-
+df = pd.DataFrame()
+model_dict = {
+    CLIP_BASE_PATCH_16:'CLIP_B',
+    CLIP_LARGE_PATCH_14:'CLIP_L',
+    BLIP_BASE_COCO:'BLIP',
+    BLIP_BASE_FLICKR:'BLIP',
+    BLIP2:'BLIP2',
+}
 if __name__ == '__main__':
     config = parser.parse_args()
-    config.dataset = FLICKR
+    config.dataset = COCO
     for model_ckt in [
-        # CLIP_BASE_PATCH_16,
-        # CLIP_LARGE_PATCH_14,
-        # BLIP_BASE_COCO,
+        CLIP_BASE_PATCH_16,
+        CLIP_LARGE_PATCH_14,
+        BLIP_BASE_COCO,
         BLIP2,
     ]:
         config.model_ckt = model_ckt
@@ -157,7 +165,7 @@ if __name__ == '__main__':
             'PiToMe', 
             'ToMe',
             'dct', 
-            'none', 
+            'baseline', 
         ]:
             # wandb.init(
             #     name=f'{model_ckt}_{algo}', 
@@ -169,7 +177,10 @@ if __name__ == '__main__':
             #     reinit=True, 
             #     project='itr-off-the-shell'
             # )
-            for r in [0.875, 0.9, 0.925, 0.95, 0.975]:
+            ratios = [1.0] if algo == 'baseline' else [
+                0.9, 0.925, 0.95, 0.975
+            ] 
+            for r in ratios:
                 config.r = r
                 if 'clip' in model_ckt:
                     visualizer = CLIPRunner(config, algorithms=algo)
@@ -179,12 +190,18 @@ if __name__ == '__main__':
                     visualizer = BLIPRunner(config, algorithms=algo)
 
                 metrics = visualizer.run()
+                metrics['algo'] = algo 
+                metrics['model'] = model_dict[model_ckt]
+                df = pd.concat([df, pd.DataFrame(metrics,index=[0])]) 
+
                 print(metrics)
                 # wandb.log({
                 #     "r@all": metrics['test/r_all'],
                 #     "remain memory": metrics['eval memory'],
                 #     "gflops": metrics['gflops']
                 # })
+
+    df.to_csv('coco_ots.csv')
 
         
         

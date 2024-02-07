@@ -6,6 +6,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import json
 import os
+import pandas as pd
 
 from pathlib import Path
 
@@ -215,20 +216,31 @@ if __name__ == '__main__':
         collate_fn=lambda batch: process_image(batch, build_transform(is_train=False, args=args)),
         drop_last=False
     )
+
+    df = pd.DataFrame()
+    model_dict = {
+        'vit_base_patch16_mae': 'ViT-B-16',
+        'vit_large_patch16_mae':'ViT-L-16',
+        'vit_huge_patch14_mae':'ViT-H-14',
+        'deit_tiny_patch16_224':"DeiT-B-16",
+        'deit_small_patch16_224':"DeiT-B-16",
+        'deit_base_patch16_224':"DeiT-B-16",
+
+    }
     
     for model_ckt in [
         'vit_base_patch16_mae',
         'vit_large_patch16_mae',
         'vit_huge_patch14_mae',
-        'deit_tiny_patch16_224',
-        'deit_small_patch16_224',
-        'deit_base_patch16_224',
+        # 'deit_tiny_patch16_224',
+        # 'deit_small_patch16_224',
+        # 'deit_base_patch16_224',
     ]:
         for algo in [
+            'DiffRate',
             'PiToMe',
-            # 'DiffRate',
-            # 'ToMe',
-            # 'Baseline',
+            'ToMe',
+            'Baseline',
         ]:
             # wandb.init(
             #     name=f'{algo}_{model_name_dict[model_ckt]}',
@@ -243,8 +255,8 @@ if __name__ == '__main__':
             logger.info(f"Creating model: {args.model}")
             ratios = [0.975, 0.95, 0.925, 0.90, 0.875, 0.85] if algo != 'Baseline' else [1.0]
 
+            # for ratio in ratios:
             for ratio in ratios:
-            # for ratio in [0.975, 0.95, 0.925, 0.90, 0.875, 0.85]:
                 model = create_model(
                     args.model,
                     pretrained=True,
@@ -266,8 +278,13 @@ if __name__ == '__main__':
                     args.ratio = 1.0 
                     get_tome_model(model, args)
                 stats = main(args, model,logger)
+                stats['algo']= algo
+                stats['model']=model_dict[model_ckt] 
+                df = pd.concat([df, pd.DataFrame(stats, index=[0])])
+                print(stats)
                 # wandb.log(stats)
-                
+    df.to_csv('mae_ost.csv') 
+    # df.to_csv('deit_ost.csv') 
                 
         
                 

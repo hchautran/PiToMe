@@ -4,6 +4,7 @@ from utils.retrivial_utils import report_metrics
 from tqdm.auto import tqdm
 import torch
 from config import CLIP_BASE_PATCH_16, CLIP_BASE_PATCH_32, CLIP_LARGE_PATCH_14, BLIP_BASE_FLICKR, BLIP_BASE_COCO, LAVIS_BLIP_BASE_FLICKR, LAVIS_BLIP_BASE_COCO
+import time
 
 names = {
    CLIP_BASE_PATCH_32: 'clip_base_32', 
@@ -192,6 +193,7 @@ class MyTrainer:
         all_vision_embeds = []
         memory_used = 0
         total_flop = 0
+        start = time.time()
 
         with torch.no_grad():
             for data in tqdm(loader):
@@ -205,7 +207,9 @@ class MyTrainer:
                 all_text_embeds.append(text_embeds.cpu())
                 all_vision_embeds.append(vision_embeds.cpu())
                 memory_used += eval_memory
-                total_flop += flop 
+                total_flop = flop 
+
+            total_time = time.time() - start
            
 
             all_text_embeds = torch.concat(all_text_embeds, 0)
@@ -220,7 +224,8 @@ class MyTrainer:
                 mode=f'{mode}'
             )
             metrics["eval memory"] = memory_used/len(loader)
-            metrics["gflops"] = total_flop/len(loader) * 1024 * 1024
+            metrics["gflops"] = total_flop/1e9
+            metrics["sample/sec"] = 50 * len(loader)/total_time
             self.accelerator.free_memory()
           
 

@@ -207,6 +207,7 @@ class MyTrainer:
         max_len=35
         memory_used = 0
         total_flop = 0
+        start = time.time()
 
         with torch.no_grad():
             for data in tqdm(loader):
@@ -225,7 +226,8 @@ class MyTrainer:
                 image_embeds.append(image_feat.cpu())
                 text_embeds.append(text_feat.cpu())
                 memory_used += eval_memory
-                total_flop += flop 
+                total_flop = flop 
+            total_time = time.time() - start
 
 
         text_embeds = torch.cat(text_embeds, dim=0)
@@ -265,12 +267,13 @@ class MyTrainer:
 
         itc_metrics["epoch"] = self.current_epoch
         itc_metrics["eval memory"] = memory_used/len(loader)
-        itc_metrics["gflops"] = total_flop/(len(loader)*1024**2)
+        itc_metrics["gflops"] = total_flop/1e9
+        itc_metrics["sample/sec"] = 50 * len(loader)/total_time
         # itm_metrics["epoch"] = self.current_epoch
         
         # return itc_metrics, itm_metrics
         self.accelerator.clear()
-        self.model.to('cpu')
+        # self.model.to('cpu')
         return itc_metrics
         
 

@@ -61,20 +61,19 @@ if __name__ == "__main__":
                     txt2img=test_txt2img,
                     img2txt=test_img2txt
                 )
-                # print(trainer.evaluate('test'))
+                print(trainer.evaluate('test'))
                 # print(trainer.evaluate('val'))
-                trainer.train()
+                # trainer.train()
 
             config.epochs = 2
-            config.enable_log = True 
+            config.enable_log = False 
             config.use_margin_loss = False 
+            config.r=0.925
 
             for compress_method in [
                 'none', 
-                # 'std-mean-merge', 
                 # 'PiToMe', 
                 # 'ToMe',
-                # 'random-mean-merge',
                 # 'dct', 
             ]:
             # for compress_method in ['mean']:

@@ -50,14 +50,15 @@ if __name__ == "__main__":
         config.epochs = 2 
         config.enable_log = False
         config.use_margin_loss = False 
+        config.r=0.975
 
         for distil in [False]:
             config.distil = distil 
             for compress_method in [
-                'PiToMe', 
+                # 'PiToMe', 
                 # 'ToMe',
                 # 'dct', 
-                # 'none',
+                'none',
             ]:
                 config.compress_method = compress_method
                 inner_training_loop(config.batch_size)
