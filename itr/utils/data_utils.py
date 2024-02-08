@@ -3,7 +3,7 @@ import pandas as pd
 from torch.utils.data import Dataset, DataLoader, Sampler
 from tqdm.auto import tqdm
 import numpy as np
-from transformers import CLIPProcessor, BlipProcessor, AutoTokenizer, AutoImageProcessor 
+from transformers import CLIPProcessor, BlipProcessor, CLIPImageProcessor, CLIPTokenizerFast, AutoImageProcessor 
 from datasets import dataset_dict 
 from datasets import load_dataset
 from lavis.datasets.builders import load_dataset as lavis_dataset
@@ -193,12 +193,12 @@ def coco_eval_collate_func(batch, vis_processor, tokenizer):
     pixel_values = []
 
     for i, image in enumerate(list(df['image'])):
-        if isinstance(vis_processor, CLIPProcessor) or isinstance(vis_processor, BlipProcessor):
+        if isinstance(vis_processor, CLIPImageProcessor) or isinstance(vis_processor, BlipProcessor):
             pixel_values.append(vis_processor(images=image, return_tensors='pt')['pixel_values'])
         else:
             pixel_values.append(vis_processor(image).unsqueeze_(0))
 
-    if isinstance(tokenizer, CLIPProcessor) or isinstance(tokenizer, BlipProcessor):
+    if isinstance(tokenizer, CLIPTokenizerFast) or isinstance(tokenizer, BlipProcessor):
         text_inputs = tokenizer(text=list(chain(*df['text_input'])), max_length=35, truncation=True, padding=True ,return_tensors='pt') 
     else:
         text_inputs = tokenizer(list(chain(*df['text_input'])), max_length=35, truncation=True, padding=True ,return_tensors='pt') 
@@ -218,7 +218,7 @@ def get_dataloader(dataset,  vis_processor, tokenizer, txt_processor=None, mode=
         texts = []
 
         for i, image in enumerate(list(df['image'])):
-            if isinstance(vis_processor, CLIPProcessor) or isinstance(vis_processor, BlipProcessor):
+            if isinstance(vis_processor, CLIPImageProcessor) or isinstance(vis_processor, BlipProcessor):
                 pixel_values.append(vis_processor(images=image, return_tensors='pt')['pixel_values'])
             else:
                 pixel_values.append(vis_processor(image).unsqueeze_(0))
@@ -226,7 +226,7 @@ def get_dataloader(dataset,  vis_processor, tokenizer, txt_processor=None, mode=
                 texts.append(txt_processor(list(df['text_input'])[i]))
             else:
                 texts.append(list(df['text_input'])[i])
-        if isinstance(tokenizer, CLIPProcessor) or isinstance(tokenizer, BlipProcessor):
+        if isinstance(tokenizer, CLIPTokenizerFast) or isinstance(tokenizer, BlipProcessor):
             text_inputs = tokenizer(text=texts, max_length=35, truncation=True, padding=True ,return_tensors='pt') 
         else:
             text_inputs = tokenizer(texts, max_length=35, truncation=True, padding=True ,return_tensors='pt') 

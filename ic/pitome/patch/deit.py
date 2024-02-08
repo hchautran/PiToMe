@@ -53,10 +53,10 @@ class PiToMeBlockUsingRatio(Block):
                     merge, x, self._tome_info["source"]
                 )
 
-            # if isolated_score is not None and self._tome_info["size"] is not None:
-                # x, self._tome_info["size"] = merge_wavg(merge, x, isolated_score + self._tome_info["size"])
-            # else:
-            x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
+            if isolated_score is not None and self._tome_info["size"] is not None:
+                x, self._tome_info["size"] = merge_wavg(merge, x, isolated_score + self._tome_info["size"])
+            else:
+                x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
 

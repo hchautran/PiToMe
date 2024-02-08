@@ -56,6 +56,7 @@ if __name__ == "__main__":
 
     storage_dir = Path(get_cache_path(storage_dir))
     download_dir = storage_dir.parent /"download"
+    print(storage_dir)
 
     if storage_dir.exists():
         print(f"Dataset already exists at {storage_dir}. Aborting.")

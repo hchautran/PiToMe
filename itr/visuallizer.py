@@ -4,7 +4,7 @@ from trainer_queue import MyTrainer as LavisTrainer
 from trainer import MyTrainer as Blip2Trainer 
 from utils.data_utils import  get_loaders
 from lavis.models import load_model_and_preprocess
-from transformers import CLIPProcessor, CLIPModel
+from transformers import CLIPTokenizerFast, CLIPImageProcessor, CLIPModel
 from model.compressedModel import CompressedHFWithQueue
 from config import parser
 from model.compressedModel import CompressedLAVISBLIP2WithQueue 
@@ -70,7 +70,7 @@ class CLIPRunner():
 
      
 class BLIP2Runner():
-    def __init__(self, config, algorithms="PiToMe"):
+    def __init__(self, config, model,train_loader, val_loader, test_loader, algorithms="PiToMe" ):
         print("Getting blip2 processor...")
         config.enable_log=False
         config.model_ckt = 'blip2'
@@ -114,8 +114,16 @@ if __name__ == '__main__':
         BLIP_BASE_COCO,
         BLIP2,
     ]:
+        model = None
+        train_loader = None
+        val_loader= None
+        test_loader= None
+        config.model_ckt = model_ckt
         if 'clip' in model_ckt:
-            processor = CLIPProcessor.from_pretrained(
+            processor = CLIPImageProcessor.from_pretrained(
+                config.model_ckt, cache_dir=config.cache_dir
+            )
+            tokenizer= CLIPTokenizerFast.from_pretrained(
                 config.model_ckt, cache_dir=config.cache_dir
             )
             model = CLIPModel.from_pretrained(config.model_ckt, cache_dir=config.cache_dir)
@@ -124,11 +132,11 @@ if __name__ == '__main__':
                 dataset,
                 vis_processor=processor,
                 txt_processor=None,
-                tokenizer=processor,
+                tokenizer=tokenizer,
                 eval_batch_size=50
             )
         elif 'blip2' in model_ckt: 
-            model, vis_processors, txt_processors = load_model_and_preprocess("blip2", 'coco', is_eval=False)
+            model, vis_processors, txt_processors = load_model_and_preprocess("blip2", 'coco', is_eval=False, device='cuda')
             train_loader, val_loader, test_loader, test_img2txt, test_txt2img, _, _ = get_loaders(
                 20, 
                 dataset,
@@ -138,7 +146,7 @@ if __name__ == '__main__':
                 eval_batch_size=50
             )
         elif 'blip' in model_ckt: 
-            model, vis_processors, txt_processors = load_model_and_preprocess("blip_retrieval", config.dataset, is_eval=False)
+            model, vis_processors, txt_processors = load_model_and_preprocess("blip_retrieval", config.dataset, is_eval=False, device='cuda')
             train_loader, val_loader, test_loader, test_img2txt, test_txt2img, _, _ = get_loaders(
                 20, 
                 dataset,
@@ -147,7 +155,6 @@ if __name__ == '__main__':
                 tokenizer=model.tokenizer,
                 eval_batch_size=50
             )
-        config.model_ckt = model_ckt
         for algo in [
             'PiToMe', 
             'ToMe',
@@ -173,9 +180,6 @@ if __name__ == '__main__':
                 df = pd.concat([df, pd.DataFrame(metrics,index=[0])]) 
 
                 print(metrics)
-        model = None
-        train_loader = None
-        va= None
 
     df.to_csv('flickr_ots.csv')
 

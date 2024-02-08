@@ -8,8 +8,8 @@ load_dotenv()
 
 # Access the environment variable
 # DATA_PATH = os.environ.get('DATA_PATH')
-# DATA_PATH = '/media/caduser/MyBook/chau' 
-DATA_PATH = '/mnt/data/mount_4TBSSD/nmduy/pitome'
+DATA_PATH = '/media/caduser/MyBook/chau' 
+# DATA_PATH = '/mnt/data/mount_4TBSSD/nmduy/pitome'
 torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
 
 def add_flags_from_config(parser, config_dict):
@@ -82,7 +82,7 @@ COCO = "coco"
 
 CACHE_DIR = f"{DATA_PATH}/.cache"
 COCO_PATH = f"{DATA_PATH}/coco/images"
-FLICKR_PATH = f"{DATA_PATH}/flickr30k/flickr30k_images"
+FLICKR_PATH = f"{DATA_PATH}/.cache/flickr30k/images"
 
 config_args = {
     "config": {

@@ -21,7 +21,7 @@ FLICKR_PATH = f"{DATA_PATH}/flickr30k/flickr30k_images"
 
 if __name__ == "__main__":
     config = parser.parse_args()
-    for dataset in [COCO]:
+    for dataset in [FLICKR, COCO]:
         config.dataset = dataset
 
         # tokenizer = model.tokenizer

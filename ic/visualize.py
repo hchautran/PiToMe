@@ -45,11 +45,11 @@ def get_tome_model(model, args):
     if 'deit' in model_ckt:
         tome.patch.deit(model,use_r=args.use_r)
         model.ratio=float(args.ratio)
-        model.r=int(args.r)
+        # model.r=int(args.r)
     elif 'mae' in args.model:
         tome.patch.mae(model,use_r=args.use_r)
         model.ratio=float(args.ratio)
-        model.r=int(args.r)
+        # model.r=int(args.r)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
     
@@ -58,11 +58,11 @@ def get_pitome_model(model, args):
     if 'deit' in args.model:
         pitome.patch.deit(model,use_r=args.use_r)
         model.ratio=float(args.ratio)
-        model.r=int(args.r)
+        # model.r=int(args.r)
     elif 'mae' in args.model:
         pitome.patch.mae(model,use_r=args.use_r)
         model.ratio=float(args.ratio)
-        model.r=int(args.r)
+        # model.r=int(args.r)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
 
@@ -206,7 +206,8 @@ if __name__ == '__main__':
 
     # leveraging MultiEpochsDataLoader for faster data loading
 
-    args.batch_size = 50
+    args.batch_size = 200 
+    args.use_r = False 
 
     data_loader_val = MultiEpochsDataLoader(
         dataset_val, sampler=sampler_val,
@@ -229,18 +230,18 @@ if __name__ == '__main__':
     }
     
     for model_ckt in [
-        'vit_base_patch16_mae',
-        'vit_large_patch16_mae',
-        'vit_huge_patch14_mae',
-        # 'deit_tiny_patch16_224',
-        # 'deit_small_patch16_224',
-        # 'deit_base_patch16_224',
+        # 'vit_base_patch16_mae',
+        # 'vit_large_patch16_mae',
+        # 'vit_huge_patch14_mae',
+        'deit_tiny_patch16_224',
+        'deit_small_patch16_224',
+        'deit_base_patch16_224',
     ]:
         for algo in [
-            # 'DiffRate',
-            # 'PiToMe',
-            # 'ToMe',
-            'Baseline',
+            'DiffRate',
+            'PiToMe',
+            'ToMe',
+            'baseline',
         ]:
             # wandb.init(
             #     name=f'{algo}_{model_name_dict[model_ckt]}',
@@ -253,38 +254,33 @@ if __name__ == '__main__':
             # )
             args.model = model_ckt
             logger.info(f"Creating model: {args.model}")
-            ratios = [0.90, 0.925, 0.95, 0.975] if algo != 'Baseline' else [1.0]
+            ratios = [0.85, 0.875, 0.90, 0.925, 0.95, 0.975] if algo != 'baseline' else [1.0]
 
             # for ratio in ratios:
+            model = create_model(
+                args.model,
+                pretrained=True,
+                num_classes=1000,
+                drop_rate=args.drop,
+                drop_path_rate=args.drop_path,
+                drop_block_rate=None,
+            )
+            if algo == 'ToMe':
+                get_tome_model(model, args)
+            elif algo == 'PiToMe':
+                get_pitome_model(model, args)
+            elif algo == 'DiffRate':
+                get_diffrate_model(model, args)
+
             for ratio in ratios:
-                model = create_model(
-                    args.model,
-                    pretrained=True,
-                    num_classes=1000,
-                    drop_rate=args.drop,
-                    drop_path_rate=args.drop_path,
-                    drop_block_rate=None,
-                )
-                args.use_r = False 
-                args.ratio = ratio 
-                args.r = 13
-                # if algo == 'ToMe':
-                #     get_tome_model(model, args)
-                # elif algo == 'PiToMe':
-                #     get_pitome_model(model, args)
-                # elif algo == 'DiffRate':
-                #     get_diffrate_model(model, args)
-                # else:
-                #     args.ratio = 1.0 
-                #     get_tome_model(model, args)
+                model.ratio = ratio
                 stats = main(args, model,logger)
                 stats['algo']= algo
                 stats['model']=model_dict[model_ckt] 
-                # df = pd.concat([df, pd.DataFrame(stats, index=[0])])
-                # print(stats)
+                df = pd.concat([df, pd.DataFrame(stats, index=[0])])
                 # wandb.log(stats)
-    df.to_csv('mae_ost.csv') 
-    # df.to_csv('deit_ost.csv') 
+    # df.to_csv('mae_ost.csv') 
+    df.to_csv('deit_ost.csv') 
                 
         
                 

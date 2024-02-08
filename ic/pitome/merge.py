@@ -110,8 +110,8 @@ def pitome(
     isolation_score = 1 - F.softmax(isolation_score, dim=-1) 
 
     if class_token:
-        return merge, isolation_score
-    return merge, isolation_score 
+        return merge, torch.cat([torch.ones(B, 1).to(metric.device), isolation_score], dim=-1)[..., None]
+    return merge, isolation_score[..., None] 
 
 
 def merge_mean(

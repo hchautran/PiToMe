@@ -71,40 +71,37 @@ def train_one_epoch(model: torch.nn.Module, criterion,
     logger.info(f"Averaged stats:{metric_logger}")
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
-@torch.no_grad()
+torch.no_grad()
 def evaluate(data_loader, model, device,logger=None):
-    with torch.no_grad():
-        criterion = torch.nn.CrossEntropyLoss()
+    criterion = torch.nn.CrossEntropyLoss()
 
-        # metric_logger = utils.MetricLogger(delimiter="  ")
-        # header = 'Test:'
+    metric_logger = utils.MetricLogger(delimiter="  ")
+    header = 'Test:'
 
-        # switch to evaluation mode
-        model.eval()
-        
-        for batch in tqdm(data_loader):
-            # print(device)
-            images = batch['image'].to(device, non_blocking=True)
-            target = batch['label'].to(device, non_blocking=True)
+    # switch to evaluation mode
+    model.eval()
+    
+    for batch in metric_logger.log_every(data_loader, 10, header,logger):
+        images = batch['image'].to(device, non_blocking=True)
+        target = batch['label'].to(device, non_blocking=True)
 
-            # compute output
-            with torch.cuda.amp.autocast():
-                output, flops = model(images)
-                loss = criterion(output, target)
+        # compute output
+        with torch.cuda.amp.autocast():
+            output, flops = model(images)
+            loss = criterion(output, target)
 
-            acc1, acc5 = accuracy(output, target, topk=(1, 5))
-            torch.cuda.synchronize()
+        acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        torch.cuda.synchronize()
 
-            batch_size = images.shape[0]
-            # metric_logger.update(flops=flops/1e9)
-            # metric_logger.update(loss=loss.item())
-            # metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
-            # metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
-            print(acc1.item)
-        # gather the stats from all processes
-        # metric_logger.synchronize_between_processes()
+        batch_size = images.shape[0]
+        metric_logger.update(flops=flops/1e9)
+        metric_logger.update(loss=loss.item())
+        metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
+        metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
+    # gather the stats from all processes
+    metric_logger.synchronize_between_processes()
 
-    # logger.info('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f} flops {flops.global_avg:.3f}'
-        #   .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss, flops=metric_logger.flops))
+    logger.info('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f} flops {flops.global_avg:.3f}'
+          .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss, flops=metric_logger.flops))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
