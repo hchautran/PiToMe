@@ -132,7 +132,6 @@ def main(args, model ,logger):
         checkpoint_model['pos_embed'] = new_pos_embed
         model.load_state_dict(checkpoint_model, strict=False)
 
-    model = model.to(device)
 
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
@@ -166,6 +165,7 @@ if __name__ == '__main__':
     logger = utils.create_logger(output_dir,dist_rank=utils.get_rank())
     wandb = utils.Wandb()
     logger.info(args)
+    args.device= 'cuda:1'
 
     device = torch.device(args.device)
 
@@ -206,14 +206,14 @@ if __name__ == '__main__':
 
     # leveraging MultiEpochsDataLoader for faster data loading
 
-    args.batch_size = 200 
+    args.batch_size = 14 
     args.use_r = False 
 
     data_loader_val = MultiEpochsDataLoader(
         dataset_val, sampler=sampler_val,
         batch_size=int(1 * args.batch_size),
         num_workers=args.num_workers,
-        pin_memory=args.pin_mem,
+        pin_memory=False,
         collate_fn=lambda batch: process_image(batch, build_transform(is_train=False, args=args)),
         drop_last=False
     )
@@ -230,18 +230,18 @@ if __name__ == '__main__':
     }
     
     for model_ckt in [
-        # 'vit_base_patch16_mae',
-        # 'vit_large_patch16_mae',
-        # 'vit_huge_patch14_mae',
-        'deit_tiny_patch16_224',
-        'deit_small_patch16_224',
-        'deit_base_patch16_224',
+        'vit_huge_patch14_mae',
+        'vit_large_patch16_mae',
+        'vit_base_patch16_mae',
+        # 'deit_base_patch16_224',
+        # 'deit_small_patch16_224',
+        # 'deit_tiny_patch16_224',
     ]:
         for algo in [
+            'baseline',
             'DiffRate',
             'PiToMe',
             'ToMe',
-            'baseline',
         ]:
             # wandb.init(
             #     name=f'{algo}_{model_name_dict[model_ckt]}',
@@ -254,9 +254,11 @@ if __name__ == '__main__':
             # )
             args.model = model_ckt
             logger.info(f"Creating model: {args.model}")
-            ratios = [0.85, 0.875, 0.90, 0.925, 0.95, 0.975] if algo != 'baseline' else [1.0]
+            ratios = [0.90, 0.925, 0.95, 0.975] if algo != 'baseline' else [1.0]
 
             # for ratio in ratios:
+            model = None
+            torch.cuda.empty_cache()
             model = create_model(
                 args.model,
                 pretrained=True,
@@ -265,22 +267,28 @@ if __name__ == '__main__':
                 drop_path_rate=args.drop_path,
                 drop_block_rate=None,
             )
+            model = model.to(device)
             if algo == 'ToMe':
                 get_tome_model(model, args)
             elif algo == 'PiToMe':
                 get_pitome_model(model, args)
             elif algo == 'DiffRate':
                 get_diffrate_model(model, args)
+            else:
+                get_tome_model(model, args)
 
             for ratio in ratios:
-                model.ratio = ratio
+                if algo == 'DiffRate':
+                    model.init_kept_num_using_ratio(ratio)
+                else:
+                    model.ratio = ratio
                 stats = main(args, model,logger)
                 stats['algo']= algo
                 stats['model']=model_dict[model_ckt] 
                 df = pd.concat([df, pd.DataFrame(stats, index=[0])])
                 # wandb.log(stats)
-    # df.to_csv('mae_ost.csv') 
-    df.to_csv('deit_ost.csv') 
+    df.to_csv('mae_ost.csv') 
+    # df.to_csv('deit_ost.csv') 
                 
         
                 
