@@ -19,8 +19,8 @@ LORENTZ = 'lorentz'
 
 class CompressedLAVISBLIP(CompressedModel):
 
-    def __init__(self, model:BlipRetrieval, compress_method='dct',r=0.9):
-        super(CompressedLAVISBLIP, self).__init__(compress_method, r=r)
+    def __init__(self, model:BlipRetrieval, compress_method='dct',r=0.9, use_k=False, k=13):
+        super(CompressedLAVISBLIP, self).__init__(compress_method, r=r, use_k=use_k, k=k)
 
         self.vision_model = model.visual_encoder
         self.text_model = model.text_encoder 

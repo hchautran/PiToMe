@@ -13,12 +13,12 @@ LORENTZ = 'lorentz'
 from .vis import make_visualization
 
 class CompressedModel(nn.Module):
-    def __init__(self, compress_method='dct', r=0.95, window_size=2):
+    def __init__(self, compress_method='dct', r=0.95, k=2, use_k=False):
         super().__init__()
         self.r = r
-        self.window_size=window_size
+        self.k = k
+        self.use_k = use_k
         self.compress_method = compress_method
-        self.num_reduced_token = 32 
         self.temp = nn.Parameter(torch.tensor(0.01))
     
     def do_nothing(self, x, mode='none'):
@@ -35,12 +35,16 @@ class CompressedModel(nn.Module):
     def bipartite_soft_matching(
         self,
         x: torch.Tensor,
-        r: int=None,
     ):
-        if self.r == 1.0:
-            return self.do_nothing
-        T = x.shape[1]
-        r = math.floor(T- T*self.r)
+        _, T, _ = x.shape
+        if self.use_k:
+            if self.k == 0:
+                return self.do_nothing
+            r = min(self.k, T//2)
+        else:
+            if self.r == 1.0:
+                return self.do_nothing
+            r = math.floor(T- T*self.r)
     
         with torch.no_grad():
             x = F.normalize(x, p=2, dim=-1) 
@@ -76,17 +80,23 @@ class CompressedModel(nn.Module):
     def do_nothing(self, x, mode=None):
         return x
 
-    def pitome(self, x: torch.Tensor, r: int=None, margin:torch.Tensor=None):
-
-        if self.r == 1.0:
-            return self.do_nothing, None
+    def pitome(self, x: torch.Tensor, margin:torch.Tensor=None):
 
         if margin >= 0.45 :
-            return self.bipartite_soft_matching(x, r), None
+            return self.bipartite_soft_matching(x), None
+
+        B,T,_ = x.shape
+        if self.use_k:
+            if self.k == 0:
+                return self.do_nothing, None
+            r = min(self.k, T//2)
+        else:
+            if self.r == 1.0:
+                return self.do_nothing, None
+            r = math.floor(T- T*self.r)
+
 
         with torch.no_grad():
-            B,T,_ = x.shape
-            r = math.floor(T- T*self.r)
             batch_idx = torch.arange(B, pin_memory=True)[..., None].to(x.device)
             x = F.normalize(x, p=2, dim=-1)
 
@@ -163,10 +173,10 @@ class CompressedModel(nn.Module):
         if self.compress_method == 'dct':
             x_reconstructed = self.dc_transform(x)
         elif self.compress_method == 'PiToMe':
-            merge, isolation_score = self.pitome(x, None, margin=margin) 
+            merge, isolation_score = self.pitome(x, margin=margin) 
             x_reconstructed = self.merge_wavg(merge, x, isolation_score) 
         elif self.compress_method == 'ToMe':
-            merge = self.bipartite_soft_matching(x, None) 
+            merge = self.bipartite_soft_matching(x) 
             x_reconstructed = self.merge_wavg(merge, x) 
         else:
             return x, x

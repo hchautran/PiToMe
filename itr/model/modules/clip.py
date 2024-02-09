@@ -6,8 +6,8 @@ from .pitome import CompressedModel
 
 class CompressedHFCLIP(CompressedModel):
 
-    def __init__(self, model:AutoModel, compress_method='dct',r=0.9):
-        super(CompressedHFCLIP, self).__init__(compress_method, r=r)
+    def __init__(self, model:AutoModel, compress_method='dct',r=0.9, use_k=False, k=13):
+        super(CompressedHFCLIP, self).__init__(compress_method, r=r, use_k=use_k, k=k)
 
         self.vision_model = model.vision_model
         self.text_model = model.text_model 

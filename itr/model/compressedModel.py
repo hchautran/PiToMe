@@ -162,7 +162,7 @@ class CompressedHFWithQueue(BaseModelWithQueue):
     def __init__(self, config, model) -> None:
         super(CompressedHFWithQueue, self).__init__(config)
         clip_model = get_lora_clip(config, model=model) 
-        self.model = clip(clip_model, compress_method=config.compress_method, r=config.r)
+        self.model = clip(clip_model, compress_method=config.compress_method, r=config.r, use_k=config.use_k, k=config.k)
         self._init_queue(config, model.config.projection_dim)
  
     
@@ -170,7 +170,7 @@ class CompressedLAVISLIPWithQueue(BaseModelWithQueue):
     def __init__(self, config, model) -> None:
         super(CompressedLAVISLIPWithQueue, self).__init__(config)
         model = get_lora_lavis_blip(config, model=model) 
-        self.model = blip(model, compress_method=config.compress_method, r=config.r)
+        self.model = blip(model, compress_method=config.compress_method, r=config.r, use_k=config.use_k, k=config.k)
         self._init_queue(config, 256)
     
 
@@ -179,6 +179,6 @@ class CompressedLAVISBLIP2WithQueue(Blip2Model):
     def __init__(self, config, model) -> None:
         super(CompressedLAVISBLIP2WithQueue, self).__init__(config)
         model = get_lora_blip2(config, model=model) 
-        self.model = blip2(model, compress_method=config.compress_method, r=config.r)
+        self.model = blip2(model, compress_method=config.compress_method, r=config.r, use_k=config.use_k, k=config.k)
     
 

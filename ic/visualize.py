@@ -77,7 +77,7 @@ def get_diffrate_model(model, args):
         raise ValueError("only support deit, mae and caformer in this codebase")
 
     if args.use_r:
-        model.init_kept_num_using_r(args.r)
+        model.init_kept_num_using_r(args.ratio)
     else:
         model.init_kept_num_using_ratio(args.ratio)
     
@@ -165,7 +165,7 @@ if __name__ == '__main__':
     logger = utils.create_logger(output_dir,dist_rank=utils.get_rank())
     wandb = utils.Wandb()
     logger.info(args)
-    args.device= 'cuda:1'
+    args.device= 'cuda:2'
 
     device = torch.device(args.device)
 
@@ -206,8 +206,7 @@ if __name__ == '__main__':
 
     # leveraging MultiEpochsDataLoader for faster data loading
 
-    args.batch_size = 14 
-    args.use_r = False 
+    args.batch_size = 16 
 
     data_loader_val = MultiEpochsDataLoader(
         dataset_val, sampler=sampler_val,
@@ -228,67 +227,90 @@ if __name__ == '__main__':
         'deit_base_patch16_224':"DeiT-B-16",
 
     }
+    k_dict = {
+        'vit_base_patch16_mae': [5, 8, 12, 14],
+        'vit_large_patch16_mae': [4,6, 9, 10],
+        'vit_huge_patch14_mae': [5, 8, 10, 12],
+        'deit_tiny_patch16_224': [6, 8, 12, 13],
+        'deit_small_patch16_224': [6, 8, 12, 13],
+        'deit_base_patch16_224': [5, 8, 12, 14],
+        
+    }
+    for use_r in [False, True]:
+        args.use_r = use_r 
     
-    for model_ckt in [
-        'vit_huge_patch14_mae',
-        'vit_large_patch16_mae',
-        'vit_base_patch16_mae',
-        # 'deit_base_patch16_224',
-        # 'deit_small_patch16_224',
-        # 'deit_tiny_patch16_224',
-    ]:
-        for algo in [
-            'baseline',
-            'DiffRate',
-            'PiToMe',
-            'ToMe',
+        for model_ckt in [
+            'vit_huge_patch14_mae',
+            'vit_large_patch16_mae',
+            'vit_base_patch16_mae',
+            # 'deit_base_patch16_224',
+            # 'deit_small_patch16_224',
+            # 'deit_tiny_patch16_224',
         ]:
-            # wandb.init(
-            #     name=f'{algo}_{model_name_dict[model_ckt]}',
-            #     project='ic_off_the_shell',
-            #     config={
-            #        'algo': algo, 
-            #        'model': model_name_dict[model_ckt], 
-            #     },
-            #     reinit=True
-            # )
-            args.model = model_ckt
-            logger.info(f"Creating model: {args.model}")
-            ratios = [0.90, 0.925, 0.95, 0.975] if algo != 'baseline' else [1.0]
-
-            # for ratio in ratios:
-            model = None
-            torch.cuda.empty_cache()
-            model = create_model(
-                args.model,
-                pretrained=True,
-                num_classes=1000,
-                drop_rate=args.drop,
-                drop_path_rate=args.drop_path,
-                drop_block_rate=None,
-            )
-            model = model.to(device)
-            if algo == 'ToMe':
-                get_tome_model(model, args)
-            elif algo == 'PiToMe':
-                get_pitome_model(model, args)
-            elif algo == 'DiffRate':
-                get_diffrate_model(model, args)
-            else:
-                get_tome_model(model, args)
-
-            for ratio in ratios:
-                if algo == 'DiffRate':
-                    model.init_kept_num_using_ratio(ratio)
+            for algo in [
+                # 'baseline',
+                # 'DiffRate',
+                # 'PiToMe',
+                'ToMe',
+            ]:
+                # wandb.init(
+                #     name=f'{algo}_{model_name_dict[model_ckt]}',
+                #     project='ic_off_the_shell',
+                #     config={
+                #        'algo': algo, 
+                #        'model': model_name_dict[model_ckt], 
+                #     },
+                #     reinit=True
+                # )
+                args.model = model_ckt
+                logger.info(f"Creating model: {args.model}")
+                if not args.use_r: 
+                    ks = [0.90, 0.925, 0.95, 0.975] if algo != 'baseline' else [1.0]
                 else:
-                    model.ratio = ratio
-                stats = main(args, model,logger)
-                stats['algo']= algo
-                stats['model']=model_dict[model_ckt] 
-                df = pd.concat([df, pd.DataFrame(stats, index=[0])])
+                    ks = [0] if algo == 'baseline' else k_dict[model_ckt] 
+
+                # for ratio in ratios:
+                model = None
+                torch.cuda.empty_cache()
+                model = create_model(
+                    args.model,
+                    pretrained=True,
+                    num_classes=1000,
+                    drop_rate=args.drop,
+                    drop_path_rate=args.drop_path,
+                    drop_block_rate=None,
+                )
+                model = model.to(device)
+                if algo == 'ToMe':
+                    get_tome_model(model, args)
+                elif algo == 'PiToMe':
+                    get_pitome_model(model, args)
+                elif algo == 'DiffRate':
+                    get_diffrate_model(model, args)
+                else:
+                    get_tome_model(model, args)
+
+                for ratio in ks:
+                    if algo == 'DiffRate':
+                        if not args.use_r:
+                            model.init_kept_num_using_ratio(ratio)
+                        else:
+                            model.init_kept_num_using_r(ratio)
+                    else:
+                        if not args.use_r:
+                            model.ratio = ratio
+                        else:
+                            model.r = ratio
+                    stats = main(args, model,logger)
+                    stats['algo']= algo
+                    stats['model']=model_dict[model_ckt] 
+                    stats['usr_k']=args.use_r 
+                    df = pd.concat([df, pd.DataFrame(stats, index=[0])])
                 # wandb.log(stats)
-    df.to_csv('mae_ost.csv') 
+    # df.to_csv('mae_ost.csv') 
     # df.to_csv('deit_ost.csv') 
+    df.to_csv('mae_use_k.csv') 
+    # df.to_csv('deit_use_k.csv') 
                 
         
                 

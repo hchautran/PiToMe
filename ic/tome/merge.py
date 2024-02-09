@@ -43,6 +43,7 @@ def bipartite_soft_matching(
     # We can only reduce by a maximum of 50% tokens
     T = metric.shape[1]
     if r >0:
+        # print(r)
         r = min(r, (T-protected) // 2)
     elif ratio < 1.0:
         r = math.floor(T- T*ratio)

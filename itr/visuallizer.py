@@ -98,90 +98,112 @@ model_dict = {
     BLIP_BASE_COCO:'BLIP',
     BLIP_BASE_FLICKR:'BLIP',
     BLIP2:'BLIP2',
+    
+}
+
+k_dict = {
+    CLIP_BASE_PATCH_16:[4, 8,11,14],
+    CLIP_LARGE_PATCH_14:[5, 9,11,12],
+    BLIP_BASE_COCO:[14,24,35,41],
+    BLIP_BASE_FLICKR:[14, 24,35,41],
+    BLIP2:[12, 18, 19],
+    
 }
 if __name__ == '__main__':
     config = parser.parse_args()
-    config.dataset = FLICKR 
 
+    config.dataset = COCO 
     if "flickr" in config.dataset:
         dataset = load_dataset("flickr30k", vis_path=FLICKR_PATH, cfg_path=None)
     else:
         dataset = load_dataset("coco_retrieval", vis_path=COCO_PATH, cfg_path=None)
+    
+    for use_k in [True, False]:
+        config.use_k = use_k 
 
-    for model_ckt in [
-        CLIP_BASE_PATCH_16,
-        CLIP_LARGE_PATCH_14,
-        BLIP_BASE_COCO,
-        BLIP2,
-    ]:
-        model = None
-        train_loader = None
-        val_loader= None
-        test_loader= None
-        config.model_ckt = model_ckt
-        if 'clip' in model_ckt:
-            processor = CLIPImageProcessor.from_pretrained(
-                config.model_ckt, cache_dir=config.cache_dir
-            )
-            tokenizer= CLIPTokenizerFast.from_pretrained(
-                config.model_ckt, cache_dir=config.cache_dir
-            )
-            model = CLIPModel.from_pretrained(config.model_ckt, cache_dir=config.cache_dir)
-            train_loader, val_loader, test_loader, test_img2txt, test_txt2img, _, _ = get_loaders(
-                config.batch_size, 
-                dataset,
-                vis_processor=processor,
-                txt_processor=None,
-                tokenizer=tokenizer,
-                eval_batch_size=50
-            )
-        elif 'blip2' in model_ckt: 
-            model, vis_processors, txt_processors = load_model_and_preprocess("blip2", 'coco', is_eval=False, device='cuda')
-            train_loader, val_loader, test_loader, test_img2txt, test_txt2img, _, _ = get_loaders(
-                20, 
-                dataset,
-                vis_processor=vis_processors['eval'],
-                txt_processor=txt_processors['eval'],
-                tokenizer=model.tokenizer,
-                eval_batch_size=50
-            )
-        elif 'blip' in model_ckt: 
-            model, vis_processors, txt_processors = load_model_and_preprocess("blip_retrieval", config.dataset, is_eval=False, device='cuda')
-            train_loader, val_loader, test_loader, test_img2txt, test_txt2img, _, _ = get_loaders(
-                20, 
-                dataset,
-                vis_processor=vis_processors['eval'],
-                txt_processor=txt_processors['eval'],
-                tokenizer=model.tokenizer,
-                eval_batch_size=50
-            )
-        for algo in [
-            'PiToMe', 
-            'ToMe',
-            'dct', 
-            'baseline', 
+        for model_ckt in [
+            CLIP_BASE_PATCH_16,
+            CLIP_LARGE_PATCH_14,
+            BLIP_BASE_COCO,
+            BLIP2,
         ]:
-     
-            ratios = [1.0] if algo == 'baseline' else [
-                0.9, 0.925, 0.95, 0.975
-            ] 
-            for r in ratios:
-                config.r = r
-                if 'clip' in model_ckt:
-                    visualizer = CLIPRunner(config, algorithms=algo, model=model, train_loader=train_loader, test_loader=test_loader, val_loader=val_loader)
-                elif 'blip2' in model_ckt: 
-                    visualizer = BLIP2Runner(config, algorithms=algo, model=model, train_loader=train_loader, test_loader=test_loader, val_loader=val_loader)
-                elif 'blip' in model_ckt: 
-                    visualizer = BLIPRunner(config, algorithms=algo, model=model, train_loader=train_loader, test_loader=test_loader, val_loader=val_loader)
+            model = None
+            train_loader = None
+            val_loader= None
+            test_loader= None
+            config.model_ckt = model_ckt
+            if 'clip' in model_ckt:
+                processor = CLIPImageProcessor.from_pretrained(
+                    config.model_ckt, cache_dir=config.cache_dir
+                )
+                tokenizer= CLIPTokenizerFast.from_pretrained(
+                    config.model_ckt, cache_dir=config.cache_dir
+                )
+                model = CLIPModel.from_pretrained(config.model_ckt, cache_dir=config.cache_dir)
+                train_loader, val_loader, test_loader, test_img2txt, test_txt2img, _, _ = get_loaders(
+                    config.batch_size, 
+                    dataset,
+                    vis_processor=processor,
+                    txt_processor=None,
+                    tokenizer=tokenizer,
+                    eval_batch_size=50
+                )
+            elif 'blip2' in model_ckt: 
+                model, vis_processors, txt_processors = load_model_and_preprocess("blip2", 'coco', is_eval=False, device='cuda')
+                train_loader, val_loader, test_loader, test_img2txt, test_txt2img, _, _ = get_loaders(
+                    20, 
+                    dataset,
+                    vis_processor=vis_processors['eval'],
+                    txt_processor=txt_processors['eval'],
+                    tokenizer=model.tokenizer,
+                    eval_batch_size=50
+                )
+            elif 'blip' in model_ckt: 
+                model, vis_processors, txt_processors = load_model_and_preprocess("blip_retrieval", config.dataset, is_eval=False, device='cuda')
+                train_loader, val_loader, test_loader, test_img2txt, test_txt2img, _, _ = get_loaders(
+                    20, 
+                    dataset,
+                    vis_processor=vis_processors['eval'],
+                    txt_processor=txt_processors['eval'],
+                    tokenizer=model.tokenizer,
+                    eval_batch_size=50
+                )
+            for algo in [
+                # 'PiToMe', 
+                'ToMe',
+                # 'dct', 
+                # 'baseline', 
+            ]:
+        
+                if not config.use_k:
+                    ks = [1.0] if algo == 'baseline' else [
+                        0.9, 0.925, 0.95, 0.975
+                    ] 
+                else:
+                    ks = [0] if algo == 'baseline' else k_dict[model_ckt] 
+                # for r in ratios:
+                # print(ks)
+                for k in ks:
+                    if config.use_k:
+                        config.k=k
+                    else:
+                        config.r = k
+                    if 'clip' in model_ckt:
+                        visualizer = CLIPRunner(config, algorithms=algo, model=model, train_loader=train_loader, test_loader=test_loader, val_loader=val_loader)
+                    elif 'blip2' in model_ckt: 
+                        visualizer = BLIP2Runner(config, algorithms=algo, model=model, train_loader=train_loader, test_loader=test_loader, val_loader=val_loader)
+                    elif 'blip' in model_ckt: 
+                        visualizer = BLIPRunner(config, algorithms=algo, model=model, train_loader=train_loader, test_loader=test_loader, val_loader=val_loader)
 
-                metrics = visualizer.run()
-                metrics['algo'] = algo 
-                metrics['model'] = model_dict[model_ckt]
-                df = pd.concat([df, pd.DataFrame(metrics,index=[0])]) 
+                    metrics = visualizer.run()
+                    metrics['algo'] = algo 
+                    metrics['use k'] = config.use_k 
+                    metrics['model'] = model_dict[model_ckt]
+                    df = pd.concat([df, pd.DataFrame(metrics,index=[0])]) 
 
-                print(metrics)
+                    print(metrics)
 
-    df.to_csv('flickr_ots.csv')
+    df.to_csv(f'{config.dataset}_use_k.csv')
 
         
         

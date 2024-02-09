@@ -9,8 +9,8 @@ from .pitome import CompressedModel
 
 class CompressedLAVISBLIP2(CompressedModel):
 
-    def __init__(self, model:Blip2Qformer, compress_method='dct',r=0.9):
-        super(CompressedLAVISBLIP2, self).__init__(compress_method,r=r)
+    def __init__(self, model:Blip2Qformer, compress_method='dct',r=0.9, use_k=False, k=13):
+        super(CompressedLAVISBLIP2, self).__init__(compress_method,r=r, k=k, use_k=use_k)
 
         self.ln_vision = model.ln_vision
         self.visual_encoder = model.visual_encoder

@@ -178,7 +178,7 @@ def make_tome_class(transformer_class):
                     # translate fp16 to fp32 for stable training
                     mhsa_flops = 4*N*C*C + 2*N*N*C
                     flops += mhsa_flops
-                    N = N * self.ratio
+                    N = N * self.ratio if not self.use_r else N - self.r
                     ffn_flops = 8*N*C*C
                     flops += ffn_flops
             flops += patch_embedding_flops
@@ -196,7 +196,7 @@ def make_tome_class(transformer_class):
                 for block in (self.blocks):
                     mhsa_flops = 4*N*C*C + 2*N*N*C
                     flops += mhsa_flops
-                    N = N * self.ratio
+                    N = N * self.ratio if not self.use_r else N - self.r
                     ffn_flops = 8*N*C*C
                     flops += ffn_flops
             flops += patch_embedding_flops
@@ -225,6 +225,7 @@ def apply_patch(
     model.__class__ = ToMeVisionTransformer
     model.r = 0
     model.ratio = 1.0 
+    model.use_r = use_r
     
     # model.compress_method = 'tome' 
     model._tome_info = {
@@ -245,8 +246,7 @@ def apply_patch(
     for module in model.modules():
 
         if isinstance(module, Block):
-            module.__class__ = ToMeBlock if use_r > 0 else ToMeBlockUsingRatio
-            module.__class__ = ToMeBlockUsingRatio 
+            module.__class__ = ToMeBlock if use_r  else ToMeBlockUsingRatio
             module._tome_info = model._tome_info
         elif isinstance(module, Attention):
             module.__class__ = ToMeAttention
