@@ -36,6 +36,7 @@ import tome
 from dotenv import load_dotenv
 from utils import build_transform, DATA_PATH
 import os
+import wandb
 
 
 # Load environment variables from .env file
@@ -43,7 +44,6 @@ load_dotenv()
 
 # Access the environment variable
 # DATA_PATH = os.environ.get('DATA_PATH')
-DATA_PATH = '/media/caduser/MyBook/chau' 
 torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
 
 warnings.filterwarnings('ignore')
@@ -53,22 +53,32 @@ def process_image(batch, transform):
     images = []
     labels = []
     for item in batch:
-        try:
-            images.append(transform(item['image']).unsqueeze(0))
-            labels.append(item['label'])
-        except:
-            pass
+        images.append(transform(item['image']).unsqueeze(0))
+        labels.append(item['label'])
     images_tensor = torch.cat(images)
     labels_tensor = torch.tensor(labels)
 
-    return {'image': images_tensor, 'label': labels_tensor}
+    return images_tensor, labels_tensor
+    # return {'image': images_tensor, 'label': labels_tensor}
+
+
+# def process_image(item, transform):
+    # images = []
+    # labels = []
+    # images = transform(item['image']).unsqueeze(0)
+    # labels = item['label']
+# 
+    # images_tensor = torch.tensor(images)
+    # labels_tensor = torch.tensor(labels)
+
+    # return images_tensor, labels_tensor
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Diffrate training and evaluation script', add_help=False)
     parser.add_argument('--batch-size', default=100, type=int)
     parser.add_argument('--epochs', default=300, type=int)
     parser.add_argument('--ratio', default=0.940, type=float)
-    parser.add_argument('--reduced_token', default=8, type=float)
+    parser.add_argument('--reduced_token', default=8, type=int)
     parser.add_argument('--use_r', default=False, type=bool)
 
     # Model parameters
@@ -104,7 +114,7 @@ def get_args_parser():
     # Learning rate schedule parameters
     parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
                         help='LR scheduler (default: "cosine"')
-    parser.add_argument('--lr', type=float, default=5e-6, metavar='LR',
+    parser.add_argument('--lr', type=float, default=1e-5, metavar='LR',
                         help='learning rate (default: 5e-4)')
     parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct',
                         help='learning rate noise on/off epoch percentages')
@@ -211,15 +221,15 @@ def get_args_parser():
 
 
 def main(args):
-    # utils.setup_default_logging()
+    utils.setup_default_logging()
     utils.init_distributed_mode(args)
 
     output_dir = Path(args.output_dir)
     logger = utils.create_logger(output_dir,dist_rank=utils.get_rank())
-    wandb = utils.Wandb()
     logger.info(args)
 
     device = torch.device(args.device)
+    print(device)
 
     # fix the seed for reproducibility
     seed = args.seed + utils.get_rank()
@@ -247,6 +257,8 @@ def main(args):
     dataset_val = dataset['validation']
     dataset_train = dataset_train.filter(filter_out_grayscale, num_proc=10)
     dataset_val = dataset_val.filter(filter_out_grayscale, num_proc=10)
+    # dataset_train = dataset_train.map(lambda batch: process_image(batch, build_transform(is_train=True, args=args)), num_proc=10)
+    # dataset_val = dataset_val.map(lambda batch: process_image(batch, build_transform(is_train=False, args=args)), num_proc=10)
 
 
     if True:  # args.distributed:
@@ -274,12 +286,14 @@ def main(args):
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
     # leveraging MultiEpochsDataLoader for faster data loading
+    train_transform =  build_transform(is_train=True, args=args) 
+    eval_transform =  build_transform(is_train=False, args=args) 
     data_loader_train = MultiEpochsDataLoader(
         dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
-        pin_memory=args.pin_mem,
-        collate_fn=lambda batch: process_image(batch, build_transform(is_train=True, args=args)),
+        # pin_memory=args.pin_mem,
+        collate_fn=lambda batch: process_image(batch, train_transform),
         drop_last=True,
         
     )
@@ -288,8 +302,8 @@ def main(args):
         dataset_val, sampler=sampler_val,
         batch_size=int(1 * args.batch_size),
         num_workers=args.num_workers,
-        pin_memory=args.pin_mem,
-        collate_fn=lambda batch: process_image(batch, build_transform(is_train=False, args=args)),
+        # pin_memory=args.pin_mem,
+        collate_fn=lambda batch: process_image(batch, eval_transform),
         drop_last=False
     )
 
@@ -313,6 +327,7 @@ def main(args):
     )
     args.use_r=False
     
+    
     if 'deit'  in args.model:
         tome.patch.deit(model,use_r=args.use_r)
         model.ratio=float(args.ratio)
@@ -324,7 +339,7 @@ def main(args):
     elif 'vit' in args.model:
         tome.patch.aug(model)
         model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
+        model.r =int(args.reduced_token)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
     
@@ -397,13 +412,13 @@ def main(args):
                 name=args.model,
                 project='ic',
                 config={
-                    'compress_method': 'tome'
+                    'compress_method': 'pitome'
                 }
             )
     
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,weight_decay=0)
-    loss_scaler = utils.NativeScalerWithGradNormCount()
+    loss_scaler = NativeScaler()
     lr_scheduler = CosineLRScheduler(optimizer, t_initial=args.epochs, lr_min=args.min_lr, decay_rate=args.decay_rate )
 
 
@@ -491,7 +506,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('training and evaluation script', parents=[get_args_parser()])
+    parser = argparse.ArgumentParser('DeiT training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
