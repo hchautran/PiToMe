@@ -1,8 +1,23 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+# --------------------------------------------------------
+# References:
+# timm: https://github.com/rwightman/pytorch-image-models/tree/master/timm
+# mae: https://github.com/facebookresearch/mae
+# --------------------------------------------------------
 
 
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
-from lib.timm import CustomViTBlock, CustomAttention 
+from copy import copy
+
+
+from .timm import PiToMeBlock, PiToMeAttention, PiToMeBlockUsingRatio
+import torch.nn as nn
+
 
 def make_pitome_class(transformer_class):
     class PiToMeVisionTransformer(transformer_class):
@@ -33,7 +48,7 @@ def make_pitome_class(transformer_class):
 
             T = x.shape[1]
 
-            cls_tokens = self.cls_token.expand(B, -1, -1)  
+            cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
             x = torch.cat((cls_tokens, x), dim=1)
             x = x + self.pos_embed
             x = self.pos_drop(x)
@@ -70,14 +85,19 @@ def make_pitome_class(transformer_class):
 
 
         def calculate_flop(self):
-            return self.total_flop 
+            C = self.embed_dim
+            patch_number = float(self.patch_embed.num_patches)
+            N = torch.tensor(patch_number+1).to('cuda')
+            flops = 0
+            flops += self.total_flop 
+            return flops
         
 
     return PiToMeVisionTransformer
 
 
 def apply_patch(
-    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False, algo='none', r=1.0, k=0
+    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False, margin=0.9, use_k=False
 ):
     """
     Applies ToMe to this MAE transformer. Afterward, set r using model.r.
@@ -93,7 +113,8 @@ def apply_patch(
 
     current_layer = 0
     model.__class__ = PiToMeVisionTransformer
-
+    model.ratio = 1.0
+    model.r = 0 
     model._tome_info = {
         "ratio": model.ratio,
         "size": None,
@@ -108,12 +129,14 @@ def apply_patch(
     margins = [0.9- 0.9*(i/num_layers) for i in range(num_layers)]
     print(margins)
 
+    if hasattr(model, "dist_token") and model.dist_token is not None:
+        model._tome_info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, Block):
-            module.__class__ = CustomViTBlock 
+            module.__class__ = PiToMeBlockUsingRatio if not use_k else PiToMeBlock
+            module.init_margin(margins[current_layer])
             module._tome_info = model._tome_info
-            module.init_algo(algo=algo, r=r, k=k, use_k=use_k, margin=margins[current_layer])
             current_layer +=1
         elif isinstance(module, Attention):
-            module.__class__ = CustomAttention 
+            module.__class__ = PiToMeAttention

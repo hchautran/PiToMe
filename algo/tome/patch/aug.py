@@ -15,8 +15,8 @@ import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 from copy import copy
 
-from tome.merge import bipartite_soft_matching, merge_source, merge_wavg
-from tome.utils import parse_r
+from ..merge import bipartite_soft_matching, merge_source, merge_wavg
+from ..utils import parse_r
 
 
 class ToMeBlock(Block):
@@ -98,6 +98,7 @@ class ToMeBlockUsingRatio(Block):
         return x
 
 
+
 class ToMeAttention(Attention):
     """
     Modifications:
@@ -146,12 +147,13 @@ def make_tome_class(transformer_class):
         """
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
-
+            margin = 0.9
             # self._tome_info["r"] = parse_r(len(self.blocks), self.r)
             self._tome_info["r"] = [self.r] * len(self.blocks) 
             self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
-            # margins = [margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
-     
+            margins = [margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
+            # margins = [0.8 if i <  len(self.blocks)//2 else margin - margin*(i/len(self.blocks)) for i in range(len(self.blocks))]
+            self._tome_info["margin"] = margins 
             self._tome_info["size"] = None
             self._tome_info["source"] = None
 
@@ -178,7 +180,7 @@ def make_tome_class(transformer_class):
                     # translate fp16 to fp32 for stable training
                     mhsa_flops = 4*N*C*C + 2*N*N*C
                     flops += mhsa_flops
-                    N = N * self.ratio if not self.use_r else N - self.r
+                    N = N * self.ratio
                     ffn_flops = 8*N*C*C
                     flops += ffn_flops
             flops += patch_embedding_flops
@@ -196,7 +198,7 @@ def make_tome_class(transformer_class):
                 for block in (self.blocks):
                     mhsa_flops = 4*N*C*C + 2*N*N*C
                     flops += mhsa_flops
-                    N = N * self.ratio if not self.use_r else N - self.r
+                    N = N * self.ratio
                     ffn_flops = 8*N*C*C
                     flops += ffn_flops
             flops += patch_embedding_flops
@@ -208,7 +210,7 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, use_r=True
+   model: VisionTransformer, compress_method='tome', trace_source: bool = False, prop_attn: bool = True
 ):
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.
@@ -225,7 +227,6 @@ def apply_patch(
     model.__class__ = ToMeVisionTransformer
     model.r = 0
     model.ratio = 1.0 
-    model.use_r = use_r
     
     # model.compress_method = 'tome' 
     model._tome_info = {
@@ -246,7 +247,8 @@ def apply_patch(
     for module in model.modules():
 
         if isinstance(module, Block):
-            module.__class__ = ToMeBlock if use_r  else ToMeBlockUsingRatio
+            # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
+            module.__class__ = ToMeBlockUsingRatio 
             module._tome_info = model._tome_info
         elif isinstance(module, Attention):
             module.__class__ = ToMeAttention

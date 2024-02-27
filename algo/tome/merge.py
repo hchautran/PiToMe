@@ -22,27 +22,15 @@ def bipartite_soft_matching(
     class_token: bool = False,
     distill_token: bool = False,
 ) -> Tuple[Callable, Callable]:
-    """
-    Applies ToMe with a balanced matching set (50%, 50%).
-
-    Input size is [batch, tokens, channels].
-    r indicates the number of tokens to remove (max 50% of tokens).
-
-    Extra args:
-     - class_token: Whether or not there's a class token.
-     - distill_token: Whether or not there's also a distillation token.
-
-    When enabled, the class token and distillation tokens won't get merged.
-    """
+    
     protected = 0
     if class_token:
-        protected += 1
-    if distill_token:
         protected += 1
 
     # We can only reduce by a maximum of 50% tokens
     T = metric.shape[1]
-    if r >0:
+    
+    if r > 0:
         # print(r)
         r = min(r, (T-protected) // 2)
     elif ratio < 1.0:
@@ -58,8 +46,6 @@ def bipartite_soft_matching(
 
         if class_token:
             scores[..., 0, :] = -math.inf
-        if distill_token:
-            scores[..., :, 0] = -math.inf
 
         node_max, node_idx = scores.max(dim=-1)
         edge_idx = node_max.argsort(dim=-1, descending=True)[..., None]
@@ -69,7 +55,6 @@ def bipartite_soft_matching(
         dst_idx = node_idx[..., None].gather(dim=-2, index=src_idx)
 
         if class_token:
-            # Sort to ensure the class token is at the start
             unm_idx = unm_idx.sort(dim=1)[0]
 
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
@@ -79,27 +64,72 @@ def bipartite_soft_matching(
         src = src.gather(dim=-2, index=src_idx.expand(n, r, c))
         dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce=mode)
 
-        if distill_token:
-            return torch.cat([unm[:, :1], dst[:, :1], unm[:, 1:], dst[:, 1:]], dim=1)
+        return torch.cat([unm, dst], dim=1)
+
+    return merge, None
+
+def pitome(
+    metric: torch.Tensor, 
+    r:int=0,
+    ratio:float=1.0,
+    margin:torch.Tensor=0.5,
+    class_token: bool = False,
+):
+    if margin >=0.45:
+        return bipartite_soft_matching(metric, r=r, ratio=ratio, class_token=class_token)
+    with torch.no_grad():
+        if class_token:
+            metric=metric[:,1:,:]
+        B,T,C = metric.shape
+
+        if r > 0:
+            r = min(r, T // 2)
+        elif ratio < 1.0:
+            r = math.floor(T- T*ratio)
         else:
-            return torch.cat([unm, dst], dim=1)
+            return do_nothing, do_nothing
 
-    def unmerge(x: torch.Tensor) -> torch.Tensor:
-        unm_len = unm_idx.shape[1]
-        unm, dst = x[..., :unm_len, :], x[..., unm_len:, :]
-        n, _, c = unm.shape
+        metric = F.normalize(metric, p=2, dim=-1) 
 
-        src = dst.gather(dim=-2, index=dst_idx.expand(n, r, c))
 
-        out = torch.zeros(n, metric.shape[1], c, device=x.device, dtype=x.dtype)
+        # margin.clamp_(max=0.9, min=0.1)
+        batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
 
-        out[..., 1::2, :] = dst
-        out.scatter_(dim=-2, index=(2 * unm_idx).expand(n, unm_len, c), src=unm)
-        out.scatter_(dim=-2, index=(2 * src_idx).expand(n, r, c), src=src)
+    sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
+    isolation_score = sim.mean(dim=-1)
 
-        return out
+    with torch.no_grad():
+        indices =  torch.argsort(isolation_score, descending=True)
+        merge_idx = indices[..., :2*r]
+        protected_idx = indices[..., 2*r:]
+        a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2]
+        scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
+        scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r))
+        _, dst_idx = scores.max(dim=-1) 
+    
+    def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
+        if class_token:
+            x_cls=x[:,0,:].unsqueeze(1)
+            x=x[:,1:,:]
+        else:
+            x_cls = None
+        B, T, C = x.shape
 
-    return merge, unmerge
+        protected = x[batch_idx, protected_idx, :]
+        src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
+        dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
+
+        if x_cls is not None:
+            return torch.cat([x_cls, protected, dst], dim=1)
+        else:
+            return torch.cat([protected, dst], dim=1)
+
+
+    isolation_score = 1 - F.softmax(isolation_score, dim=-1) 
+
+    if class_token:
+        return merge, torch.cat([torch.ones(B, 1).to(metric.device), isolation_score], dim=-1)[..., None]
+    return merge, isolation_score[..., None] 
 
 
 def kth_bipartite_soft_matching(

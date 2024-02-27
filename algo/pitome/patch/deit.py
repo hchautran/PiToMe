@@ -6,17 +6,17 @@
 # --------------------------------------------------------
 # References:
 # timm: https://github.com/rwightman/pytorch-image-models/tree/master/timm
-# mae: https://github.com/facebookresearch/mae
 # --------------------------------------------------------
 
 
+from typing import Tuple
+
 import torch
-from timm.models.vision_transformer import Attention, Block, VisionTransformer
-from copy import copy
-
-
-from .deit import PiToMeBlock, PiToMeAttention, PiToMeBlockUsingRatio
 import torch.nn as nn
+from timm.models.vision_transformer import Attention, Block, VisionTransformer
+from ..merge import merge_source, pitome, merge_mean, merge_wavg
+from .timm import PiToMeAttention, PiToMeBlock, PiToMeBlockUsingRatio
+
 
 
 def make_pitome_class(transformer_class):
@@ -24,56 +24,40 @@ def make_pitome_class(transformer_class):
         """
         Modifications:
         - Initialize r, token size, and token sources.
-        - For MAE: make global average pooling proportional to token size
         """
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
+      
             self._tome_info["r"] = [self.r]* len(self.blocks) 
             self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
             self._tome_info["size"] = None
             self._tome_info["source"] = None
-            self._tome_info["isolate_score"] = None
             self.total_flop = 0
 
             x = super().forward(x)
             if return_flop:
-                return x, self.calculate_flop()
+                return x, self.total_flop
             else:
                 return x
-
-        def forward_features(self, x: torch.Tensor) -> torch.Tensor:
-            # From the MAE implementation
-            B = x.shape[0]
+                
+        def forward_features(self, x):
             x = self.patch_embed(x)
-
-            T = x.shape[1]
-
-            cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
-            x = torch.cat((cls_tokens, x), dim=1)
-            x = x + self.pos_embed
-            x = self.pos_drop(x)
-
+            cls_token = self.cls_token.expand(x.shape[0], -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+            if self.dist_token is None:
+                x = torch.cat((cls_token, x), dim=1)
+            else:
+                x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
+            x = self.pos_drop(x + self.pos_embed)
             for blk in self.blocks:
                 x = blk(x)
                 self.total_flop += self.calculate_block_flop(x.shape) 
-
-            if self.global_pool:
-                # ---- ToMe changes this ----
-                # Global average pool proportional to token size
-                if self._tome_info["size"] is not None:
-                    x = (x * self._tome_info["size"])[:, 1:, :].sum(dim=1) / T
-                else:
-                    x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
-                # ---- End of change ----
-
-                outcome = self.fc_norm(x)
+            self.total_flop += self.calculate_block_flop(x.shape) 
+            x = self.norm(x)
+            if self.dist_token is None:
+                return self.pre_logits(x[:, 0])
             else:
-                x = self.norm(x)
-                outcome = x[:, 0]
-
-            return outcome
-
-        
+                return x[:, 0], x[:, 1]
+ 
         def calculate_block_flop(self, shape):
             flops = 0
             _, N, C = shape
@@ -84,39 +68,32 @@ def make_pitome_class(transformer_class):
             return flops
 
 
-        def calculate_flop(self):
-            C = self.embed_dim
-            patch_number = float(self.patch_embed.num_patches)
-            N = torch.tensor(patch_number+1).to('cuda')
-            flops = 0
-            flops += self.total_flop 
-            return flops
-        
-
     return PiToMeVisionTransformer
 
 
+
 def apply_patch(
-    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False, margin=0.9, use_r=False
-):
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
     """
-    Applies ToMe to this MAE transformer. Afterward, set r using model.r.
+    Applies ToMe to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
     The sources will be available at model._tome_info["source"] afterward.
 
-    For MAE models, prop_attn should be set to false.
+    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
+    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-
     PiToMeVisionTransformer = make_pitome_class(model.__class__)
     print('using', 'pitome')
 
-    current_layer = 0
     model.__class__ = PiToMeVisionTransformer
-    model.ratio = 1.0
-    model.r = 0 
+    model.ratio = 1.0 
+    model.r=0.0
+    
+    # model.compress_method = 'tome' 
     model._tome_info = {
         "ratio": model.ratio,
+        "margin":  [],
         "size": None,
         "source": None,
         "trace_source": trace_source,
@@ -125,16 +102,18 @@ def apply_patch(
         "distill_token": False,
     }
     current_layer = 0
+    margin = margin 
     num_layers = len(model.blocks)
-    margins = [0.9- 0.9*(i/num_layers) for i in range(num_layers)]
-    print(margins)
+    # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
+    margins = [0.9 - 0.9*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tome_info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, Block):
-            module.__class__ = PiToMeBlockUsingRatio if not use_r else PiToMeBlock
+            # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
+            module.__class__ = PiToMeBlock if use_k else PiToMeBlockUsingRatio 
             module.init_margin(margins[current_layer])
             module._tome_info = model._tome_info
             current_layer +=1

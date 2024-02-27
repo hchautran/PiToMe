@@ -32,7 +32,7 @@ from datasets import load_dataset
 from torchvision import transforms
 from PIL import Image
 import torch
-import pitome
+import algo.pitome as pitome
 from dotenv import load_dotenv
 from utils import build_transform, DATA_PATH
 import os
@@ -79,7 +79,7 @@ def get_args_parser():
     parser.add_argument('--epochs', default=300, type=int)
     parser.add_argument('--ratio', default=0.940, type=float)
     parser.add_argument('--reduced_token', default=8, type=int)
-    parser.add_argument('--use_r', default=False, type=bool)
+    parser.add_argument('--use_k', default=False, type=bool)
 
     # Model parameters
     parser.add_argument('--model', default='deit_base_patch16_224', type=str, metavar='MODEL',
@@ -292,7 +292,7 @@ def main(args):
         dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
         # num_workers=args.num_workers,
-        num_workers = 8, prefetch_factor = 8, pin_memory=True, per=True, 
+        num_workers = 8, prefetch_factor = 8, pin_memory=True,
         collate_fn=lambda batch: process_image(batch, train_transform),
         drop_last=True,
         
@@ -325,15 +325,15 @@ def main(args):
         drop_path_rate=args.drop_path,
         drop_block_rate=None,
     )
-    args.use_r=False
+    args.use_k=False
     
     
     if 'deit'  in args.model:
-        pitome.patch.deit(model,use_r=args.use_r)
+        pitome.patch.timm(model,use_k=args.use_k)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
     elif 'mae' in args.model:
-        pitome.patch.mae(model,use_r=args.use_r)
+        pitome.patch.mae(model,use_k=args.use_k)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
     elif 'vit' in args.model:

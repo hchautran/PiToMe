@@ -30,7 +30,8 @@ load_dotenv()
 
 # Access the environment variable
 DATA_PATH = os.environ.get('DATA_PATH')
-DATA_PATH = '/mnt/data/mount_4TBSSD/nmduy/pitome'
+# DATA_PATH = '/mnt/data/mount_4TBSSD/nmduy/pitome'
+DATA_PATH = '/media/caduser/MyBook/chau'
 
 
 
@@ -161,7 +162,7 @@ if __name__ == "__main__":
         # 'tome', 
         'pitome',
         # 'dct', 
-        # 'none',
+        'none',
     ]:
         # wandb.init(
         #     name=f'{method}_bert-base',
@@ -186,6 +187,6 @@ if __name__ == "__main__":
         eval_dataset = task.dataset_fn(config, split='eval')    
         max_train_steps = int(np.ceil(config.total_train_samples / batch_size))
 
-        res = eval(model, eval_dataset, tokenizer ,batch_size=20)
+        res = eval(model, eval_dataset, tokenizer ,batch_size=64)
         print(res)
         # wandb.log(stats)

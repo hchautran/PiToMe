@@ -14,42 +14,49 @@ from pathlib import Path
 from timm.data import Mixup
 from timm.models import create_model
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
-from timm.scheduler import create_scheduler
 from timm.optim import create_optimizer
 from timm.utils import NativeScaler, get_state_dict, ModelEma
 
 from datasets import load_dataset
-import models_mae
-from engine import train_one_epoch, evaluate
-from samplers import RASampler
-import utils
+import ic.models_mae
+from ic.accelerated_engine import train_one_epoch, evaluate
+from ic.samplers import RASampler
+import ic.utils
 import shutil
 import warnings
-from utils import MultiEpochsDataLoader
 from timm.scheduler.cosine_lr import CosineLRScheduler
 
 from datasets import load_dataset
 from torchvision import transforms
+import algo.tome
+import algo.pitome
 from PIL import Image
 import torch
-import algo.tome as tome 
+import algo
+from algo import (
+    PITOME,
+    TOME,
+    DCT,
+    TOFU,
+    LTMP,
+    DIFFRATE,
+    NONE, 
+)
 from dotenv import load_dotenv
-from utils import build_transform, DATA_PATH
+from ic.utils import build_transform, DATA_PATH
 import os
+from accelerate import Accelerator
+from torch.utils.data import DataLoader
 import wandb
 
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Access the environment variable
-# DATA_PATH = os.environ.get('DATA_PATH')
 torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
 
 warnings.filterwarnings('ignore')
 
 
 def process_image(batch, transform):
+    # start = time.time()
     images = []
     labels = []
     for item in batch:
@@ -57,32 +64,23 @@ def process_image(batch, transform):
         labels.append(item['label'])
     images_tensor = torch.cat(images)
     labels_tensor = torch.tensor(labels)
+    # print(time.time() - start)
 
     return images_tensor, labels_tensor
-    # return {'image': images_tensor, 'label': labels_tensor}
 
 
-# def process_image(item, transform):
-    # images = []
-    # labels = []
-    # images = transform(item['image']).unsqueeze(0)
-    # labels = item['label']
-# 
-    # images_tensor = torch.tensor(images)
-    # labels_tensor = torch.tensor(labels)
-
-    # return images_tensor, labels_tensor
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Diffrate training and evaluation script', add_help=False)
     parser.add_argument('--batch-size', default=100, type=int)
-    parser.add_argument('--epochs', default=300, type=int)
-    parser.add_argument('--ratio', default=0.940, type=float)
+    parser.add_argument('--epochs', default=10, type=int)
+    parser.add_argument('--ratio', default=0.9125, type=float)
     parser.add_argument('--reduced_token', default=8, type=int)
     parser.add_argument('--use_k', default=False, type=bool)
+    parser.add_argument('--algo', default=PITOME) 
 
     # Model parameters
-    parser.add_argument('--model', default='deit_base_patch16_224', type=str, metavar='MODEL',
+    parser.add_argument('--model', default='deit_tiny_patch16_224', type=str, metavar='MODEL',
                         help='Name of model to train')
     parser.add_argument('--multi-reso', default=False, action='store_true',help='')
     parser.add_argument('--input-size', default=224, type=int, help='images input size')
@@ -219,51 +217,72 @@ def get_args_parser():
     parser.add_argument('--warmup_compression_rate', action='store_true', default=False, help='inactive computational constraint in first epoch')
     return parser
 
+gray_transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+])
+def filter_out_grayscale(example):
+    img_tensor = gray_transform(example['image'])
+    # Check if the image has only one channel (grayscale)
+    if img_tensor.shape[0] == 3:
+        return True
+    return False
+
+
+
+def prepare_model(args, use_k=False):
+    model = create_model(
+        args.model,
+        pretrained=True,
+        num_classes=1000,
+        drop_rate=args.drop,
+        drop_path_rate=args.drop_path,
+        drop_block_rate=None,
+    )
+    args.use_k=use_k
+    if 'deit'  in args.model:
+        if args.algo == PITOME:
+            algo.pitome.patch.deit(model,use_k=args.use_k)
+        else:
+            algo.tome.patch.deit(model,use_k=args.use_k)
+        model.ratio=float(args.ratio)
+        model.r=int(args.reduced_token)
+    elif 'mae' in args.model:
+        if args.algo == PITOME:
+            algo.pitome.patch.mae(model,use_k=args.use_k)
+        else:
+            algo.tome.patch.mae(model,use_k=args.use_k)
+        model.ratio=float(args.ratio)
+        model.r=int(args.reduced_token)
+    else:
+        raise ValueError("only support deit, mae and caformer in this codebase")
+    return model
+
 
 def main(args):
-    utils.setup_default_logging()
-    utils.init_distributed_mode(args)
-
+    accelerator = Accelerator() 
     output_dir = Path(args.output_dir)
-    logger = utils.create_logger(output_dir,dist_rank=utils.get_rank())
+    logger = ic.utils.create_logger(output_dir,dist_rank=ic.utils.get_rank())
     logger.info(args)
 
-    device = torch.device(args.device)
-    print(device)
 
     # fix the seed for reproducibility
-    seed = args.seed + utils.get_rank()
-    torch.manual_seed(seed)
-    np.random.seed(seed)
+    # seed = args.seed + utils.get_rank()
+    # torch.manual_seed(seed)
+    # np.random.seed(seed)
     # random.seed(seed)
 
     cudnn.benchmark = True
     dataset = load_dataset("imagenet-1k", cache_dir=f"{DATA_PATH}/imagenet/")
-    transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-    ])
-    def filter_out_grayscale(example):
-        img_tensor = transform(example['image'])
-        # Check if the image has only one channel (grayscale)
-        if img_tensor.shape[0] == 3:
-            return True
-        return False
-
-    # Filter out grayscale images
-    # dataset = dataset.filter(filter_out_grayscale, num_proc=10)
 
     dataset_train = dataset['train']
     dataset_val = dataset['validation']
     dataset_train = dataset_train.filter(filter_out_grayscale, num_proc=10)
     dataset_val = dataset_val.filter(filter_out_grayscale, num_proc=10)
-    # dataset_train = dataset_train.map(lambda batch: process_image(batch, build_transform(is_train=True, args=args)), num_proc=10)
-    # dataset_val = dataset_val.map(lambda batch: process_image(batch, build_transform(is_train=False, args=args)), num_proc=10)
-
 
     if True:  # args.distributed:
-        num_tasks = utils.get_world_size()
-        global_rank = utils.get_rank()
+        num_tasks = ic.utils.get_world_size()
+        global_rank = ic.utils.get_rank()
         if args.repeated_aug:
             sampler_train = RASampler(
                 dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
@@ -285,26 +304,30 @@ def main(args):
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
-    # leveraging MultiEpochsDataLoader for faster data loading
+
     train_transform =  build_transform(is_train=True, args=args) 
     eval_transform =  build_transform(is_train=False, args=args) 
-    data_loader_train = MultiEpochsDataLoader(
-        dataset_train, sampler=sampler_train,
+    data_loader_train = DataLoader(
+        dataset_train, 
         batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        # pin_memory=args.pin_mem,
         collate_fn=lambda batch: process_image(batch, train_transform),
+        # shuffle=False,
         drop_last=True,
-        
+        num_workers = 16,
+        pin_memory=True,
+        persistent_workers=True
+
+        # sampler=sampler_train
     )
 
-    data_loader_val = MultiEpochsDataLoader(
-        dataset_val, sampler=sampler_val,
-        batch_size=int(1 * args.batch_size),
-        num_workers=args.num_workers,
-        # pin_memory=args.pin_mem,
+    data_loader_val = DataLoader(
+        dataset_val, 
+        batch_size=args.batch_size,
         collate_fn=lambda batch: process_image(batch, eval_transform),
-        drop_last=False
+        # shuffle=False,
+        drop_last=False,
+        sampler=sampler_val,
+        num_workers = 8, prefetch_factor = 8, pin_memory=True, 
     )
 
     mixup_fn = None
@@ -315,57 +338,23 @@ def main(args):
             prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
             label_smoothing=args.smoothing, num_classes=1000)
     
-    
-    logger.info(f"Creating model: {args.model}")
-    model = create_model(
-        args.model,
-        pretrained=True,
-        num_classes=1000,
-        drop_rate=args.drop,
-        drop_path_rate=args.drop_path,
-        drop_block_rate=None,
-    )
-    args.use_k=False
-    
-    
-    if 'deit'  in args.model:
-        tome.patch.timm(model,use_k=args.use_k)
-        model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
-    elif 'mae' in args.model:
-        tome.patch.mae(model,use_k=args.use_k)
-        model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
-    elif 'vit' in args.model:
-        tome.patch.aug(model)
-        model.ratio=float(args.ratio)
-        model.r =int(args.reduced_token)
-    else:
-        raise ValueError("only support deit, mae and caformer in this codebase")
-    
-    model_name_dict = {
-        'vit_deit_tiny_patch16_224':'ViT-T-DeiT',
-        'vit_deit_small_patch16_224':'ViT-S-DeiT',
-        'vit_deit_base_patch16_224': 'ViT-B-DeiT',
-        'vit_base_patch16_mae': 'ViT-B-MAE',
-        'vit_large_patch16_mae': 'ViT-L-MAE',
-        'vit_huge_patch14_mae': 'ViT-H-MAE',
-        'caformer_s36':'CAFormer-S36',
-    }
+
+    accelerator.print(f"Creating model: {args.model}")
+    model = prepare_model(args, use_k=False)
 
             
     if args.finetune:
         if args.finetune.startswith('https'):
             checkpoint = torch.hub.load_state_dict_from_url(
-                args.finetune, map_location='cpu', check_hash=True)
+                args.finetune, map_location='cuda:5', check_hash=True)
         else:
-            checkpoint = torch.load(args.finetune, map_location='cpu')
+            checkpoint = torch.load(args.finetune, map_location='cuda:5')
 
         checkpoint_model = checkpoint['model']
         state_dict = model.state_dict()
         for k in ['head.weight', 'head.bias', 'head_dist.weight', 'head_dist.bias']:
             if k in checkpoint_model and checkpoint_model[k].shape != state_dict[k].shape:
-                logger.info(f"Removing key {k} from pretrained checkpoint")
+                accelerator.print(f"Removing key {k} from pretrained checkpoint")
                 del checkpoint_model[k]
 
         # interpolate position embedding
@@ -389,39 +378,36 @@ def main(args):
         checkpoint_model['pos_embed'] = new_pos_embed
         model.load_state_dict(checkpoint_model, strict=False)
 
-    model.to(device)
+    model = accelerator.prepare(model)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,weight_decay=0)
+    lr_scheduler = CosineLRScheduler(optimizer, t_initial=args.epochs, lr_min=args.min_lr, decay_rate=args.decay_rate )
+    optimizer, lr_scheduler, data_loader_train, data_loader_val = accelerator.prepare(optimizer, lr_scheduler, data_loader_train, data_loader_val)
 
-    model_without_ddp = model
-    if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
-        model_without_ddp = model.module
+
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    logger.info(f'number of params: {n_parameters}')
 
-    linear_scaled_lr = args.lr * args.batch_size * utils.get_world_size() / 512.0
+    accelerator.print(f'number of params: {n_parameters}')
+
+    linear_scaled_lr = args.lr * args.batch_size * ic.utils.get_world_size() / 512.0
+
     args.lr = linear_scaled_lr
 
 
     if args.eval:
-        test_stats = evaluate(data_loader_val, model, device,logger)
-        logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
+        test_stats = evaluate(data_loader_val, model, accelerator)
+        accelerator.print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
         return
     else:
-        if utils.is_main_process():
-            wandb.init(
-                name=args.model,
-                project='ic',
-                config={
-                    'compress_method': 'pitome'
-                }
-            )
+        pass
+        # if accelerator.is_main_process:
+        #     wandb.init(
+        #         name=args.model,
+        #         project='ic',
+        #         config={
+        #             'compress_method': 'pitome'
+        #         }
+        #     )
     
-
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,weight_decay=0)
-    loss_scaler = NativeScaler()
-    lr_scheduler = CosineLRScheduler(optimizer, t_initial=args.epochs, lr_min=args.min_lr, decay_rate=args.decay_rate )
-
-
 
     criterion = LabelSmoothingCrossEntropy()
 
@@ -442,67 +428,65 @@ def main(args):
                 args.resume, map_location='cpu', check_hash=True)
         else:
             checkpoint = torch.load(args.resume, map_location='cpu')
-        model_without_ddp.load_state_dict(checkpoint['model'], strict=False)
+        model.load_state_dict(checkpoint['model'], strict=False)
         if not args.eval and 'optimizer' in checkpoint and 'lr_scheduler' in checkpoint and 'epoch' in checkpoint:
             optimizer.load_state_dict(checkpoint['optimizer'])
             lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
             args.start_epoch = checkpoint['epoch'] + 1
-            if 'scaler' in checkpoint:
-                loss_scaler.load_state_dict(checkpoint['scaler'])
 
 
-    logger.info(f"Start training for {args.epochs} epochs")
+    accelerator.print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
     max_accuracy = 0.0
     for epoch in range(args.start_epoch, args.epochs):
-        if args.distributed:
-            data_loader_train.sampler.set_epoch(epoch)
+        # if args.distributed:
+            # data_loader_train.sampler.set_epoch(epoch)
 
         train_stats = train_one_epoch(
-            model, criterion, data_loader_train,
-            optimizer,device, epoch, loss_scaler,
-            args.clip_grad, mixup_fn,
-            set_training_mode=args.finetune == '',  # keep in eval mode during finetuning
-            logger=logger, 
-            target_flops=args.target_flops,
-            warm_up=args.warmup_compression_rate
+            model=model, 
+            criterion=criterion, 
+            data_loader=data_loader_train,
+            optimizer=optimizer, 
+            accelerator=accelerator,
+            epoch=epoch, 
+            logger=logger,
+            mixup_fn=mixup_fn,
         )
-        if utils.is_main_process():
-            wandb.log(train_stats)
+        # if accelerator.is_main_process:
+            # wandb.log(train_stats)
 
         lr_scheduler.step(epoch)
         if args.output_dir:
             checkpoint_paths = [output_dir / 'checkpoint.pth']
             for checkpoint_path in checkpoint_paths:
-                utils.save_on_master({
-                    'model': model_without_ddp.state_dict(),
+                ic.utils.save_on_master({
+                    'model': model.state_dict(),
                     'optimizer': optimizer.state_dict(),
                     'lr_scheduler': lr_scheduler.state_dict(),
                     'epoch': epoch,
-                    'scaler': loss_scaler.state_dict(),
                     'args': args,
                 }, checkpoint_path)
 
-        test_stats = evaluate(data_loader_val, model, device,logger=logger)
-        logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
-        if utils.is_main_process() and max_accuracy < test_stats['acc1'] :
+        test_stats = evaluate(data_loader_val, model, accelerator)
+        accelerator.print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
+        if accelerator.is_main_process and max_accuracy < test_stats['acc1'] :
             shutil.copyfile(checkpoint_path, f'{args.output_dir}/model_best.pth')
             max_accuracy = max(max_accuracy, test_stats["acc1"])
-            wandb.log({'acc': f'{test_stats["acc1"]}%'})
-            wandb.log({'max acc': f'{max_accuracy:.2f}%'})
-        logger.info(f'Max accuracy: {max_accuracy:.2f}%')
+            # wandb.log({'acc': f'{test_stats["acc1"]}%'})
+            # wandb.log({'max acc': f'{max_accuracy:.2f}%'})
+        accelerator.print(f'Max accuracy: {max_accuracy:.2f}%')
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
                      **{f'test_{k}': v for k, v in test_stats.items()},
                      'epoch': epoch,
                      'n_parameters': n_parameters}
 
-        if utils.is_main_process():
-            wandb.log(log_stats)
+        # if accelerator.is_main_process():
+            # wandb.log(log_stats)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    logger.info('Training time {}'.format(total_time_str))
+    accelerator.print('Training time {}'.format(total_time_str))
 
 
 if __name__ == '__main__':

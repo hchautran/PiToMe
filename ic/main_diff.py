@@ -28,9 +28,7 @@ from utils import MultiEpochsDataLoader
 from timm.scheduler.cosine_lr import CosineLRScheduler
 
 import models_mae
-import caformer
-import DiffRate
-import tome
+import algo.DiffRate as DiffRate
 from dotenv import load_dotenv
 from utils import build_transform, DATA_PATH
 import os

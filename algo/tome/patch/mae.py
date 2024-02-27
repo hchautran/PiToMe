@@ -14,7 +14,7 @@ import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 
 
-from .deit import ToMeAttention, ToMeBlockUsingRatio, ToMeBlock
+from .timm import ToMeAttention, ToMeBlockUsingRatio, ToMeBlock
 
 
 def make_tome_class(transformer_class):
@@ -97,7 +97,7 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False, use_r=True
+    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False, use_k=True
 ):
     """
     Applies ToMe to this MAE transformer. Afterward, set r using model.r.
@@ -129,7 +129,7 @@ def apply_patch(
 
     for module in model.modules():
         if isinstance(module, Block):
-            module.__class__ = ToMeBlockUsingRatio if not use_r else ToMeBlock
+            module.__class__ = ToMeBlockUsingRatio if not use_k else ToMeBlock
             # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
             module._tome_info = model._tome_info
         elif isinstance(module, Attention):

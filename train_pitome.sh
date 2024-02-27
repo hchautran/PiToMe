@@ -22,7 +22,7 @@ python -m accelerate.commands.launch \
 --config_file accelerate.yml --main_process_port 29512 ic/main.py \
 --epoch 20 --batch-size 128 \
 --model ${CKT_SIZE} \
---ratio 0.9125 --use_r False --reduced_token 13 
+--ratio 0.9125 --use_k False --reduced_token 13 
 
 # python -m torch.distributed.launch \
 # --nproc_per_node=5 --use_env  \

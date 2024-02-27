@@ -30,8 +30,16 @@ from datasets import load_dataset
 from torchvision import transforms
 from PIL import Image
 import torch
-import pitome
-import tome
+import algo
+from algo import (
+    PITOME,
+    TOME,
+    DCT,
+    TOFU,
+    LTMP,
+    DIFFRATE,
+    NONE, 
+)
 from dotenv import load_dotenv
 from utils import build_transform, DATA_PATH
 import os
@@ -66,7 +74,7 @@ def get_args_parser():
     parser.add_argument('--epochs', default=10, type=int)
     parser.add_argument('--ratio', default=0.9125, type=float)
     parser.add_argument('--reduced_token', default=8, type=int)
-    parser.add_argument('--use_r', default=False, type=bool)
+    parser.add_argument('--use_k', default=False, type=bool)
 
     # Model parameters
     parser.add_argument('--model', default='deit_tiny_patch16_224', type=str, metavar='MODEL',
@@ -219,7 +227,8 @@ def filter_out_grayscale(example):
 
 
 
-def prepare_model(args, use_r=False):
+def prepare_model(args, use_k=False, algo=NONE):
+    
     model = create_model(
         args.model,
         pretrained=True,
@@ -228,19 +237,27 @@ def prepare_model(args, use_r=False):
         drop_path_rate=args.drop_path,
         drop_block_rate=None,
     )
-    args.use_r=use_r
+    args.use_k=use_k
     if 'deit'  in args.model:
-        pitome.patch.deit(model,use_r=args.use_r)
-        model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
+        algo.deit(
+            model=model,
+            use_k=args.use_k,
+            k=int(args.reduced_token),
+            r=float(args.ratio),
+            algo=algo
+        )
     elif 'mae' in args.model:
-        pitome.patch.mae(model,use_r=args.use_r)
-        model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
-    elif 'vit' in args.model:
-        pitome.patch.aug(model)
-        model.ratio=float(args.ratio)
-        model.r =int(args.reduced_token)
+        algo.deit(
+            model=model,
+            use_k=args.use_k,
+            k=int(args.reduced_token),
+            r=float(args.ratio),
+            algo=algo
+        )
+    # elif 'vit' in args.model:
+        # patch.aug(model)
+        # model.ratio=float(args.ratio)
+        # model.r =int(args.reduced_token)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
     return model
@@ -303,7 +320,6 @@ def main(args):
         num_workers = 16,
         pin_memory=True,
         persistent_workers=True
-
         # sampler=sampler_train
     )
 
@@ -327,7 +343,8 @@ def main(args):
     
 
     accelerator.print(f"Creating model: {args.model}")
-    model = prepare_model(args, use_r=False)
+
+    model = prepare_model(args, use_k=False, algo=PITOME)
 
             
     if args.finetune:

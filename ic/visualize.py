@@ -43,11 +43,11 @@ import wandb
 
 def get_tome_model(model, args):
     if 'deit' in model_ckt:
-        tome.patch.deit(model,use_r=args.use_r)
+        tome.patch.deit(model,use_k=args.use_k)
         model.ratio=float(args.ratio)
         # model.r=int(args.r)
     elif 'mae' in args.model:
-        tome.patch.mae(model,use_r=args.use_r)
+        tome.patch.mae(model,use_k=args.use_k)
         model.ratio=float(args.ratio)
         # model.r=int(args.r)
     else:
@@ -56,11 +56,11 @@ def get_tome_model(model, args):
 
 def get_pitome_model(model, args):
     if 'deit' in args.model:
-        pitome.patch.deit(model,use_r=args.use_r)
+        pitome.patch.deit(model,use_k=args.use_k)
         model.ratio=float(args.ratio)
         # model.r=int(args.r)
     elif 'mae' in args.model:
-        pitome.patch.mae(model,use_r=args.use_r)
+        pitome.patch.mae(model,use_k=args.use_k)
         model.ratio=float(args.ratio)
         # model.r=int(args.r)
     else:
@@ -76,7 +76,7 @@ def get_diffrate_model(model, args):
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
 
-    if args.use_r:
+    if args.use_k:
         model.init_kept_num_using_r(args.ratio)
     else:
         model.init_kept_num_using_ratio(args.ratio)
@@ -86,16 +86,7 @@ def get_diffrate_model(model, args):
 def main(args, model ,logger):
     # utils.setup_default_logging()
 
-    
-    model_name_dict = {
-        'vit_deit_tiny_patch16_224':'ViT-T-DeiT',
-        'vit_deit_small_patch16_224':'ViT-S-DeiT',
-        'vit_deit_base_patch16_224': 'ViT-B-DeiT',
-        'vit_base_patch16_mae': 'ViT-B-MAE',
-        'vit_large_patch16_mae': 'ViT-L-MAE',
-        'vit_huge_patch14_mae': 'ViT-H-MAE',
-    }
-    
+ 
             
     if args.finetune:
         if args.finetune.startswith('https'):
@@ -236,8 +227,8 @@ if __name__ == '__main__':
         'deit_base_patch16_224': [5, 8, 12, 14],
         
     }
-    for use_r in [False, True]:
-        args.use_r = use_r 
+    for use_k in [False, True]:
+        args.use_k = use_k 
     
         for model_ckt in [
             'vit_huge_patch14_mae',
@@ -264,7 +255,7 @@ if __name__ == '__main__':
                 # )
                 args.model = model_ckt
                 logger.info(f"Creating model: {args.model}")
-                if not args.use_r: 
+                if not args.use_k: 
                     ks = [0.90, 0.925, 0.95, 0.975] if algo != 'baseline' else [1.0]
                 else:
                     ks = [0] if algo == 'baseline' else k_dict[model_ckt] 
@@ -292,19 +283,19 @@ if __name__ == '__main__':
 
                 for ratio in ks:
                     if algo == 'DiffRate':
-                        if not args.use_r:
+                        if not args.use_k:
                             model.init_kept_num_using_ratio(ratio)
                         else:
                             model.init_kept_num_using_r(ratio)
                     else:
-                        if not args.use_r:
+                        if not args.use_k:
                             model.ratio = ratio
                         else:
                             model.r = ratio
                     stats = main(args, model,logger)
                     stats['algo']= algo
                     stats['model']=model_dict[model_ckt] 
-                    stats['usr_k']=args.use_r 
+                    stats['usr_k']=args.use_k 
                     df = pd.concat([df, pd.DataFrame(stats, index=[0])])
                 # wandb.log(stats)
     # df.to_csv('mae_ost.csv') 

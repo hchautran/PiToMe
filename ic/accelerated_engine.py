@@ -10,13 +10,12 @@ from typing import Iterable, Optional
 import torch
 
 from timm.data import Mixup
+from .utils import *
 from timm.utils import accuracy, ModelEma
 import time
 import wandb
 from tqdm.auto import tqdm
 from accelerate import Accelerator
-
-import utils
 
 
 
@@ -26,15 +25,11 @@ def train_one_epoch(model: torch.nn.Module, criterion,
                     
     ):
     model.train()
-    metric_logger = utils.MetricLogger(delimiter="  ")
+    metric_logger = MetricLogger(delimiter="  ")
     header = 'Epoch: [{}]'.format(epoch)
     logger.info_freq = 10
 
     for data_iter_step, (samples, targets) in enumerate(metric_logger.log_every(data_loader, logger.info_freq, header,logger)):
-        # start = time.time()
-        # print('got here')
-        # print(samples)
-        # print(targets)
         optimizer.zero_grad()
 
         if mixup_fn is not None:
@@ -67,7 +62,7 @@ def train_one_epoch(model: torch.nn.Module, criterion,
 @torch.no_grad()
 def evaluate(data_loader, model, accelerator=None):
     criterion = torch.nn.CrossEntropyLoss()
-    metric_logger = utils.MetricLogger(delimiter="  ")
+    metric_logger = MetricLogger(delimiter="  ")
 
     # switch to evaluation mode
     model.eval()

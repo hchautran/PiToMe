@@ -45,7 +45,6 @@ def get_bsm_merge(
 
     return merge, None
 
-
 def pitome(
     metric: torch.Tensor, 
     r:int=0,
@@ -84,19 +83,20 @@ def pitome(
         indices =  torch.argsort(isolation_score, descending=True)
         merge_idx = indices[..., :2*r]
         protected_idx = indices[..., 2*r:]
-        a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2]
+        a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:]
         scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
         scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r))
         _, dst_idx = scores.max(dim=-1) 
     
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
+
         if class_token:
             x_cls=x[:,0,:].unsqueeze(1)
             x=x[:,1:,:]
         else:
             x_cls = None
-        B, T, C = x.shape
 
+        B, T, C = x.shape
         protected = x[batch_idx, protected_idx, :]
         src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
         dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
@@ -141,8 +141,6 @@ def merge_wavg(
     x = x / size
 
     return x, size 
-
-
 
 
 def merge_source(

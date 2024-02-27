@@ -15,8 +15,8 @@ import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 from copy import copy
 
-from pitome.merge import merge_source, pitome, merge_mean
-from .deit import PiToMeAttention, PiToMeBlock
+from ..merge import merge_source, pitome, merge_mean
+from .timm import PiToMeAttention, PiToMeBlock
 
 
 def make_pitome_class(transformer_class):

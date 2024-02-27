@@ -44,9 +44,6 @@ class CompressedModel(nn.Module, ModuleUtilsMixin):
         def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
             B, _, C = x.shape
 
-            # mask = torch.ones_like(x, dtype=torch.bool).to(x.device)
-            # mask[batch_idx, min_indices] = False
-            # protected = torch.masked_select(x, mask).view(B, -1, C)
 
             protected = x[batch_idx, protected_idx,:] 
             src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
