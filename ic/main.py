@@ -46,6 +46,7 @@ warnings.filterwarnings('ignore')
 
 
 def process_image(batch, transform):
+    # start = time.time()
     images = []
     labels = []
     for item in batch:
@@ -53,19 +54,22 @@ def process_image(batch, transform):
         labels.append(item['label'])
     images_tensor = torch.cat(images)
     labels_tensor = torch.tensor(labels)
+    # print(time.time() - start)
 
     return images_tensor, labels_tensor
 
+
+
 def get_args_parser():
     parser = argparse.ArgumentParser('Diffrate training and evaluation script', add_help=False)
-    parser.add_argument('--batch-size', default=300, type=int)
+    parser.add_argument('--batch-size', default=100, type=int)
     parser.add_argument('--epochs', default=10, type=int)
     parser.add_argument('--ratio', default=0.9125, type=float)
     parser.add_argument('--reduced_token', default=8, type=int)
     parser.add_argument('--use_r', default=False, type=bool)
 
     # Model parameters
-    parser.add_argument('--model', default='deit_base_patch16_224', type=str, metavar='MODEL',
+    parser.add_argument('--model', default='deit_tiny_patch16_224', type=str, metavar='MODEL',
                         help='Name of model to train')
     parser.add_argument('--multi-reso', default=False, action='store_true',help='')
     parser.add_argument('--input-size', default=224, type=int, help='images input size')
@@ -263,6 +267,29 @@ def main(args):
     dataset_train = dataset_train.filter(filter_out_grayscale, num_proc=10)
     dataset_val = dataset_val.filter(filter_out_grayscale, num_proc=10)
 
+    if True:  # args.distributed:
+        num_tasks = utils.get_world_size()
+        global_rank = utils.get_rank()
+        if args.repeated_aug:
+            sampler_train = RASampler(
+                dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
+            )
+        else:
+            sampler_train = torch.utils.data.DistributedSampler(
+                dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
+            )
+        if args.dist_eval:
+            if len(dataset_val) % num_tasks != 0:
+                logger.info('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
+                      'This will slightly alter validation results as extra duplicate entries are added to achieve '
+                      'equal num of samples per-process.')
+            sampler_val = torch.utils.data.DistributedSampler(
+                dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=False)
+        else:
+            sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+    else:
+        sampler_train = torch.utils.data.RandomSampler(dataset_train)
+        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
 
     train_transform =  build_transform(is_train=True, args=args) 
@@ -270,22 +297,24 @@ def main(args):
     data_loader_train = DataLoader(
         dataset_train, 
         batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        # pin_memory=args.pin_mem,
         collate_fn=lambda batch: process_image(batch, train_transform),
-        shuffle=True,
+        # shuffle=False,
         drop_last=True,
-        
+        num_workers = 16,
+        pin_memory=True,
+        persistent_workers=True
+
+        # sampler=sampler_train
     )
 
     data_loader_val = DataLoader(
         dataset_val, 
-        batch_size=int(1 * args.batch_size),
-        num_workers=args.num_workers,
-        # pin_memory=args.pin_mem,
+        batch_size=args.batch_size,
         collate_fn=lambda batch: process_image(batch, eval_transform),
-        shuffle=False,
-        drop_last=False
+        # shuffle=False,
+        drop_last=False,
+        sampler=sampler_val,
+        num_workers = 8, prefetch_factor = 8, pin_memory=True, 
     )
 
     mixup_fn = None
@@ -367,9 +396,6 @@ def main(args):
         #     )
     
 
-
-
-
     criterion = LabelSmoothingCrossEntropy()
 
     if mixup_active:
@@ -402,7 +428,6 @@ def main(args):
     for epoch in range(args.start_epoch, args.epochs):
         # if args.distributed:
             # data_loader_train.sampler.set_epoch(epoch)
-        print(accelerator)
 
         train_stats = train_one_epoch(
             model=model, 

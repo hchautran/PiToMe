@@ -31,19 +31,20 @@ def train_one_epoch(model: torch.nn.Module, criterion,
     logger.info_freq = 10
 
     for data_iter_step, (samples, targets) in enumerate(metric_logger.log_every(data_loader, logger.info_freq, header,logger)):
+        # start = time.time()
+        # print('got here')
+        # print(samples)
+        # print(targets)
         optimizer.zero_grad()
 
         if mixup_fn is not None:
             samples, targets = mixup_fn(samples, targets)
 
-        with torch.cuda.amp.autocast():
-            outputs, flops = model(samples)
-            loss = criterion(outputs, targets)
-            loss_cls_value = loss.item()
-            # if utils.is_main_process():
-                # wandb.log({'current loss': loss_cls_value})
-            # loss_flops_value = loss_cls.item()
-        
+        outputs, flops = model(samples)
+        loss = criterion(outputs, targets)
+        loss_cls_value = loss.item()
+        # if utils.is_main_process():
+            # wandb.log({'current loss': loss_cls_value})
         
         if not math.isfinite(loss_cls_value):
             accelerator.print("Loss is {}, stopping training".format(loss_cls_value))
@@ -52,15 +53,15 @@ def train_one_epoch(model: torch.nn.Module, criterion,
 
         accelerator.backward(loss)
         optimizer.step() 
-        # print(time.time() - start)
         
         metric_logger.update(loss_cls=loss_cls_value)
         metric_logger.update(flops=flops/1e9)
         # accelerator.print('flops:',flops.item()/1e9)
         # accelerator.print('loss_cls:',loss_cls_value)
+        # print('train time:', time.time() - start )
 
     metric_logger.synchronize_between_processes()
-    accelerator.info(f"Averaged stats:{metric_logger}")
+    accelerator.print(f"Averaged stats:{metric_logger}")
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 @torch.no_grad()
@@ -72,6 +73,7 @@ def evaluate(data_loader, model, accelerator=None):
     model.eval()
     
     for images, targets  in tqdm(data_loader):
+        # start = time.time()
 
         output, flops = model(images)
         loss = criterion(output, targets)
@@ -83,6 +85,7 @@ def evaluate(data_loader, model, accelerator=None):
         metric_logger.update(loss=loss.item())
         metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
         metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
+        # print('eval time:', time.time() - start)
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
 

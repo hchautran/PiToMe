@@ -291,8 +291,8 @@ def main(args):
     data_loader_train = MultiEpochsDataLoader(
         dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        # pin_memory=args.pin_mem,
+        # num_workers=args.num_workers,
+        num_workers = 8, prefetch_factor = 8, pin_memory=True, per=True, 
         collate_fn=lambda batch: process_image(batch, train_transform),
         drop_last=True,
         
@@ -301,8 +301,8 @@ def main(args):
     data_loader_val = MultiEpochsDataLoader(
         dataset_val, sampler=sampler_val,
         batch_size=int(1 * args.batch_size),
-        num_workers=args.num_workers,
-        # pin_memory=args.pin_mem,
+        # num_workers=args.num_workers,
+        num_workers = 8, prefetch_factor = 8, pin_memory=True, 
         collate_fn=lambda batch: process_image(batch, eval_transform),
         drop_last=False
     )
@@ -450,11 +450,12 @@ def main(args):
             if 'scaler' in checkpoint:
                 loss_scaler.load_state_dict(checkpoint['scaler'])
 
-
     logger.info(f"Start training for {args.epochs} epochs")
     start_time = time.time()
     max_accuracy = 0.0
+
     for epoch in range(args.start_epoch, args.epochs):
+
         if args.distributed:
             data_loader_train.sampler.set_epoch(epoch)
 
@@ -467,6 +468,7 @@ def main(args):
             target_flops=args.target_flops,
             warm_up=args.warmup_compression_rate
         )
+
         if utils.is_main_process():
             wandb.log(train_stats)
 
@@ -485,17 +487,20 @@ def main(args):
 
         test_stats = evaluate(data_loader_val, model, device,logger=logger)
         logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
+
         if utils.is_main_process() and max_accuracy < test_stats['acc1'] :
             shutil.copyfile(checkpoint_path, f'{args.output_dir}/model_best.pth')
             max_accuracy = max(max_accuracy, test_stats["acc1"])
             wandb.log({'acc': f'{test_stats["acc1"]}%'})
             wandb.log({'max acc': f'{max_accuracy:.2f}%'})
-        logger.info(f'Max accuracy: {max_accuracy:.2f}%')
 
-        log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-                     **{f'test_{k}': v for k, v in test_stats.items()},
-                     'epoch': epoch,
-                     'n_parameters': n_parameters}
+        logger.info(f'Max accuracy: {max_accuracy:.2f}%')
+        log_stats = {
+            **{f'train_{k}': v for k, v in train_stats.items()},
+            **{f'test_{k}': v for k, v in test_stats.items()},
+            'epoch': epoch,
+            'n_parameters': n_parameters
+        }
 
         if utils.is_main_process():
             wandb.log(log_stats)
