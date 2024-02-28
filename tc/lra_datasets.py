@@ -44,7 +44,6 @@ class ImdbDataset:
 
 class ListOpsDataset:
     def __init__(self, config, split='train'):
-        
         paths = {'train': f"{DATA_PATH}/lra_release/listops-1000/basic_train.tsv",
                       'eval': f"{DATA_PATH}/lra_release/listops-1000/basic_val.tsv"}
         self.data = pd.read_csv(paths[split], delimiter='\t')

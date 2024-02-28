@@ -191,7 +191,13 @@ def make_pitome_class(transformer_class):
         ): 
             len_layers = len(self.layer)
             # self._tome_info["ratio"] = [self.ratio if i in [len_layers-1,len_layers-6] else 1.0 for i in range(len_layers) ]
-            self._tome_info["ratio"] = [self.ratio for _ in range(len_layers) ]
+            # self._tome_info["ratio"] = [self.ratio for _ in range(len_layers) ]
+            self._tome_info["ratio"] = [self.ratio if i in [
+                len_layers - 1, 
+                len_layers - 2,
+                len_layers - 3,
+                # len_layers - 9,
+            ] else 1.0 for i in range(len_layers) ]
             all_hidden_states = () if output_hidden_states else None
             all_self_attentions = () if output_attentions else None
             flops = 0

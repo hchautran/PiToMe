@@ -5,7 +5,8 @@ import torch
 import torch.nn.functional as F
 from transformers import (
     AutoTokenizer,
-    BertForSequenceClassification
+    BertForSequenceClassification,
+    DistilBertForSequenceClassification,
 )
 
 from tqdm import tqdm
@@ -77,7 +78,7 @@ TASKS = {
 }
 
 
-def get_model(model_ckt, compress_method='none', ratio=1.0):
+def prepare_bert_model(model_ckt, compress_method='none', ratio=1.0):
     model = BertForSequenceClassification.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
     if compress_method == PITOME:
         pitome.patch.bert(model.bert.encoder)
@@ -90,6 +91,21 @@ def get_model(model_ckt, compress_method='none', ratio=1.0):
     model = accelerator.prepare(model)
 
     return model, tokenizer
+
+def prepare_distil_model(model_ckt, compress_method='none', ratio=1.0):
+    model = DistilBertForSequenceClassification.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
+    if compress_method == PITOME:
+        pitome.patch.distilbert(model.distilbert.transformer)
+    elif compress_method == TOME:
+        tome.patch.distilbert(model.distilbert.transformer)
+
+    model.distilbert.transformer.ratio = ratio 
+
+    tokenizer = AutoTokenizer.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
+    model = accelerator.prepare(model)
+
+    return model, tokenizer
+
 
 
 def train(model, config, dataset ,use_deepspeed):
@@ -151,6 +167,7 @@ def eval(model, eval_dataset, tokenizer,batch_size=4):
             f"gflops: {outputs[3]/1e9:.2f}"
         )
     return {'acc': 100*eval_running_acc/len(eval_dataloader), 'ratio':model.bert.encoder.ratio, 'gflops': outputs[3]/1e9}
+    # return {'acc': 100*eval_running_acc/len(eval_dataloader), 'ratio':model.bert.encoder.ratio}
 
 
 # main
@@ -166,13 +183,14 @@ if __name__ == "__main__":
     batch_size = 4 
     avg_factor = 0.95
     task_name = args.task
-    model_ckt = 'JiaqiLee/imdb-finetuned-bert-base-uncased'
+    # model_ckt = 'JiaqiLee/imdb-finetuned-bert-base-uncased'
+    model_ckt = 'lvwerra/distilbert-imdb'
+
     # model_ckt = 'bert-base-uncased'
     # model_ckt = 'bert-large-uncased'
 
     # compress_methjod='none' 
     # compress_method='dct'
-    wandb
     for method in [
         PITOME,
         TOME, 
@@ -188,11 +206,12 @@ if __name__ == "__main__":
         #     },
         #     reinit=True
         # )
-        model, tokenizer = get_model(
+        model, tokenizer = prepare_distil_model(
             model_ckt, 
             compress_method=method,
-            ratio=.775
+            ratio=.525
         )
+
         task = TASKS[task_name]
         config, model_config = task.config_getter()    
         config.tokenizer = tokenizer
@@ -201,5 +220,5 @@ if __name__ == "__main__":
         eval_dataset = task.dataset_fn(config, split='eval')    
         max_train_steps = int(np.ceil(config.total_train_samples / batch_size))
 
-        res = eval(model, eval_dataset, tokenizer ,batch_size=48)
+        res = eval(model, eval_dataset, tokenizer ,batch_size=64)
         # wandb.log(stats)

@@ -48,7 +48,7 @@ class ToMeBertLayer(BertLayer):
         if ratio < 1.0:
             merge, _ = bipartite_soft_matching(
                 ratio=ratio,
-                metric=x,
+                metric=key,
                 class_token=self._tome_info["class_token"]
             )
 
@@ -188,8 +188,14 @@ def make_tome_class(transformer_class):
             output_hidden_states: Optional[bool] = False,
         ): 
             len_layers = len(self.layer)
-            # self._tome_info["ratio"] = [self.ratio if i in [len_layers-1,len_layers-6] else 1.0 for i in range(len_layers) ]
-            self._tome_info["ratio"] = [self.ratio for i in range(len(self.layer))]
+            self._tome_info["ratio"] = [self.ratio if i in [
+                len_layers - 1, 
+                len_layers - 2,
+                len_layers - 3,
+                # len_layers - 6,
+                # len_layers - 9,
+            ] else 1.0 for i in range(len_layers) ]
+            # self._tome_info["ratio"] = [self.ratio for i in range(len(self.layer))]
             all_hidden_states = () if output_hidden_states else None
             all_self_attentions = () if output_attentions else None
             flops = 0
