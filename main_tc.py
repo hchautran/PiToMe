@@ -166,11 +166,22 @@ def eval(model, eval_dataset, tokenizer,batch_size=4):
             f"eval accuracy: {100*eval_running_acc/(j+1):.2f} "
             f"gflops: {outputs[3]/1e9:.2f}"
         )
-    return {'acc': 100*eval_running_acc/len(eval_dataloader), 'ratio':model.distilbert.transformer, 'gflops': outputs[3]/1e9}
-    # return {'acc': 100*eval_running_acc/len(eval_dataloader), 'ratio':model.bert.encoder.ratio}
+    if isinstance(model, BertForSequenceClassification):
+        return {'acc': 100*eval_running_acc/len(eval_dataloader), 'ratio':model.bert.encoder.ratio, 'gflops': outputs[3]/1e9}
+    else:
+        return {'acc': 100*eval_running_acc/len(eval_dataloader), 'ratio':model.distilbert.transformer.ratio, 'gflops': outputs[3]/1e9}
 
+BERT_BASE = 'bert-base-uncased'
+DISTILBERT_BASE = 'distilbert-base-uncased'
+model_ft_dict = {
+    BERT_BASE: 'JiaqiLee/imdb-finetuned-bert-base-uncased',
+    DISTILBERT_BASE: 'lvwerra/distilbert-imdb',
+}
+model_dict  = {
+    BERT_BASE: BERT_BASE,
+    DISTILBERT_BASE: DISTILBERT_BASE,
+}
 
-# main
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--task", default="imdb", choices=TASKS.keys(),
@@ -183,42 +194,45 @@ if __name__ == "__main__":
     batch_size = 4 
     avg_factor = 0.95
     task_name = args.task
-    # model_ckt = 'JiaqiLee/imdb-finetuned-bert-base-uncased'
-    model_ckt = 'lvwerra/distilbert-imdb'
 
-    # model_ckt = 'bert-base-uncased'
-    # model_ckt = 'bert-large-uncased'
+    for model_ckt in [BERT_BASE, DISTILBERT_BASE]:
 
-    # compress_methjod='none' 
-    # compress_method='dct'
-    for method in [
-        PITOME,
-        TOME, 
-        # 'dct', 
-        # NONE,
-    ]:
-        # wandb.init(
-        #     name=f'{method}_bert-base',
-        #     project='tc_off_the_shell',
-        #     config={
-        #        'algo': method, 
-        #        'model': 'bert-base', 
-        #     },
-        #     reinit=True
-        # )
-        model, tokenizer = prepare_distil_model(
-            model_ckt, 
-            compress_method=method,
-            ratio=.505
-        )
+        for ratio in [0.505,0.525, 0.55, 0.6, 0.625]:
+            for method in [
+                PITOME,
+                TOME, 
+                # 'dct', 
+                # NONE,
+            ]:
+                wandb.init(
+                    name=f'{method}_bert-base',
+                    project='tc_off_the_shell',
+                    config={
+                    'algo': method, 
+                    'model': 'bert-base', 
+                    },
+                    reinit=True
+                )
+                if model_ckt == BERT_BASE:
+                    model, tokenizer = prepare_bert_model(
+                        model_ft_dict[model_ckt], 
+                        compress_method=method,
+                        ratio=ratio
+                    )
+                else:
+                    model, tokenizer = prepare_distil_model(
+                        model_ft_dict[model_ckt], 
+                        compress_method=method,
+                        ratio=ratio
+                    )
 
-        task = TASKS[task_name]
-        config, model_config = task.config_getter()    
-        config.tokenizer = tokenizer
+                task = TASKS[task_name]
+                config, model_config = task.config_getter()    
+                config.tokenizer = tokenizer
 
-        dataset = task.dataset_fn(config, split='train')
-        eval_dataset = task.dataset_fn(config, split='eval')    
-        max_train_steps = int(np.ceil(config.total_train_samples / batch_size))
+                dataset = task.dataset_fn(config, split='train')
+                eval_dataset = task.dataset_fn(config, split='eval')    
+                max_train_steps = int(np.ceil(config.total_train_samples / batch_size))
 
-        res = eval(model, eval_dataset, tokenizer ,batch_size=128)
-        # wandb.log(stats)
+                res = eval(model, eval_dataset, tokenizer ,batch_size=64)
+                wandb.log(res)
