@@ -42,9 +42,9 @@ class ToMeBlock(Block):
             # Apply ToMe here
             merge, _ = bipartite_soft_matching(
                 metric,
-                r,
-                self._tome_info["class_token"],
-                self._tome_info["distill_token"],
+                r=r,
+                class_token=self._tome_info["class_token"],
+                # distill_token=self._tome_info["distill_token"],
             )
             if self._tome_info["trace_source"]:
                 self._tome_info["source"] = merge_source(

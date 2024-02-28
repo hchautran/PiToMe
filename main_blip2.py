@@ -12,7 +12,6 @@ if __name__ == "__main__":
         config.dataset =dataset
 
         model, vis_processors, txt_processors = load_model_and_preprocess("blip2", "coco", is_eval=False, device="cuda")
-        # tokenizer = model.tokenizer
         config.model_ckt = 'blip2' 
         if "flickr" in config.dataset:
             dataset = load_dataset("flickr30k", vis_path=FLICKR_PATH, cfg_path=None)

@@ -72,11 +72,11 @@ def process_image(batch, transform):
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Diffrate training and evaluation script', add_help=False)
+    parser.add_argument('--use_k', type=bool)
     parser.add_argument('--batch-size', default=100, type=int)
     parser.add_argument('--epochs', default=10, type=int)
     parser.add_argument('--ratio', default=0.9125, type=float)
     parser.add_argument('--reduced_token', default=8, type=int)
-    parser.add_argument('--use_k', default=False, type=bool)
     parser.add_argument('--algo', default=PITOME) 
 
     # Model parameters
@@ -221,6 +221,7 @@ gray_transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
 ])
+
 def filter_out_grayscale(example):
     img_tensor = gray_transform(example['image'])
     # Check if the image has only one channel (grayscale)
@@ -230,33 +231,47 @@ def filter_out_grayscale(example):
 
 
 
-def prepare_model(args, use_k=False):
-    model = create_model(
-        args.model,
-        pretrained=True,
-        num_classes=1000,
-        drop_rate=args.drop,
-        drop_path_rate=args.drop_path,
-        drop_block_rate=None,
-    )
-    args.use_k=use_k
-    if 'deit'  in args.model:
-        if args.algo == PITOME:
-            algo.pitome.patch.deit(model,use_k=args.use_k)
-        else:
-            algo.tome.patch.deit(model,use_k=args.use_k)
+def get_tome_model(model, args):
+    if 'deit' in args.model:
+        algo.tome.patch.deit(model,use_k=args.use_k)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
     elif 'mae' in args.model:
-        if args.algo == PITOME:
-            algo.pitome.patch.mae(model,use_k=args.use_k)
-        else:
-            algo.tome.patch.mae(model,use_k=args.use_k)
+        algo.tome.patch.mae(model,use_k=args.use_k)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
-    return model
+    
+
+def get_pitome_model(model, args):
+    if 'deit' in args.model:
+        algo.pitome.patch.deit(model,use_k=args.use_k)
+        model.ratio=float(args.ratio)
+        model.r=int(args.reduced_token)
+    elif 'mae' in args.model:
+        algo.pitome.patch.mae(model,use_k=args.use_k)
+        model.ratio=float(args.ratio)
+        model.r=int(args.reduced_token)
+    else:
+        raise ValueError("only support deit, mae and caformer in this codebase")
+
+
+
+def get_diffrate_model(model, args):
+    if 'deit' in args.model:
+        algo.DiffRate.patch.deit(model, prune_granularity=args.granularity, merge_granularity=args.granularity)
+    elif 'mae' in args.model:
+        algo.DiffRate.patch.mae(model, prune_granularity=args.granularity, merge_granularity=args.granularity)
+    else:
+        raise ValueError("only support deit, mae and caformer in this codebase")
+
+    if args.use_k:
+        model.init_kept_num_using_r(args.reduced_token)
+    else:
+        model.init_kept_num_using_ratio(args.ratio)
+    
+            
 
 
 def main(args):
@@ -340,8 +355,15 @@ def main(args):
     
 
     accelerator.print(f"Creating model: {args.model}")
-    model = prepare_model(args, use_k=False)
 
+    model = create_model(
+        args.model,
+        pretrained=True,
+        num_classes=1000,
+        drop_rate=args.drop,
+        drop_path_rate=args.drop_path,
+        drop_block_rate=None,
+    )
             
     if args.finetune:
         if args.finetune.startswith('https'):
@@ -377,6 +399,18 @@ def main(args):
         new_pos_embed = torch.cat((extra_tokens, pos_tokens), dim=1)
         checkpoint_model['pos_embed'] = new_pos_embed
         model.load_state_dict(checkpoint_model, strict=False)
+
+    args.use_k = False
+    args.ratio = 0.9 
+    print(args)
+    if args.algo == TOME:
+        get_tome_model(model, args)
+    elif args.algo == PITOME:
+        get_pitome_model(model, args)
+    elif args.algo == DIFFRATE:
+        get_diffrate_model(model, args)
+    else:
+        get_tome_model(model, args)
 
     model = accelerator.prepare(model)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,weight_decay=0)

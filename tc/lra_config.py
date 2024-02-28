@@ -1,6 +1,6 @@
 import torch
 import ml_collections
-from train_utils import create_learning_rate_scheduler
+from .train_utils import create_learning_rate_scheduler
 
 
 # helper fns

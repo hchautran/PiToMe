@@ -14,7 +14,7 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
-from ..merge import merge_source, pitome, merge_mean, merge_wavg
+from ..merge import merge_source, pitome_vision, merge_mean, merge_wavg
 
 
 
@@ -34,32 +34,38 @@ class PiToMeBlockUsingRatio(Block):
     def _drop_path2(self, x):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
+    def forward(self, x: torch.Tensor, pos_embed:torch.Tensor) -> torch.Tensor:
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        x_attn, metric = self.attn(self.norm1(x), attn_size)
+        x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
-
+        x = x + self._drop_path2(self.mlp(self.norm2(x)))
         ratio = self._tome_info["ratio"].pop(0)
+
         if ratio < 1.0:
-            merge, isolated_score = pitome(
-                metric=metric,
+            merge, isolated_score = pitome_vision(
                 ratio=ratio,
+                metric=x + pos_embed,
+                attn=attn,  
                 margin=self.margin,
                 class_token=self._tome_info["class_token"]
             )
+
             if self._tome_info["trace_source"]:
                 self._tome_info["source"] = merge_source(
                     merge, x, self._tome_info["source"]
                 )
+
             if isolated_score is not None and self._tome_info["size"] is not None:
-                x, self._tome_info["size"] = merge_wavg(merge, x, isolated_score + self._tome_info["size"])
+                weight = self._tome_info["size"] + isolated_score
+                x, self._tome_info["size"] = merge_wavg(merge, x, weight)
+                pos_embed, _= merge_wavg(merge, pos_embed, weight)
             else:
-                x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
+                weight = self._tome_info["size"] 
+                x, self._tome_info["size"] = merge_wavg(merge, x, weight)
+                pos_embed, _ = merge_wavg(merge, pos_embed, weight)
 
-        x = x + self._drop_path2(self.mlp(self.norm2(x)))
+        return x, pos_embed 
 
-        return x 
 
 class PiToMeBlock(Block):
     """
@@ -68,7 +74,8 @@ class PiToMeBlock(Block):
      - Compute and propogate token size and potentially the token sources.
     """
     def init_margin(self, margin=0.5):
-        self.margin = nn.Parameter(torch.tensor(margin))
+        # self.margin = nn.Parameter(torch.tensor(margin))
+        self.margin = margin
 
     def _drop_path1(self, x):
         return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
@@ -76,16 +83,18 @@ class PiToMeBlock(Block):
     def _drop_path2(self, x):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, pos_embed:torch.Tensor) -> torch.Tensor:
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        x_attn, metric = self.attn(self.norm1(x), attn_size)
+        x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
-
+        x = x + self._drop_path2(self.mlp(self.norm2(x)))
         r = self._tome_info["r"].pop(0)
+
         if r > 0:
             merge, isolated_score = pitome(
                 r=r,
-                metric=metric,
+                metric=x + pos_embed,
+                attn=attn,  
                 margin=self.margin,
                 class_token=self._tome_info["class_token"]
             )
@@ -95,14 +104,19 @@ class PiToMeBlock(Block):
                     merge, x, self._tome_info["source"]
                 )
 
+            
             if isolated_score is not None and self._tome_info["size"] is not None:
-                x, self._tome_info["size"] = merge_wavg(merge, x, isolated_score + self._tome_info["size"])
+                weight = self._tome_info["size"] + isolated_score
+                x, self._tome_info["size"] = merge_wavg(merge, x, weight)
+                pos_embed, _= merge_wavg(merge, pos_embed, weight)
             else:
-                x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
+                weight = self._tome_info["size"] 
+                x, self._tome_info["size"] = merge_wavg(merge, x, weight)
+                pos_embed, _ = merge_wavg(merge, pos_embed, weight)
 
-        x = x + self._drop_path2(self.mlp(self.norm2(x)))
+        
 
-        return x 
+        return x, pos_embed 
 
 
 
@@ -143,5 +157,5 @@ class PiToMeAttention(Attention):
         x = self.proj(x)
         x = self.proj_drop(x)
 
-        return x, k.mean(1)
+        return x, k.mean(1), attn[..., 0,1:].mean(1).squeeze()
 

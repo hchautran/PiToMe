@@ -45,13 +45,15 @@ def get_bsm_merge(
 
     return merge, None
 
-def pitome(
+def pitome_vision(
     metric: torch.Tensor, 
+    pos_embed:torch.Tensor=None,
     r:int=0,
     ratio:float=1.0,
     margin:torch.Tensor=0.5,
     class_token: bool = False,
 ):
+    # print(attn.shape)
     with torch.no_grad():
         if class_token:
             metric=metric[:,1:,:]
@@ -64,6 +66,7 @@ def pitome(
         else:
             return do_nothing, do_nothing
 
+        
         metric = F.normalize(metric, p=2, dim=-1) 
 
         if margin >=0.45:
@@ -72,20 +75,20 @@ def pitome(
             node_max, node_idx = scores.max(dim=-1)
             return get_bsm_merge(node_max, node_idx, r, class_token)
 
-        # margin.clamp_(max=0.9, min=0.1)
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
 
     sim = F.elu((metric@metric.transpose(-1,-2) - 0.45)/0.01)
     # sim = metric@metric.transpose(-1,-2)
-    isolation_score = sim.mean(dim=-1)
+    isolation_score = sim.mean(dim=-1) + sim.sum(dim=-1)
 
     with torch.no_grad():
         indices =  torch.argsort(isolation_score, descending=True)
-        merge_idx = indices[..., :2*r]
-        protected_idx = indices[..., 2*r:]
-        a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:]
-        scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
-        scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r))
+        merge_idx = indices[..., :T-r]
+        protected_idx = indices[..., T-r:]
+        even_idx, odd_idx = merge_idx[..., ::2], merge_idx[..., 1::2]
+        a_idx, b_idx = even_idx[..., :r], torch.cat([even_idx[..., r:], odd_idx], dim=1)
+        scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, T-2*r)) 
+        scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, T-2*r ))
         _, dst_idx = scores.max(dim=-1) 
     
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
@@ -113,6 +116,57 @@ def pitome(
         return merge, torch.cat([torch.ones(B, 1).to(metric.device), isolation_score], dim=-1)[..., None]
     return merge, isolation_score[..., None] 
 
+def pitome_text(
+    metric: torch.Tensor, 
+    r:int=0,
+    ratio:float=1.0,
+    margin:torch.Tensor=0.5,
+    class_token: bool = False,
+):
+    with torch.no_grad():
+        if class_token:
+            metric=metric[:,1:,:]
+        B,T,C = metric.shape
+        r = math.floor(T- T*ratio)
+        metric = F.normalize(metric, p=2, dim=-1) 
+        batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
+
+    sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
+    isolation_score = sim.mean(dim=-1) + sim.sum(dim=-1)
+
+    with torch.no_grad():
+        indices =  torch.argsort(isolation_score, descending=True)
+        merge_idx = indices[..., :2*r]
+        protected_idx = indices[..., 2*r:]
+        a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:]
+        scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
+        scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
+        _, dst_idx = scores.max(dim=-1) 
+    
+    def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
+
+        if class_token:
+            x_cls=x[:,0,:].unsqueeze(1)
+            x=x[:,1:,:]
+        else:
+            x_cls = None
+
+        B, T, C = x.shape
+        protected = x[batch_idx, protected_idx, :]
+        src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
+        dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
+
+        if x_cls is not None:
+            return torch.cat([x_cls, protected, dst], dim=1)
+        else:
+            return torch.cat([protected, dst], dim=1)
+
+
+    isolation_score = 1 - F.softmax(isolation_score, dim=-1) 
+
+    if class_token:
+        return merge, torch.cat([torch.ones(B, 1).to(metric.device), isolation_score], dim=-1)[..., None]
+    return merge, isolation_score[..., None] 
 
 def merge_mean(
     merge: Callable, x: torch.Tensor
@@ -156,3 +210,10 @@ def merge_source(
 
     source = merge(source, mode="amax")
     return source
+
+def merge_attention_mask(
+    merge, attention_mask: torch.Tensor
+): 
+
+    attention_mask = merge(attention_mask, mode="amax")
+    return attention_mask 

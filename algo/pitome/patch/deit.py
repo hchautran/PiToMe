@@ -14,7 +14,6 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
-from ..merge import merge_source, pitome, merge_mean, merge_wavg
 from .timm import PiToMeAttention, PiToMeBlock, PiToMeBlockUsingRatio
 
 
@@ -48,8 +47,9 @@ def make_pitome_class(transformer_class):
             else:
                 x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
             x = self.pos_drop(x + self.pos_embed)
+            pos_embed = self.pos_embed.expand(x.shape)
             for blk in self.blocks:
-                x = blk(x)
+                x, pos_embed = blk(x, pos_embed)
                 self.total_flop += self.calculate_block_flop(x.shape) 
             self.total_flop += self.calculate_block_flop(x.shape) 
             x = self.norm(x)

@@ -25,6 +25,14 @@ class CompressedBERT(CompressedModel):
         self.compress_layers = [1,5]
         self.model_len = len(self.model.encoder.layer) 
      
+    def calculate_block_flop(self, shape):
+        flops = 0
+        _, N, C = shape
+        mhsa_flops = 4*N*C*C + 2*N*N*C
+        flops += mhsa_flops
+        ffn_flops = 8*N*C*C
+        flops += ffn_flops
+        return flops
     
     def forward(
         self,
@@ -47,6 +55,7 @@ class CompressedBERT(CompressedModel):
         all_hidden_states = []
         real_mem = 0
         total_mem = 0
+        gflops = 0
         if self.config.is_decoder:
             use_cache = use_cache if use_cache is not None else self.config.use_cache
         else:
@@ -97,11 +106,11 @@ class CompressedBERT(CompressedModel):
                     extended_attention_mask,
                 )
             else:
-
                 layer_outputs = layer_module(
                     hidden_states,
                     extended_attention_mask,
                 )
+            gflops += self.calculate_block_flop(hidden_states.shape)
 
             hidden_states = layer_outputs[0]
             if output_attentions:
@@ -122,6 +131,7 @@ class CompressedBERT(CompressedModel):
             logits,
             all_hidden_states,
             all_self_attentions,
+            gflops/1e9,
         )
 
 

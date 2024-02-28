@@ -3,7 +3,7 @@
 # import tome 
 # import pitome 
 
-__all__ = ["tome", "pitome"]
+__all__ = ["tome", "pitome",'DiffRate']
 
 PITOME = 'pitome'
 TOME = 'tome'

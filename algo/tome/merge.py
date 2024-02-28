@@ -75,8 +75,8 @@ def pitome(
     margin:torch.Tensor=0.5,
     class_token: bool = False,
 ):
-    if margin >=0.45:
-        return bipartite_soft_matching(metric, r=r, ratio=ratio, class_token=class_token)
+    # if margin >=0.45:
+        # return bipartite_soft_matching(metric, r=r, ratio=ratio, class_token=class_token)
     with torch.no_grad():
         if class_token:
             metric=metric[:,1:,:]
@@ -100,11 +100,11 @@ def pitome(
 
     with torch.no_grad():
         indices =  torch.argsort(isolation_score, descending=True)
-        merge_idx = indices[..., :2*r]
-        protected_idx = indices[..., 2*r:]
-        a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2]
-        scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
-        scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r))
+        merge_idx = indices[..., :T//2]
+        protected_idx = indices[..., T//2:]
+        a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:]
+        scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, T//2-r)) 
+        scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, T//2 - r))
         _, dst_idx = scores.max(dim=-1) 
     
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
@@ -273,3 +273,10 @@ def merge_source(
 
     source = merge(source, mode="amax")
     return source
+
+def merge_attention_mask(
+    merge, attention_mask: torch.Tensor
+): 
+
+    attention_mask = merge(attention_mask, mode="amax")
+    return attention_mask 

@@ -52,9 +52,10 @@ def make_pitome_class(transformer_class):
             x = torch.cat((cls_tokens, x), dim=1)
             x = x + self.pos_embed
             x = self.pos_drop(x)
+            pos_embed = self.pos_embed.expand(x.shape)
 
             for blk in self.blocks:
-                x = blk(x)
+                x, pos_embed = blk(x, pos_embed)
                 self.total_flop += self.calculate_block_flop(x.shape) 
 
             if self.global_pool:

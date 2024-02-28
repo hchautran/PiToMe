@@ -28,7 +28,6 @@ def make_tome_class(transformer_class):
                 return x, self.total_flop
             else:
                 return x
-                
 
         def forward_features(self, x):
             x = self.patch_embed(x)
@@ -63,7 +62,7 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, use_k=True
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, use_k=False
 ):
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.

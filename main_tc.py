@@ -12,16 +12,22 @@ from tqdm import tqdm
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from ml_collections import ConfigDict
-from lra_config import (
+from tc.lra_config import (
     get_listops_config, 
     get_cifar10_config, 
     get_text_classification_config
 )
-from lra_datasets import (ListOpsDataset, Cifar10Dataset, ImdbDataset)
+from tc.lra_datasets import (ListOpsDataset, Cifar10Dataset, ImdbDataset)
 from argparse import ArgumentParser
 from accelerate import Accelerator
-from model.bert import CompressedBERT 
 from dotenv import load_dotenv
+from algo import (
+    pitome, 
+    tome,
+    PITOME,
+    TOME,
+    NONE
+)
 import os
 import wandb
 
@@ -71,9 +77,15 @@ TASKS = {
 }
 
 
-def get_model(model_ckt, compress_method='none', r=1.0):
-    ori_model = BertForSequenceClassification.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
-    model = CompressedBERT(ori_model, compress_method=compress_method, r=r)
+def get_model(model_ckt, compress_method='none', ratio=1.0):
+    model = BertForSequenceClassification.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
+    if compress_method == PITOME:
+        pitome.patch.bert(model.bert.encoder)
+    elif compress_method == TOME:
+        tome.patch.bert(model.bert.encoder)
+
+    model.bert.encoder.ratio = ratio 
+
     tokenizer = AutoTokenizer.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
     model = accelerator.prepare(model)
 
@@ -114,7 +126,7 @@ def train(model, config, dataset ,use_deepspeed):
         pbar.set_postfix_str(f"loss: {avg_loss:.2f} accuracy: {avg_acc:.2f}")
 
 
-def eval(model, eval_dataset, tokenizer,batch_size=4, r=0.9):
+def eval(model, eval_dataset, tokenizer,batch_size=4):
     model.eval()
     eval_running_loss = 0.
     eval_running_acc = 0.
@@ -129,16 +141,16 @@ def eval(model, eval_dataset, tokenizer,batch_size=4, r=0.9):
     eval_pbar = tqdm(eval_dataloader, total=len(eval_dataloader))
     for j, (inputs, target) in enumerate(eval_pbar):
         accelerator.free_memory()
-        outputs = model(**inputs, return_dict=True)
-        loss = F.cross_entropy(outputs[1], target)
+        outputs = model(**inputs, return_dict=False)
+        loss = F.cross_entropy(outputs[0], target)
         eval_running_loss += loss.item()
-        eval_running_acc += accuracy_score(outputs[1], target)
+        eval_running_acc += accuracy_score(outputs[0], target)
         eval_pbar.set_postfix_str(
             f"eval loss: {100*eval_running_loss/(j+1):.2f} "
             f"eval accuracy: {100*eval_running_acc/(j+1):.2f} "
-            f"gflops: {outputs[4]:.2f}"
+            f"gflops: {outputs[3]/1e9:.2f}"
         )
-    return {'acc': 100*eval_running_acc/len(eval_dataloader), 'r':model.r,  "gflops": {outputs[4]}}
+    return {'acc': 100*eval_running_acc/len(eval_dataloader), 'ratio':model.bert.encoder.ratio, 'gflops': outputs[3]/1e9}
 
 
 # main
@@ -162,10 +174,10 @@ if __name__ == "__main__":
     # compress_method='dct'
     wandb
     for method in [
-        'tome', 
-        'pitome',
+        PITOME,
+        TOME, 
         # 'dct', 
-        'none',
+        # NONE,
     ]:
         # wandb.init(
         #     name=f'{method}_bert-base',
@@ -176,11 +188,10 @@ if __name__ == "__main__":
         #     },
         #     reinit=True
         # )
-        print('using', method)
         model, tokenizer = get_model(
             model_ckt, 
             compress_method=method,
-            r=0.55
+            ratio=.775
         )
         task = TASKS[task_name]
         config, model_config = task.config_getter()    
@@ -190,5 +201,5 @@ if __name__ == "__main__":
         eval_dataset = task.dataset_fn(config, split='eval')    
         max_train_steps = int(np.ceil(config.total_train_samples / batch_size))
 
-        res = eval(model, eval_dataset, tokenizer ,batch_size=64)
+        res = eval(model, eval_dataset, tokenizer ,batch_size=48)
         # wandb.log(stats)

@@ -18,27 +18,25 @@ from timm.optim import create_optimizer
 from timm.utils import NativeScaler, get_state_dict, ModelEma
 
 from datasets import load_dataset
-from engine import train_one_epoch, evaluate
-from samplers import RASampler
-import utils
-import shutil
-import warnings
-from utils import MultiEpochsDataLoader
+from ic.engine import train_one_epoch, evaluate
+from ic.samplers import RASampler
+import ic.utils as utils
+from ic.utils import MultiEpochsDataLoader
 from timm.scheduler.cosine_lr import CosineLRScheduler
 
 from datasets import load_dataset
 from torchvision import transforms
-from PIL import Image
 import torch
-from dotenv import load_dotenv
-from utils import build_transform, DATA_PATH
-from main_pitome import process_image
-import tome
-import pitome
 import os
-import DiffRate
-from main_pitome import get_args_parser
-import models_mae
+from PIL import Image
+from dotenv import load_dotenv
+from main_ic import process_image
+import algo.tome as tome
+import algo.pitome as pitome
+import algo.DiffRate as DiffRate
+import ic.models_mae as models_mae 
+from main_ic import get_args_parser
+from ic.utils import build_transform, DATA_PATH
 import wandb
 
 def get_tome_model(model, args):
