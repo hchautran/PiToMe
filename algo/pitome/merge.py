@@ -132,6 +132,7 @@ def pitome_text(
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
 
     sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
+    # sim = metric@metric.transpose(-1,-2) 
     isolation_score = sim.mean(dim=-1) + sim.sum(dim=-1)
 
     with torch.no_grad():

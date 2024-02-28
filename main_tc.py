@@ -166,7 +166,7 @@ def eval(model, eval_dataset, tokenizer,batch_size=4):
             f"eval accuracy: {100*eval_running_acc/(j+1):.2f} "
             f"gflops: {outputs[3]/1e9:.2f}"
         )
-    return {'acc': 100*eval_running_acc/len(eval_dataloader), 'ratio':model.bert.encoder.ratio, 'gflops': outputs[3]/1e9}
+    return {'acc': 100*eval_running_acc/len(eval_dataloader), 'ratio':model.distilbert.transformer, 'gflops': outputs[3]/1e9}
     # return {'acc': 100*eval_running_acc/len(eval_dataloader), 'ratio':model.bert.encoder.ratio}
 
 
@@ -209,7 +209,7 @@ if __name__ == "__main__":
         model, tokenizer = prepare_distil_model(
             model_ckt, 
             compress_method=method,
-            ratio=.525
+            ratio=.505
         )
 
         task = TASKS[task_name]
@@ -220,5 +220,5 @@ if __name__ == "__main__":
         eval_dataset = task.dataset_fn(config, split='eval')    
         max_train_steps = int(np.ceil(config.total_train_samples / batch_size))
 
-        res = eval(model, eval_dataset, tokenizer ,batch_size=64)
+        res = eval(model, eval_dataset, tokenizer ,batch_size=128)
         # wandb.log(stats)
