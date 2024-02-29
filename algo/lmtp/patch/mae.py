@@ -12,15 +12,13 @@
 
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
-from copy import copy
 
 
-from .timm import PiToMeBlock, PiToMeAttention, PiToMeBlockUsingRatio
-import torch.nn as nn
+from .timm import ToMeAttention, ToMeBlockUsingRatio, ToMeBlock
 
 
-def make_pitome_class(transformer_class):
-    class PiToMeVisionTransformer(transformer_class):
+def make_tome_class(transformer_class):
+    class ToMeVisionTransformer(transformer_class):
         """
         Modifications:
         - Initialize r, token size, and token sources.
@@ -28,13 +26,12 @@ def make_pitome_class(transformer_class):
         """
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
+            margin = 0.95
             self._tome_info["r"] = [self.r]* len(self.blocks) 
             self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
             self._tome_info["size"] = None
             self._tome_info["source"] = None
-            self._tome_info["isolate_score"] = None
             self.total_flop = 0
-
             x = super().forward(x)
             if return_flop:
                 return x, self.calculate_flop()
@@ -52,10 +49,9 @@ def make_pitome_class(transformer_class):
             x = torch.cat((cls_tokens, x), dim=1)
             x = x + self.pos_embed
             x = self.pos_drop(x)
-            pos_embed = self.pos_embed.expand(x.shape)
 
             for blk in self.blocks:
-                x, pos_embed = blk(x, pos_embed)
+                x = blk(x)
                 self.total_flop += self.calculate_block_flop(x.shape) 
 
             if self.global_pool:
@@ -73,7 +69,6 @@ def make_pitome_class(transformer_class):
                 outcome = x[:, 0]
 
             return outcome
-
         
         def calculate_block_flop(self, shape):
             flops = 0
@@ -90,15 +85,19 @@ def make_pitome_class(transformer_class):
             patch_number = float(self.patch_embed.num_patches)
             N = torch.tensor(patch_number+1).to('cuda')
             flops = 0
+            patch_embedding_flops = N*C*(self.patch_embed.patch_size[0]*self.patch_embed.patch_size[1]*3)
+            classifier_flops = C*self.num_classes
+            flops += patch_embedding_flops
             flops += self.total_flop 
+            flops += classifier_flops
             return flops
         
 
-    return PiToMeVisionTransformer
+    return ToMeVisionTransformer
 
 
 def apply_patch(
-    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False, margin=0.9, use_k=False
+    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False, use_k=True
 ):
     """
     Applies ToMe to this MAE transformer. Afterward, set r using model.r.
@@ -108,15 +107,14 @@ def apply_patch(
 
     For MAE models, prop_attn should be set to false.
     """
+    ToMeVisionTransformer = make_tome_class(model.__class__)
+    print('using', 'tome')
 
-    PiToMeVisionTransformer = make_pitome_class(model.__class__)
-    print('using', 'pitome')
-
-    current_layer = 0
-    model.__class__ = PiToMeVisionTransformer
+    model.__class__ = ToMeVisionTransformer
+    model.r = 0
     model.ratio = 1.0
-    model.r = 0 
     model._tome_info = {
+        "r": model.r,
         "ratio": model.ratio,
         "size": None,
         "source": None,
@@ -125,20 +123,14 @@ def apply_patch(
         "class_token": model.cls_token is not None,
         "distill_token": False,
     }
-    current_layer = 0
-    num_layers = len(model.blocks)
-    # margins = [0.9- 0.9*(i/num_layers) for i in range(num_layers)]
-    margins = [.75 - .25*(i/num_layers) for i in range(num_layers)]
-    print(margins)
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tome_info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, Block):
-            module.__class__ = PiToMeBlockUsingRatio if not use_k else PiToMeBlock
-            module.init_margin(margins[current_layer])
+            module.__class__ = ToMeBlockUsingRatio if not use_k else ToMeBlock
+            # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
             module._tome_info = model._tome_info
-            current_layer +=1
         elif isinstance(module, Attention):
-            module.__class__ = PiToMeAttention
+            module.__class__ = ToMeAttention

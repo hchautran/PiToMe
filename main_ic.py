@@ -401,7 +401,7 @@ def main(args):
         model.load_state_dict(checkpoint_model, strict=False)
 
     args.use_k = False
-    args.ratio = 0.9 
+    args.ratio = 0.90
     print(args)
     if args.algo == TOME:
         get_tome_model(model, args)

@@ -12,21 +12,18 @@
 from typing import Tuple
 
 import torch
-import torch.nn as nn
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
-from ..merge import merge_source, pitome_vision, prune, merge_mean, merge_wavg
+from copy import copy
+
+from ..merge import bipartite_soft_matching, merge_source, merge_wavg, pitome
 
 
-
-class PiToMeBlockUsingRatio(Block):
+class ToMeBlock(Block):
     """
     Modifications:
      - Apply ToMe between the attention and mlp blocks
      - Compute and propogate token size and potentially the token sources.
     """
-    def init_margin(self, margin=0.5):
-        # self.margin = nn.Parameter(torch.tensor(margin)) 
-        self.margin = margin
 
     def _drop_path1(self, x):
         return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
@@ -34,45 +31,37 @@ class PiToMeBlockUsingRatio(Block):
     def _drop_path2(self, x):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
-    def forward(self, x: torch.Tensor, pos_embed:torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Note: this is copied from timm.models.vision_transformer.Block with modifications.
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
+        x_attn, metric = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
-        x = x + self._drop_path2(self.mlp(self.norm2(x)))
-        ratio = self._tome_info["ratio"].pop(0)
 
-        if ratio < 1.0:
-            merge, isolated_score = pitome_vision(
-                ratio=ratio,
-                metric=x,
-                margin=self.margin,
-                class_token=self._tome_info["class_token"]
+        r = self._tome_info["r"].pop(0)
+        if r > 0:
+            # Apply ToMe here
+            merge, _ = bipartite_soft_matching(
+                metric,
+                r=r,
+                class_token=self._tome_info["class_token"],
+                # distill_token=self._tome_info["distill_token"],
             )
-
             if self._tome_info["trace_source"]:
                 self._tome_info["source"] = merge_source(
                     merge, x, self._tome_info["source"]
                 )
+            x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
 
-            if isolated_score is not None and self._tome_info["size"] is not None:
-                weight = self._tome_info["size"] + isolated_score
-                x, self._tome_info["size"] = merge_wavg(merge, x, weight)
-            else:
-                weight = self._tome_info["size"] 
-                x, self._tome_info["size"] = merge_wavg(merge, x, weight)
-
-        return x, pos_embed 
+        x = x + self._drop_path2(self.mlp(self.norm2(x)))
+        return x
 
 
-class PiToMeBlock(Block):
+class ToMeBlockUsingRatio(Block):
     """
     Modifications:
-     - Apply PiToMe between the attention and mlp blocks
+     - Apply ToMe between the attention and mlp blocks
      - Compute and propogate token size and potentially the token sources.
     """
-    def init_margin(self, margin=0.5):
-        # self.margin = nn.Parameter(torch.tensor(margin))
-        self.margin = margin
 
     def _drop_path1(self, x):
         return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
@@ -80,44 +69,32 @@ class PiToMeBlock(Block):
     def _drop_path2(self, x):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
-    def forward(self, x: torch.Tensor, pos_embed:torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Note: this is copied from timm.models.vision_transformer.Block with modifications.
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
+        x_attn, metric = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
-        x = x + self._drop_path2(self.mlp(self.norm2(x)))
-        r = self._tome_info["r"].pop(0)
 
-        if r > 0:
-            merge, isolated_score = pitome_vision(
-                r=r,
-                metric=x + pos_embed,
-                margin=self.margin,
-                class_token=self._tome_info["class_token"]
+        ratio = self._tome_info["ratio"].pop(0)
+        if ratio < 1.0:
+            # Apply ToMe here
+            merge, _ = bipartite_soft_matching(
+                metric,
+                ratio=ratio,
+                class_token=self._tome_info["class_token"],
+                distill_token=self._tome_info["distill_token"],
             )
-
             if self._tome_info["trace_source"]:
                 self._tome_info["source"] = merge_source(
                     merge, x, self._tome_info["source"]
                 )
+            x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
 
-            
-            if isolated_score is not None and self._tome_info["size"] is not None:
-                weight = self._tome_info["size"] + isolated_score
-                x, self._tome_info["size"] = merge_wavg(merge, x, weight)
-                pos_embed, _= prune(merge, pos_embed, weight)
-            else:
-                weight = self._tome_info["size"] 
-                x, self._tome_info["size"] = merge_wavg(merge, x, weight)
-                pos_embed, _ = prune(merge, pos_embed, weight)
-
-        
-
-        return x, pos_embed 
+        x = x + self._drop_path2(self.mlp(self.norm2(x)))
+        return x
 
 
-
-
-class PiToMeAttention(Attention):
+class ToMeAttention(Attention):
     """
     Modifications:
      - Apply proportional attention
@@ -125,7 +102,7 @@ class PiToMeAttention(Attention):
     """
 
     def forward(
-        self, x: torch.Tensor, isolation_score: torch.Tensor = None
+        self, x: torch.Tensor, size: torch.Tensor = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # Note: this is copied from timm.models.vision_transformer.Attention with modifications.
         B, N, C = x.shape
@@ -143,8 +120,8 @@ class PiToMeAttention(Attention):
         attn = (q @ k.transpose(-2, -1)) * self.scale
 
         # Apply proportional attention
-        if isolation_score is not None:
-            attn = attn +  isolation_score.log()[:, None, None, :, 0]
+        if size is not None:
+            attn = attn + size.log()[:, None, None, :, 0]
 
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
@@ -153,5 +130,6 @@ class PiToMeAttention(Attention):
         x = self.proj(x)
         x = self.proj_drop(x)
 
-        return x, k.mean(1), attn[..., 0,1:].mean(1).squeeze()
+        # Return k as well here
+        return x, k.mean(1)
 
