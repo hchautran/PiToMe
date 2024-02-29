@@ -196,21 +196,21 @@ if __name__ == "__main__":
     task_name = args.task
 
     for model_ckt in [BERT_BASE, DISTILBERT_BASE]:
-
-        for ratio in [0.505,0.525, 0.55, 0.6, 0.625]:
+        for ratio in [0.505,0.525, 0.55, 0.6, 0.625, .65, .7]:
             for method in [
-                PITOME,
                 TOME, 
+                PITOME,
                 # 'dct', 
                 # NONE,
             ]:
                 wandb.init(
-                    name=f'{method}_bert-base',
+                    name=f'{method}_{model_ckt}',
                     project='tc_off_the_shell',
                     config={
-                    'algo': method, 
-                    'model': 'bert-base', 
-                    },
+                        'algo': method, 
+                        'model': model_ckt, 
+                        'ratio': ratio, 
+                        },
                     reinit=True
                 )
                 if model_ckt == BERT_BASE:

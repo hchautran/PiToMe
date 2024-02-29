@@ -68,7 +68,6 @@ class CLIPRunner():
     def run(self):
         return self.trainer.evaluate()
 
-     
 class BLIP2Runner():
     def __init__(self, config, model,train_loader, val_loader, test_loader, algorithms="PiToMe" ):
         print("Getting blip2 processor...")

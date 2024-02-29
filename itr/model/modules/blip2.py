@@ -28,12 +28,10 @@ class CompressedLAVISBLIP2(CompressedModel):
    
     def get_vision_features(self, pixel_values:torch.Tensor, return_source=False, return_attention_map=False):
         all_hidden_states = []
-       
         total_mem=0
         real_mem=0
         flop = 0
         source = None
-        sources = []
         with torch.no_grad():
             x = self.visual_encoder.patch_embed(pixel_values.squeeze(0))
             batch_size, seq_len, _ = x.size()

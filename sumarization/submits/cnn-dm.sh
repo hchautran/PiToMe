@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-FAIRSEQ_PATH=/your/path
+FAIRSEQ_PATH=/home/caduser/HDD/vit_token_compress/PiToMe/sumarization
 FAIRSEQ_USER_DIR=${FAIRSEQ_PATH}/bart_dct
 
 TOTAL_NUM_UPDATES=20000
@@ -8,12 +8,12 @@ WARMUP_UPDATES=500
 LR=5e-05
 MAX_TOKENS=2048
 UPDATE_FREQ=4
-BART_PATH=/your/path/to/model.pt
+BART_PATH=/media/caduser/MyBook/chau/model.pt
 
 TENSORBOARD_LOG=${FAIRSEQ_PATH}/tb_logs/
 CHECKPOINTS_DIR=${FAIRSEQ_PATH}/checkpoints/
 
-CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python train.py /path/to/data \
+CUDA_VISIBLE_DEVICES=0,1,2,3,4 python train.py cnn_dm-bin \
     --seed 666 \
     --restore-file $BART_PATH \
     --user-dir $FAIRSEQ_USER_DIR \

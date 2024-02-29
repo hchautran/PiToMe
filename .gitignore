@@ -6,3 +6,5 @@ test.py
 .env
 wandb/
 log/
+*/cnn_dm-bin/
+*/cnn_dm/
