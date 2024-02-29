@@ -35,7 +35,6 @@ from consts import (
     DATA_PATH
 )
 
-
 accelerator = Accelerator(
     mixed_precision='fp16',
     gradient_accumulation_steps=4
