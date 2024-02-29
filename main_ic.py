@@ -43,7 +43,8 @@ from algo import (
     NONE, 
 )
 from dotenv import load_dotenv
-from ic.utils import build_transform, DATA_PATH
+from ic.utils import build_transform
+from consts import DATA_PATH 
 import os
 from accelerate import Accelerator
 from torch.utils.data import DataLoader
@@ -51,7 +52,6 @@ import wandb
 
 
 torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
-
 warnings.filterwarnings('ignore')
 
 
