@@ -15,7 +15,7 @@ import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 from copy import copy
 
-from ..merge import bipartite_soft_matching, merge_source, merge_mean, pitome
+from ..merge import bipartite_soft_matching, merge_source, merge_mean
 
 
 class ToMeBlock(Block):
@@ -50,7 +50,7 @@ class ToMeBlock(Block):
                 self._tome_info["source"] = merge_source(
                     merge, x, self._tome_info["source"]
                 )
-            x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
+            x, self._tome_info["size"] = merge_mean(merge, x)
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
         return x
@@ -88,7 +88,7 @@ class ToMeBlockUsingRatio(Block):
                 self._tome_info["source"] = merge_source(
                     merge, x, self._tome_info["source"]
                 )
-            x, self._tome_info["size"] = merge_mean(merge, x, self._tome_info["size"])
+            x = merge_mean(merge, x)
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
         return x
