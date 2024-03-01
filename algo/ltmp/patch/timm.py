@@ -156,3 +156,41 @@ class LTPMVisionTransformer(VisionTransformer):
             self.vizs.append(v.clone())
         x = self.norm(x)
         return x
+
+
+# VIT
+@register_model
+def ltpm_vit_base_patch16_224(pretrained=False, **kwargs):
+    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, block_fn=LTPMBlock, **kwargs)
+    model = create_vision_transformer(
+        LTPMVisionTransformer, "vit_base_patch16_224", pretrained=pretrained, **model_kwargs
+    )
+    return model
+
+
+# DEIT
+@register_model
+def ltpm_deit_small_patch16_224(pretrained=False, **kwargs):
+    model_kwargs = dict(patch_size=16, embed_dim=384, depth=12, num_heads=6, block_fn=LTPMBlock, **kwargs)
+    model = create_vision_transformer(
+        LTPMVisionTransformer, "deit_small_patch16_224", pretrained=pretrained, **model_kwargs
+    )
+    return model
+
+
+@register_model
+def ltpm_deit_base_patch16_224(pretrained=False, **kwargs):
+    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, block_fn=LTPMBlock, **kwargs)
+    model = create_vision_transformer(
+        LTPMVisionTransformer, "deit_base_patch16_224", pretrained=pretrained, **model_kwargs
+    )
+    return model
+
+
+@register_model
+def ltpm_deit_base_patch16_384(pretrained=False, **kwargs):
+    model_kwargs = dict(patch_size=16, embed_dim=768, depth=12, num_heads=12, block_fn=LTPMBlock, **kwargs)
+    model = create_vision_transformer(
+        LTPMVisionTransformer, "deit_base_patch16_384", pretrained=pretrained, **model_kwargs
+    )
+    return model

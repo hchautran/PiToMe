@@ -1,10 +1,9 @@
-geoopt==0.5.0
-pillow==10.0.0 
-accelerate==0.21.0  
-salesforce-lavis
+# salesforce-lavis
+timm
+pillow
+accelerate
 datasets
 wandb
 peft
-bitsandbytes
 ml_collections
 python-dotenv
