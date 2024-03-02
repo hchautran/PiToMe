@@ -1,10 +1,10 @@
 from transformers.models.bart.modeling_bart import BartEncoder, BartEncoderLayer, BartAttention
-from ..merge import merge_source, pitome_vision, prune, merge_mean, merge_wavg
+from ..merge import merge_source, pitome_vision, prune, merge_mean, merge_wavg, merge_attention_mask
 
 
 class PiToMeBartEncoderLayer(BartEncoderLayer):
 
-    def compress_x(self, metric, x):
+    def compress_x(self, metric, x, attention_mask):
         ratio = self._tome_info["ratio"].pop(0)
         if ratio < 1.0:
             merge, isolated_score = pitome_vision(
@@ -24,7 +24,12 @@ class PiToMeBartEncoderLayer(BartEncoderLayer):
             else:
                 weight = self._tome_info["size"] 
                 x, self._tome_info["size"] = merge_wavg(merge, x, weight)
-        return x
+            attention_mask = torch.where(attention_mask.squeeze_() >= 0, 1, 0)
+            attention_mask = merge_attention_mask(merge, attention_mask=attention_mask[..., None]).squeeze_()
+        else:
+            attention_mask = torch.where(attention_mask.squeeze_() >= 0, 1, 0)
+
+        return x, attention_mask
 
 
     def forward(
@@ -55,8 +60,7 @@ class PiToMeBartEncoderLayer(BartEncoderLayer):
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
         hidden_states = residual + hidden_states
         hidden_states = self.self_attn_layer_norm(hidden_states)
-
-        hidden_states = self.compress_x(metric, hidden_states)
+        hidden_states, attention_mask = self.compress_x(metric=metric, x=hidden_states, attention_mask=attention_mask)
 
         residual = hidden_states
         hidden_states = self.activation_fn(self.fc1(hidden_states))
@@ -77,7 +81,7 @@ class PiToMeBartEncoderLayer(BartEncoderLayer):
         if output_attentions:
             outputs += (attn_weights,)
 
-        return outputs
+        return outputs, attention_mask
 
 class PiToMeBartAttention(BartAttention):
     """Multi-headed attention from 'Attention Is All You Need' paper"""
@@ -204,7 +208,7 @@ class PiToMeBartAttention(BartAttention):
 
 
 def make_pitome_class(transformer_class):
-    class PiToMeVisionTransformer(transformer_class):
+    class PiToMeBart(transformer_class):
         """
         Modifications:
         - Initialize r, token size, and token sources.
@@ -341,6 +345,7 @@ def make_pitome_class(transformer_class):
                         )
 
                     hidden_states = layer_outputs[0]
+                    attention_mask = _expand_mask(layer_outputs[1], inputs_embeds.dtype)
                     self.total_flop += self.calculate_block_flop(hidden_states.shape)
 
                 if output_attentions:
@@ -365,11 +370,11 @@ def make_pitome_class(transformer_class):
             flops += ffn_flops
             return flops
 
-    return PiToMeVisionTransformer
+    return PiToMeBart
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
+   model: BartEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.
 
@@ -379,10 +384,10 @@ def apply_patch(
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    PiToMeVisionTransformer = make_pitome_class(model.__class__)
+    PiToMeBart = make_pitome_class(model.__class__)
     print('using', 'pitome')
 
-    model.__class__ = PiToMeVisionTransformer
+    model.__class__ = PiToMeBart
     model.ratio = 1.0 
     model.r=0.0
     
