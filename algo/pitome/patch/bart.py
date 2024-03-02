@@ -1,3 +1,4 @@
+import torch
 from transformers.models.bart.modeling_bart import BartEncoder, BartEncoderLayer, BartAttention
 from ..merge import merge_source, pitome_vision, prune, merge_mean, merge_wavg, merge_attention_mask
 
