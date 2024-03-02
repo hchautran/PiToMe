@@ -40,7 +40,6 @@ class PiToMeBlockUsingRatio(Block):
         x = x + self._drop_path1(x_attn)
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
         ratio = self._tome_info["ratio"].pop(0)
-
         if ratio < 1.0:
             merge, isolated_score = pitome_vision(
                 ratio=ratio,
