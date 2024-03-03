@@ -30,7 +30,6 @@ class BLIPRunner():
        # tokenizer = model.tokenizer
         config.enable_log = False
         config.compress_method = algorithms 
-
         queue_model = CompressedLAVISLIPWithQueue(config, model)
         self.trainer = LavisTrainer(
             model=queue_model,
