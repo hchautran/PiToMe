@@ -1,5 +1,5 @@
 contexttimer
-decord
+eva-decord
 diffusers<=0.16.0
 einops>=0.4.1
 fairscale==0.4.4
@@ -35,5 +35,5 @@ peft
 
 easydict==1.9
 pyyaml_env_tag==0.1
-open3d==0.13.0
+open3d==0.16.0
 h5py
