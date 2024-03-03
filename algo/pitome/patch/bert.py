@@ -9,15 +9,14 @@
 # --------------------------------------------------------
 
 
-from typing import Tuple
-
 import torch
 import torch.nn as nn
+from typing import Tuple
 from transformers.models.bert.modeling_bert import BertLayer, BertEncoder, BertSelfAttention, BertAttention, apply_chunking_to_forward
 from ..merge import merge_source, pitome_text, merge_mean, merge_wavg, merge_attention_mask
+from transformers.modeling_utils import ModuleUtilsMixin 
 from typing import Optional, Union 
 import math
-from transformers.modeling_utils import ModuleUtilsMixin 
 
 
 class PiToMeBertLayer(BertLayer):
