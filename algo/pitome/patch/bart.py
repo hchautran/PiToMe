@@ -1,5 +1,7 @@
 import torch
+import torch.nn as nn
 from transformers.models.bart.modeling_bart import BartEncoder, BartEncoderLayer, BartAttention
+from typing import Optional, Tuple, Union
 from ..merge import merge_source, pitome_vision, prune, merge_mean, merge_wavg, merge_attention_mask
 
 
