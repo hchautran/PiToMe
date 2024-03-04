@@ -30,33 +30,26 @@ def train_one_epoch(model: torch.nn.Module, criterion,
     logger.info_freq = 10
 
     for data_iter_step, (samples, targets) in enumerate(metric_logger.log_every(data_loader, logger.info_freq, header,logger)):
+        # print('got here')
         with accelerator.autocast():
             optimizer.zero_grad()
+            # print(samples.shape)
 
             if mixup_fn is not None:
                 samples, targets = mixup_fn(samples, targets)
 
             outputs, flops = model(samples)
             loss = criterion(outputs, targets)
-            loss_cls_value = loss.item()
             # if utils.is_main_process():
                 # wandb.log({'current loss': loss_cls_value})
             
-            if not math.isfinite(loss_cls_value):
-                accelerator.print("Loss is {}, stopping training".format(loss_cls_value))
-                sys.exit(1)
-
-
             accelerator.backward(loss)
             if accelerator.sync_gradients:
                 accelerator.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step() 
             
-            metric_logger.update(loss_cls=loss_cls_value)
+            metric_logger.update(loss_cls=loss.item())
             metric_logger.update(flops=flops/1e9)
-            # accelerator.print('flops:',flops.item()/1e9)
-            # accelerator.print('loss_cls:',loss_cls_value)
-            # print('train time:', time.time() - start )
 
     metric_logger.synchronize_between_processes()
     accelerator.print(f"Averaged stats:{metric_logger}")

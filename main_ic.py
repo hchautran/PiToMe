@@ -49,6 +49,9 @@ import os
 from accelerate import Accelerator
 from torch.utils.data import DataLoader
 import wandb
+import pandas as pd 
+from skimage import color
+from ic.utils import MultiEpochsDataLoader
 
 
 torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
@@ -56,19 +59,20 @@ warnings.filterwarnings('ignore')
 
 
 def process_image(batch, transform):
+    # batch = pd.DataFrame(batch)
     # start = time.time()
     images = []
-    labels = []
-    for item in batch:
-        images.append(transform(item['image']).unsqueeze(0))
-        labels.append(item['label'])
-    images_tensor = torch.cat(images)
-    labels_tensor = torch.tensor(labels)
+    # labels = []
+    images = [transform(item['image']) for item in batch]
+    labels_tensor = torch.tensor([item['label'] for item in batch])
+
+    # labels_tensor = torch.cat(list(batch['label']))
+    # labels.append(item['label'])
+    images_tensor =   torch.stack(images)
+    # labels_tensor = torch.tensor(labels)
     # print(time.time() - start)
 
     return images_tensor, labels_tensor
-
-
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Diffrate training and evaluation script', add_help=False)
@@ -112,7 +116,7 @@ def get_args_parser():
     # Learning rate schedule parameters
     parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
                         help='LR scheduler (default: "cosine"')
-    parser.add_argument('--lr', type=float, default=1e-5, metavar='LR',
+    parser.add_argument('--lr', type=float, default=1e-6, metavar='LR',
                         help='learning rate (default: 5e-4)')
     parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct',
                         help='learning rate noise on/off epoch percentages')
@@ -222,12 +226,21 @@ gray_transform = transforms.Compose([
     transforms.ToTensor(),
 ])
 
+def process_grayscale(example):
+    image = example['image']
+    img_tensor = gray_transform(image)
+    # Check if the image has only one channel (grayscale)
+    if img_tensor.shape[0] == 2:
+        example['image'] = color.gray2rgb(image)
+    return example
+
 def filter_out_grayscale(example):
     img_tensor = gray_transform(example['image'])
     # Check if the image has only one channel (grayscale)
     if img_tensor.shape[0] == 3:
         return True
     return False
+
 
 
 
@@ -274,6 +287,7 @@ def get_diffrate_model(model, args):
             
 
 
+
 def main(args):
     accelerator = Accelerator() 
     output_dir = Path(args.output_dir)
@@ -292,6 +306,10 @@ def main(args):
 
     dataset_train = dataset['train']
     dataset_val = dataset['validation']
+    # print(dataset_train)
+    # print(dataset_val)
+    # dataset_train = dataset_train.map(process_grayscale, num_proc=10)
+    # dataset_val = dataset_val.map(process_grayscale, num_proc=10)
     dataset_train = dataset_train.filter(filter_out_grayscale, num_proc=10)
     dataset_val = dataset_val.filter(filter_out_grayscale, num_proc=10)
 
@@ -323,26 +341,22 @@ def main(args):
     train_transform =  build_transform(is_train=True, args=args) 
     eval_transform =  build_transform(is_train=False, args=args) 
     data_loader_train = DataLoader(
-        dataset_train, 
+        dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
-        collate_fn=lambda batch: process_image(batch, train_transform),
-        # shuffle=False,
+        num_workers=args.num_workers,
+        pin_memory=args.pin_mem,
         drop_last=True,
-        num_workers = 16,
-        pin_memory=True,
-        persistent_workers=True
-
-        # sampler=sampler_train
+        collate_fn=lambda batch: process_image(batch, train_transform),
+        
     )
 
     data_loader_val = DataLoader(
-        dataset_val, 
-        batch_size=args.batch_size,
-        collate_fn=lambda batch: process_image(batch, eval_transform),
-        # shuffle=False,
+        dataset_val, sampler=sampler_val,
+        batch_size=int(1 * args.batch_size),
+        num_workers=args.num_workers,
+        pin_memory=args.pin_mem,
         drop_last=False,
-        sampler=sampler_val,
-        num_workers = 8, prefetch_factor = 8, pin_memory=True, 
+        collate_fn=lambda batch: process_image(batch, eval_transform),
     )
 
     mixup_fn = None
@@ -474,7 +488,7 @@ def main(args):
     max_accuracy = 0.0
     for epoch in range(args.start_epoch, args.epochs):
         # if args.distributed:
-            # data_loader_train.sampler.set_epoch(epoch)
+        # data_loader_train.sampler.set_epoch(epoch)
 
         train_stats = train_one_epoch(
             model=model, 
