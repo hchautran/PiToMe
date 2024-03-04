@@ -67,10 +67,7 @@ def pitome_vision(
         metric = F.normalize(metric, p=2, dim=-1) 
 
     batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
-    # ori_sim = metric@metric.transpose(-1,-2) - torch.eye(T)[None,...].to(metric.device)
     ori_sim = metric@metric.transpose(-1,-2) 
-    # print(ori_sim.max(-1,keepdim=True).values.mean(-1,keepdim=True).shape)
-    # sim = F.elu((ori_sim - ori_sim.max(-1,keepdim=True).values.min(-1,keepdim=True).values)/0.1) 
     sim = F.elu((ori_sim - margin)/0.1) 
     isolation_score = sim.sum(dim=-1) + sim.std(dim=-1)
 
@@ -115,7 +112,6 @@ def pitome_vision(
 
 def pitome_text(
     metric: torch.Tensor, 
-    r:int=0,
     ratio:float=1.0,
     margin:torch.Tensor=0.5,
     class_token: bool = False,
@@ -123,6 +119,9 @@ def pitome_text(
     with torch.no_grad():
         if class_token:
             metric=metric[:,1:,:]
+        if len(metric.shape) == 2:
+            metric = metric[None,...]
+        # B,H,T,C = metric.shape
         B,T,C = metric.shape
         r = math.floor(T- T*ratio)
         metric = F.normalize(metric, p=2, dim=-1) 
@@ -130,7 +129,11 @@ def pitome_text(
 
     sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
     # sim = metric@metric.transpose(-1,-2) 
-    isolation_score = sim.mean(dim=-1) + sim.sum(dim=-1)
+    # print(sim.shape)
+    # isolation_score = sim.sum(dim=-1).mean(1)
+    # sim = sim.mean(dim=1)
+    isolation_score = sim.mean(dim=-1)
+    # print(isolation_score.shape)
 
     with torch.no_grad():
         indices =  torch.argsort(isolation_score, descending=True)
@@ -220,6 +223,5 @@ def merge_source(
 def merge_attention_mask(
     merge, attention_mask: torch.Tensor
 ): 
-
     attention_mask = merge(attention_mask, mode="amax")
     return attention_mask 

@@ -188,44 +188,44 @@ if __name__ == "__main__":
     avg_factor = 0.95
     task_name = args.task
 
-    for model_ckt in [BERT_BASE, DISTILBERT_BASE]:
-        for ratio in [0.505,0.525, 0.55, 0.6, 0.625, .65, .7]:
-            for method in [
-                TOME, 
-                PITOME,
-                # 'dct', 
-                # NONE,
-            ]:
-                wandb.init(
-                    name=f'{method}_{model_ckt}',
-                    project='tc_off_the_shell',
-                    config={
-                        'algo': method, 
-                        'model': model_ckt, 
-                        'ratio': ratio, 
-                        },
-                    reinit=True
-                )
-                if model_ckt == BERT_BASE:
-                    model, tokenizer = prepare_bert_model(
-                        model_ft_dict[model_ckt], 
-                        compress_method=method,
-                        ratio=ratio
-                    )
-                else:
-                    model, tokenizer = prepare_distil_model(
-                        model_ft_dict[model_ckt], 
-                        compress_method=method,
-                        ratio=ratio
-                    )
+    for method in [
+        PITOME,
+        TOME, 
+        # 'dct', 
+        # NONE,
+    ]:
+        for model_ckt in [BERT_BASE, DISTILBERT_BASE]:
+            wandb.init(
+                name=f'{method}_{model_ckt}',
+                project='tc_off_the_shell',
+                config={
+                    'algo': method, 
+                    'model': model_ckt, 
+                    },
+                reinit=True
+            )
+            for ratio in [0.505,0.525, 0.55, 0.6, 0.625, .65, .7]:
+                 
+                    if model_ckt == BERT_BASE:
+                        model, tokenizer = prepare_bert_model(
+                            model_ft_dict[model_ckt], 
+                            compress_method=method,
+                            ratio=ratio
+                        )
+                    else:
+                        model, tokenizer = prepare_distil_model(
+                            model_ft_dict[model_ckt], 
+                            compress_method=method,
+                            ratio=ratio
+                        )
 
-                task = TASKS[task_name]
-                config, model_config = task.config_getter()    
-                config.tokenizer = tokenizer
+                    task = TASKS[task_name]
+                    config, model_config = task.config_getter()    
+                    config.tokenizer = tokenizer
 
-                dataset = task.dataset_fn(config, split='train')
-                eval_dataset = task.dataset_fn(config, split='eval')    
-                max_train_steps = int(np.ceil(config.total_train_samples / batch_size))
+                    dataset = task.dataset_fn(config, split='train')
+                    eval_dataset = task.dataset_fn(config, split='eval')    
+                    max_train_steps = int(np.ceil(config.total_train_samples / batch_size))
 
-                res = eval(model, eval_dataset, tokenizer ,batch_size=64)
-                wandb.log(res)
+                    res = eval(model, eval_dataset, tokenizer ,batch_size=64)
+                    wandb.log(res)

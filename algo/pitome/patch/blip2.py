@@ -1,3 +1,6 @@
+import torch
+import torch.nn.functional as F 
+import torch.utils.checkpoint as checkpoint
 from lavis.models.eva_vit import VisionTransformer,Attention,Block
 from ..merge import merge_source, pitome_vision, prune, merge_mean, merge_wavg
 

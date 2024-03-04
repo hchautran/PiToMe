@@ -51,11 +51,6 @@ class PiToMeBertLayer(BertLayer):
                 class_token=self._tome_info["class_token"]
             )
 
-            # if isolated_score is not None and self._tome_info["size"] is not None:
-            #     # print(isolated_score.shape)
-            #     # print(self._tome_info["size"].shape)
-            #     weight = self._tome_info["size"] + isolated_score
-            # else:
             weight = isolated_score
             x, self._tome_info["size"] = merge_wavg(merge, x, weight)
             attention_mask = torch.where(attention_mask.squeeze_() >= 0, 1, 0)
@@ -165,7 +160,7 @@ class PiToMeBertSelfAttention(BertSelfAttention):
         
 
     
-        return outputs, key_layer.mean(1)
+        return outputs, key_layer.sum(1)
 
 
 def make_pitome_class(transformer_class):
