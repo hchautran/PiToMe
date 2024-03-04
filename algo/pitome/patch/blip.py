@@ -1,3 +1,4 @@
+import torch
 from lavis.models.vit import VisionTransformer, Attention, Block
 from ..merge import merge_source, pitome_vision, prune, merge_mean, merge_wavg
 

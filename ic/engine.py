@@ -41,7 +41,6 @@ def train_one_epoch(model: torch.nn.Module, criterion,
         with torch.cuda.amp.autocast():
             outputs, flops = model(samples)
             loss_cls = criterion(outputs, targets)
-            loss = loss_cls
             loss_cls_value = loss_cls.item()
             # if utils.is_main_process():
                 # wandb.log({'current loss': loss_cls_value})
@@ -58,6 +57,7 @@ def train_one_epoch(model: torch.nn.Module, criterion,
         # loss_scaler(loss, optimizer, clip_grad=max_norm, parameters=model.parameters(), create_graph=is_second_order)
         # start = time.time()
         loss_cls.backward()
+        
         optimizer.step() 
 
         torch.cuda.synchronize()

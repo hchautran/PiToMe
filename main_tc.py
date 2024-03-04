@@ -41,11 +41,6 @@ accelerator = Accelerator(
 )
 
 
-device = torch.device(
-    f"cuda:0"
-    if torch.cuda.is_available()
-    else "cpu"
-)
 
 
 def transformers_collator(batch, tokenizer):
@@ -103,7 +98,6 @@ def prepare_distil_model(model_ckt, compress_method='none', ratio=1.0):
 
 def train(model, config, dataset ,use_deepspeed):
     dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=transformers_collator)
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     lr = config.learning_rate
     wd = config.weight_decay
  
@@ -189,12 +183,15 @@ if __name__ == "__main__":
     task_name = args.task
 
     for method in [
-        PITOME,
+        # PITOME,
         TOME, 
         # 'dct', 
         # NONE,
     ]:
-        for model_ckt in [BERT_BASE, DISTILBERT_BASE]:
+        for model_ckt in [
+            DISTILBERT_BASE, 
+            # BERT_BASE 
+        ]:
             wandb.init(
                 name=f'{method}_{model_ckt}',
                 project='tc_off_the_shell',

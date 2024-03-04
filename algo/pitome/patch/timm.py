@@ -38,12 +38,11 @@ class PiToMeBlockUsingRatio(Block):
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
         x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
-        x = x + self._drop_path2(self.mlp(self.norm2(x)))
         ratio = self._tome_info["ratio"].pop(0)
         if ratio < 1.0:
             merge, isolated_score = pitome_vision(
                 ratio=ratio,
-                metric=x,
+                metric=metric,
                 margin=self.margin,
                 class_token=self._tome_info["class_token"]
             )
@@ -60,6 +59,7 @@ class PiToMeBlockUsingRatio(Block):
                 weight = self._tome_info["size"] 
                 x, self._tome_info["size"] = merge_wavg(merge, x, weight)
 
+        x = x + self._drop_path2(self.mlp(self.norm2(x)))
         return x, pos_embed 
 
 
@@ -152,5 +152,5 @@ class PiToMeAttention(Attention):
         x = self.proj(x)
         x = self.proj_drop(x)
 
-        return x, k.mean(1), attn[..., 0,1:].mean(1).squeeze()
+        return x, k.sum(1), attn[..., 0,1:].mean(1).squeeze()
 
