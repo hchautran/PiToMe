@@ -1,1 +1,1 @@
-from LAVIS.lavis.models.eva_vit import VisionTransformer,Attention,Block
+from lavis.models.eva_vit import VisionTransformer,Attention,Block

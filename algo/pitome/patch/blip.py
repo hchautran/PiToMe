@@ -1,7 +1,4 @@
-from LAVIS.lavis.models.vit import VisionTransformer, Attention, Block
-
-
-# from LAVIS.lavis.models.clip_vit import ResidualAttentionBlock, Transformer, MultiheadAttention 
+from lavis.models.vit import VisionTransformer, Attention, Block
 from ..merge import merge_source, pitome_vision, prune, merge_mean, merge_wavg
 
 class PiToMeBlock(Block):
