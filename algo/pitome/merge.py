@@ -138,7 +138,7 @@ def pitome_text(
     # print(sim.shape)
     # isolation_score = sim.sum(dim=-1).mean(1)
     # sim = sim.mean(dim=1)
-    isolation_score = sim.mean(dim=-1)
+    isolation_score = sim.mean(dim=-1) + sim.sum(dim=-1)
     # print(isolation_score.shape)
 
     with torch.no_grad():
