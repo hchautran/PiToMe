@@ -69,12 +69,13 @@ def pitome_vision(
         metric = F.normalize(metric, p=2, dim=-1) 
 
     with torch.no_grad():
-        if margin >= 0.0:
+        if margin >= 0.45:
             a, b = metric[..., ::2, :], metric[..., 1::2, :]
             scores = a @ b.transpose(-1, -2)
             node_max, node_idx = scores.max(dim=-1)
             return get_bsm_merge(node_max=node_max, node_idx=node_idx, r=r, class_token=class_token)
         else:
+            # print('got here')
             batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
             sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.1) 
             # sim = F.elu(25 - torch.cdist(metric, metric), alpha=margin) 
@@ -82,7 +83,7 @@ def pitome_vision(
             indices =  torch.argsort(isolation_score, descending=True)
             merge_idx = indices[..., :2*r]
             protected_idx = indices[..., 2*r:]
-            a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:] 
+            a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2] 
             scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
             scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
             _, dst_idx = scores.max(dim=-1) 
@@ -95,25 +96,20 @@ def pitome_vision(
             x_cls = None
         B, T, C = x.shape
         protected = x[batch_idx, protected_idx, :]
-        if mode == 'prune':
-            dst = x[batch_idx,  b_idx, :]
-            if x_cls is not None:
-                return torch.cat([x_cls, protected, dst], dim=1)
-            else:
-                return torch.cat([protected, dst], dim=1)
+        src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
+        dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
+        if x_cls is not None:
+            return torch.cat([x_cls, protected, dst], dim=1)
         else:
-            src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
-            dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
-            if x_cls is not None:
-                return torch.cat([x_cls, protected, dst], dim=1)
-            else:
-                return torch.cat([protected, dst], dim=1)
+            return torch.cat([protected, dst], dim=1)
 
 
     isolation_score = 1 - F.softmax(isolation_score, dim=-1) 
     if class_token:
         return merge, torch.cat([torch.ones(B, 1).to(metric.device), isolation_score], dim=-1)[..., None]
+        # return merge, None 
     return merge, isolation_score[..., None] 
+    # return merge, None 
 
 def pitome_text(
     metric: torch.Tensor, 
