@@ -24,7 +24,8 @@ from ic.samplers import RASampler
 import ic.utils
 import shutil
 import warnings
-from timm.scheduler.cosine_lr import CosineLRScheduler
+# from timm.scheduler.plateau_lr import PlateauLRScheduler 
+from timm.scheduler.cosine_lr import CosineLRScheduler 
 
 from datasets import load_dataset
 from torchvision import transforms
@@ -116,7 +117,7 @@ def get_args_parser():
     # Learning rate schedule parameters
     parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
                         help='LR scheduler (default: "cosine"')
-    parser.add_argument('--lr', type=float, default=5e-6, metavar='LR',
+    parser.add_argument('--lr', type=float, default=1e-5, metavar='LR',
                         help='learning rate (default: 1e-5)')
     parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct',
                         help='learning rate noise on/off epoch percentages')
@@ -124,9 +125,9 @@ def get_args_parser():
                         help='learning rate noise limit percent (default: 0.67)')
     parser.add_argument('--lr-noise-std', type=float, default=1.0, metavar='STDDEV',
                         help='learning rate noise std-dev (default: 1.0)')
-    parser.add_argument('--warmup-lr', type=float, default=1e-6, metavar='LR',
+    parser.add_argument('--warmup-lr', type=float, default=1e-7, metavar='LR',
                         help='warmup learning rate (default: 1e-6)')
-    parser.add_argument('--min-lr', type=float, default=1e-6, metavar='LR',
+    parser.add_argument('--min-lr', type=float, default=1e-7, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
     parser.add_argument('--decay-epochs', type=float, default=30, metavar='N',
                         help='epoch interval to decay LR')
@@ -336,7 +337,6 @@ def main(args):
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
-
     train_transform =  build_transform(is_train=True, args=args) 
     eval_transform =  build_transform(is_train=False, args=args) 
     data_loader_train = DataLoader(
@@ -435,6 +435,7 @@ def main(args):
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,weight_decay=0)
     lr_scheduler = CosineLRScheduler(optimizer, t_initial=args.epochs, lr_min=args.min_lr, decay_rate=args.decay_rate )
+    # lr_scheduler = PlateauLRScheduler(optimizer, patience_t=3, lr_min=1e-6, mode='max', decay_rate=0.5)
     loss_scaler = ic.utils.NativeScalerWithGradNormCount()
     optimizer, lr_scheduler, data_loader_train, data_loader_val = accelerator.prepare(optimizer, lr_scheduler, data_loader_train, data_loader_val)
 

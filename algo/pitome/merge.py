@@ -65,11 +65,11 @@ def pitome_vision(
             r = math.floor(T- T*ratio)
         else:
             return do_nothing, do_nothing
+
         metric = F.normalize(metric, p=2, dim=-1) 
 
-
     with torch.no_grad():
-        if margin >= 0.825:
+        if margin >= 0.0:
             a, b = metric[..., ::2, :], metric[..., 1::2, :]
             scores = a @ b.transpose(-1, -2)
             node_max, node_idx = scores.max(dim=-1)
@@ -77,9 +77,8 @@ def pitome_vision(
         else:
             batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
             sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.1) 
+            # sim = F.elu(25 - torch.cdist(metric, metric), alpha=margin) 
             isolation_score = sim.sum(dim=-1) 
-            if attn is not None: 
-                isolation_score = isolation_score - attn
             indices =  torch.argsort(isolation_score, descending=True)
             merge_idx = indices[..., :2*r]
             protected_idx = indices[..., 2*r:]
@@ -134,11 +133,7 @@ def pitome_text(
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
 
     sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
-    # sim = metric@metric.transpose(-1,-2) 
-    # print(sim.shape)
-    # isolation_score = sim.sum(dim=-1).mean(1)
-    # sim = sim.mean(dim=1)
-    isolation_score = sim.mean(dim=-1) + sim.sum(dim=-1)
+    isolation_score = sim.mean(dim=-1) + sim.sum(-1)
     # print(isolation_score.shape)
 
     with torch.no_grad():

@@ -35,11 +35,12 @@ class PiToMeBlockUsingRatio(Block):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        ratio = self._tome_info["ratio"].pop(0)
+
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
         x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
+        ratio = self._tome_info["ratio"].pop(0)
         if ratio < 1.0:
             merge, isolated_score = pitome_vision(
                 ratio=ratio,
@@ -82,6 +83,10 @@ class PiToMeBlock(Block):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         r = self._tome_info["r"].pop(0)
+        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
+        x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
+        x = x + self._drop_path1(x_attn)
+        x = x + self._drop_path2(self.mlp(self.norm2(x)))
         if r > 0:
             merge, isolated_score = pitome_vision(
                 r=r,
@@ -104,10 +109,6 @@ class PiToMeBlock(Block):
                 x, self._tome_info["size"] = merge_wavg(merge, x, weight)
 
         
-        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
-        x = x + self._drop_path1(x_attn)
-        x = x + self._drop_path2(self.mlp(self.norm2(x)))
 
         return x
 
