@@ -421,7 +421,7 @@ def main(args):
         model.load_state_dict(checkpoint_model, strict=False)
 
     args.use_k = False
-    args.ratio = 0.925
+    args.ratio = 0.9275
     # args.reduced_token = 11 
     print(args)
     if args.algo == TOME:

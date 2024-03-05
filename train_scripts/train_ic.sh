@@ -13,7 +13,7 @@ export CKT_SIZE='deit_small_patch16_224'
 
 python -m accelerate.commands.launch \
 --config_file accelerate.yml main_ic.py \
---epoch 30 --batch-size 100 \
+--epoch 30 --batch-size 200 \
 --model ${CKT_SIZE} \
 --use_k False \
 --ratio 0.925 \
