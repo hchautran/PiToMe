@@ -4,7 +4,6 @@ import torch.nn as nn
 from typing import  Optional, Tuple, Union
 from transformers.models.clip.modeling_clip import CLIPOutput
 import torch.nn.functional as F
-import time
 
 
 EUCLID = 'euclidean'
@@ -19,8 +18,6 @@ class BaseModel(nn.Module):
         self.model_ckt = config.model_ckt
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.temp = nn.Parameter(torch.tensor(config.temp))
-
-    
         self.logit_scale = nn.Parameter(torch.tensor(config.temp))
         self.weight_i2t = self.config.weight_i2t 
 

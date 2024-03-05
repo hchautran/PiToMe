@@ -32,6 +32,7 @@ import os
 import PIL
 
 from torchvision import datasets, transforms
+from peft import get_peft_model, LoraConfig, TaskType
 
 from timm.data import create_transform
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
@@ -459,7 +460,7 @@ class NativeScalerWithGradNormCount:
     def __call__(self, loss, optimizer, clip_grad=None, parameters=None, create_graph=False, update_grad=True):
         self._scaler.scale(loss).backward(create_graph=create_graph)
         if update_grad:
-            start = time.time()
+            # start = time.time()
             # if clip_grad is not None:
             #     assert parameters is not None
                 # self._scaler.unscale_(optimizer)  # unscale the gradients of optimizer's assigned params in-place
@@ -469,7 +470,7 @@ class NativeScalerWithGradNormCount:
             norm = ampscaler_get_grad_norm(parameters)
             self._scaler.step(optimizer)
             self._scaler.update()
-            print(time.time() - start)
+            # print(time.time() - start)
         else:
             norm = None
         return norm
@@ -546,6 +547,21 @@ def build_dataset(is_train, args):
     print(dataset)
 
     return dataset
+
+    
+
+def get_lora_timm(model, target_modules=['qkv', 'proj', 'fc1', 'fc2']):
+  
+    peft_config = LoraConfig(
+        # task_type=TaskType.FEATURE_EXTRACTION, 
+        r=32, 
+        lora_alpha=32, 
+        lora_dropout=0.2, 
+        target_modules=target_modules
+    )
+    model = get_peft_model(model, peft_config)
+    model.print_trainable_parameters()
+    return model 
 
 
 def build_transform(is_train, args):

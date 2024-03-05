@@ -47,9 +47,8 @@ def make_pitome_class(transformer_class):
             else:
                 x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
             x = self.pos_drop(x + self.pos_embed)
-            pos_embed = self.pos_embed.expand(x.shape)
             for blk in self.blocks:
-                x, pos_embed = blk(x, pos_embed)
+                x = blk(x)
                 self.total_flop += self.calculate_block_flop(x.shape) 
             self.total_flop += self.calculate_block_flop(x.shape) 
             x = self.norm(x)
@@ -105,7 +104,7 @@ def apply_patch(
     margin = margin 
     num_layers = len(model.blocks)
     # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
-    margins = [.9 - 1.9*(i/num_layers) for i in range(num_layers)]
+    margins = [.9 - .9*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tome_info["distill_token"] = True

@@ -51,7 +51,7 @@ from torch.utils.data import DataLoader
 import wandb
 import pandas as pd 
 from skimage import color
-from ic.utils import MultiEpochsDataLoader
+from ic.utils import get_lora_timm 
 
 
 torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
@@ -116,8 +116,8 @@ def get_args_parser():
     # Learning rate schedule parameters
     parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
                         help='LR scheduler (default: "cosine"')
-    parser.add_argument('--lr', type=float, default=1e-6, metavar='LR',
-                        help='learning rate (default: 5e-4)')
+    parser.add_argument('--lr', type=float, default=5e-6, metavar='LR',
+                        help='learning rate (default: 1e-5)')
     parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct',
                         help='learning rate noise on/off epoch percentages')
     parser.add_argument('--lr-noise-pct', type=float, default=0.67, metavar='PERCENT',
@@ -128,7 +128,6 @@ def get_args_parser():
                         help='warmup learning rate (default: 1e-6)')
     parser.add_argument('--min-lr', type=float, default=1e-6, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
-
     parser.add_argument('--decay-epochs', type=float, default=30, metavar='N',
                         help='epoch interval to decay LR')
     parser.add_argument('--warmup-epochs', type=int, default=5, metavar='N',
@@ -289,7 +288,7 @@ def get_diffrate_model(model, args):
 
 
 def main(args):
-    accelerator = Accelerator() 
+    accelerator = Accelerator(mixed_precision='no') 
     output_dir = Path(args.output_dir)
     logger = ic.utils.create_logger(output_dir,dist_rank=ic.utils.get_rank())
     logger.info(args)
@@ -378,6 +377,13 @@ def main(args):
         drop_path_rate=args.drop_path,
         drop_block_rate=None,
     )
+    # model = get_lora_timm(model, target_modules=[
+    #    'qkv', 
+    #    'head', 
+    #    'proj', 
+    #    'fc1', 
+    #    'fc2', 
+    # ])
             
     if args.finetune:
         if args.finetune.startswith('https'):
@@ -415,7 +421,8 @@ def main(args):
         model.load_state_dict(checkpoint_model, strict=False)
 
     args.use_k = False
-    args.ratio = 0.90
+    args.ratio = 0.9275
+    # args.reduced_token = 11 
     print(args)
     if args.algo == TOME:
         get_tome_model(model, args)
@@ -426,9 +433,9 @@ def main(args):
     else:
         get_tome_model(model, args)
 
-    model = accelerator.prepare(model)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,weight_decay=0)
     lr_scheduler = CosineLRScheduler(optimizer, t_initial=args.epochs, lr_min=args.min_lr, decay_rate=args.decay_rate )
+    loss_scaler = ic.utils.NativeScalerWithGradNormCount()
     optimizer, lr_scheduler, data_loader_train, data_loader_val = accelerator.prepare(optimizer, lr_scheduler, data_loader_train, data_loader_val)
 
 
@@ -441,6 +448,7 @@ def main(args):
     args.lr = linear_scaled_lr
 
 
+    model = accelerator.prepare(model)
     if args.eval:
         test_stats = evaluate(data_loader_val, model, accelerator)
         accelerator.print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
@@ -467,7 +475,6 @@ def main(args):
     else:
         criterion = torch.nn.CrossEntropyLoss()
 
-    
     if args.autoresume and os.path.exists(os.path.join(args.output_dir, 'checkpoint.pth')):
         args.resume = os.path.join(args.output_dir, 'checkpoint.pth')
     if args.resume:
@@ -476,12 +483,12 @@ def main(args):
                 args.resume, map_location='cpu', check_hash=True)
         else:
             checkpoint = torch.load(args.resume, map_location='cpu')
-        model.load_state_dict(checkpoint['model'], strict=False)
         if not args.eval and 'optimizer' in checkpoint and 'lr_scheduler' in checkpoint and 'epoch' in checkpoint:
             optimizer.load_state_dict(checkpoint['optimizer'])
             lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
             args.start_epoch = checkpoint['epoch'] + 1
-
+            if 'scaler' in checkpoint:
+                loss_scaler.load_state_dict(checkpoint['scaler'])
 
     accelerator.print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
@@ -489,6 +496,8 @@ def main(args):
     for epoch in range(args.start_epoch, args.epochs):
         # if args.distributed:
         # data_loader_train.sampler.set_epoch(epoch)
+        # test_stats = evaluate(data_loader_val, model, accelerator)
+        # accelerator.print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
 
         train_stats = train_one_epoch(
             model=model, 
@@ -500,6 +509,20 @@ def main(args):
             logger=logger,
             mixup_fn=mixup_fn,
         )
+        # train_stats = train_one_epoch(
+        #     model=model, 
+        #     criterion=criterion, 
+        #     data_loader=data_loader_train,
+        #     optimizer=optimizer, 
+        #     epoch=epoch, 
+        #     mixup_fn=mixup_fn,
+        #     loss_scaler=loss_scaler,
+        #     set_training_mode=True,  # keep in eval mode during finetuning
+        #     logger=logger, 
+        #     target_flops=args.target_flops,
+        #     warm_up=args.warmup_compression_rate
+        # )
+
         # if accelerator.is_main_process:
             # wandb.log(train_stats)
 

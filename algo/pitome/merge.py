@@ -47,6 +47,7 @@ def get_bsm_merge(
 
 def pitome_vision(
     metric: torch.Tensor, 
+    attn:torch.Tensor=None,
     r:int=0,
     ratio:float=1.0,
     margin:torch.Tensor=0.5,
@@ -66,23 +67,23 @@ def pitome_vision(
             return do_nothing, do_nothing
         metric = F.normalize(metric, p=2, dim=-1) 
 
-    batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
-    # sim = metric@metric.transpose(-1,-2) 
-    sim = F.elu((metric@metric.transpose(-1,-2)  - margin)/0.1) 
-    isolation_score = sim.mean(dim=-1) 
-    indices =  torch.argsort(isolation_score, descending=True)
 
     with torch.no_grad():
-        if margin >= 0.45:
-            # sorted_metric = metric[batch_idx, indices, :]
+        if margin >= 0.825:
             a, b = metric[..., ::2, :], metric[..., 1::2, :]
             scores = a @ b.transpose(-1, -2)
             node_max, node_idx = scores.max(dim=-1)
             return get_bsm_merge(node_max=node_max, node_idx=node_idx, r=r, class_token=class_token)
         else:
+            batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
+            sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.1) 
+            isolation_score = sim.sum(dim=-1) 
+            if attn is not None: 
+                isolation_score = isolation_score - attn
+            indices =  torch.argsort(isolation_score, descending=True)
             merge_idx = indices[..., :2*r]
             protected_idx = indices[..., 2*r:]
-            a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2] 
+            a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:] 
             scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
             scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
             _, dst_idx = scores.max(dim=-1) 

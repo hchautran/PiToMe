@@ -34,7 +34,7 @@ class PiToMeBlockUsingRatio(Block):
     def _drop_path2(self, x):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
-    def forward(self, x: torch.Tensor, pos_embed:torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
         x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
@@ -42,6 +42,7 @@ class PiToMeBlockUsingRatio(Block):
         if ratio < 1.0:
             merge, isolated_score = pitome_vision(
                 ratio=ratio,
+                attn=None,
                 metric=metric,
                 margin=self.margin,
                 class_token=self._tome_info["class_token"]
@@ -60,7 +61,7 @@ class PiToMeBlockUsingRatio(Block):
                 x, self._tome_info["size"] = merge_wavg(merge, x, weight)
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
-        return x, pos_embed 
+        return x 
 
 
 class PiToMeBlock(Block):
@@ -79,17 +80,15 @@ class PiToMeBlock(Block):
     def _drop_path2(self, x):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
-    def forward(self, x: torch.Tensor, pos_embed:torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
         x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
-        x = x + self._drop_path2(self.mlp(self.norm2(x)))
         r = self._tome_info["r"].pop(0)
-
         if r > 0:
             merge, isolated_score = pitome_vision(
                 r=r,
-                metric=x + pos_embed,
+                metric=metric,
                 margin=self.margin,
                 class_token=self._tome_info["class_token"]
             )
@@ -103,15 +102,14 @@ class PiToMeBlock(Block):
             if isolated_score is not None and self._tome_info["size"] is not None:
                 weight = self._tome_info["size"] + isolated_score
                 x, self._tome_info["size"] = merge_wavg(merge, x, weight)
-                pos_embed, _= prune(merge, pos_embed, weight)
             else:
                 weight = self._tome_info["size"] 
                 x, self._tome_info["size"] = merge_wavg(merge, x, weight)
-                pos_embed, _ = prune(merge, pos_embed, weight)
 
         
+        x = x + self._drop_path2(self.mlp(self.norm2(x)))
 
-        return x, pos_embed 
+        return x
 
 
 
@@ -151,6 +149,7 @@ class PiToMeAttention(Attention):
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
+        # print(attn.shape)
 
-        return x, k.sum(1), attn[..., 0,1:].mean(1).squeeze()
+        return x, k.sum(1), attn.mean(1)[...,1:, 1:].mean(1).squeeze()
 

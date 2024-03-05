@@ -110,7 +110,6 @@ def train(model, config, dataset ,use_deepspeed):
             optimizer, dataloader, scheduler= accelerator.prepare(optimizer, dataloader, scheduler)
     
     # train model
-    model.to(device)
     model.train()
     avg_loss = None
     avg_acc = None

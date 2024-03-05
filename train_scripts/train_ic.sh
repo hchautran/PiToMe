@@ -15,5 +15,6 @@ python -m accelerate.commands.launch \
 --config_file accelerate.yml main_ic.py \
 --epoch 30 --batch-size 100 \
 --model ${CKT_SIZE} \
---ratio 0.9 \
+--use_k False \
+--ratio 0.925 \
 --algo $1 

@@ -13,10 +13,6 @@ POINCARE = 'poincare'
 LORENTZ = 'lorentz'
 
 
-
-
-
-
 class CompressedLAVISBLIP(CompressedModel):
 
     def __init__(self, model:BlipRetrieval, compress_method='dct',r=0.9, use_k=False, k=13):

@@ -56,6 +56,7 @@ def train_one_epoch(model: torch.nn.Module, criterion,
         # is_second_order = hasattr(optimizer, 'is_second_order') and optimizer.is_second_order
         # loss_scaler(loss, optimizer, clip_grad=max_norm, parameters=model.parameters(), create_graph=is_second_order)
         # start = time.time()
+        
         loss_cls.backward()
         
         optimizer.step() 
