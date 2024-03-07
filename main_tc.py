@@ -152,27 +152,27 @@ if __name__ == "__main__":
 
     for model_ckt in [
         BERT_BASE,
-        DISTILBERT_BASE, 
+        # DISTILBERT_BASE, 
     ]:
         engine = Engine(
             task_name=task_name,
             model_ckt=model_ckt,
             ratio=1.0,
             algo=None,
-            batch_size=100,
+            batch_size=64,
             enable_log=False
         )
         for algo in [
-            TOME, 
             PITOME,
+            TOME, 
             # 'dct', 
             # NONE,
         ]:
             engine.prepare_model(model_ckt, algo)
         
-            for ratio in [0.505, 0.55, 0.6, 0.625, .65, .7]:
+            for ratio in [0.6, 0.505, 0.55, 0.6, 0.625, .65, .7]:
                 engine.set_ratio(ratio)
-                # engine.evaluate()
+                engine.evaluate()
                 engine.train(num_epochs=10)
                 
                     

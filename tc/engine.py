@@ -69,7 +69,7 @@ model_dict  = {
 
 class Engine:
 
-    def __init__(self, task_name, model_ckt, ratio=1.0, algo=NONE, batch_size=32, enable_log=False):
+    def __init__(self, task_name, model_ckt, ratio=1.0, algo=NONE, batch_size=32, enable_log=False, trained=False):
 
         self.accelerator = Accelerator(
             mixed_precision='fp16',
@@ -87,6 +87,10 @@ class Engine:
         self.algo = algo
         self.ori_model = None
         self.model_ckt = model_ckt
+        if trained:
+            self.model_dict = model_ft_dict
+        else:
+            self.model_dict = model_dict 
         self.prepare_model(self.model_ckt, self.algo)
 
         self.config.tokenizer = self.tokenizer
@@ -106,10 +110,11 @@ class Engine:
 
     def prepare_model(self, model_ckt, algo=None):
         self.algo = algo
+        
         if model_ckt == BERT_BASE:
-            self._prepare_bert_model(model_ft_dict[model_ckt],algo=algo)
+            self._prepare_bert_model(self.model_dict[model_ckt],algo=algo)
         else:
-            self._prepare_distil_model(model_ft_dict[model_ckt],algo=algo)
+            self._prepare_distil_model(self.model_dict[model_ckt],algo=algo)
 
     def log(self, stats):
         if self.enable_log:
