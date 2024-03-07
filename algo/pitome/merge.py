@@ -65,7 +65,6 @@ def pitome_vision(
             r = math.floor(T- T*ratio)
         else:
             return do_nothing, do_nothing
-
         metric = F.normalize(metric, p=2, dim=-1) 
 
     with torch.no_grad():
@@ -164,6 +163,7 @@ def pitome_text(
     if class_token:
         return merge, torch.cat([torch.ones(B, 1).to(metric.device), isolation_score], dim=-1)[..., None]
     return merge, isolation_score[..., None] 
+
 
 def merge_mean(
     merge: Callable, x: torch.Tensor
