@@ -69,7 +69,7 @@ def get_listops_config():
     config.eval_frequency = 50
     config.total_eval_samples = 640
     config.total_train_samples = 160000
-    config.learning_rate = 0.005
+    config.learning_rate = 1e-5 
     config.weight_decay = 1e-1
     config.warmup_steps = 1000
     config.tied_weights = False

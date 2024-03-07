@@ -151,7 +151,6 @@ class Engine:
 
         self.model.distilbert.transformer.ratio = self.ratio 
         self.tokenizer = AutoTokenizer.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
-        self.model = self.accelerator.prepare(self.model)
     
 
     def set_ratio(self, ratio):
@@ -160,6 +159,8 @@ class Engine:
             self.model.bert.encoder.ratio = self.ratio 
         else:
             self.model.distilbert.transformer.ratio = self.ratio 
+
+        self.model = self.accelerator.prepare(self.model)
 
     def init_logger(self):
         if self.enable_log:
@@ -178,14 +179,15 @@ class Engine:
 
         lr = self.config.learning_rate
         wd = self.config.weight_decay
-        scheduler_fn = self.config.lr_scheduler
-        optimizer = Adam(self.model.parameters(), lr=lr, weight_decay=wd)
-        scheduler = scheduler_fn(optimizer)
+        optimizer = Adam(self.model.parameters(), lr=1e-4)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1, min_lr=1e-8, mode='max')
         optimizer, scheduler= self.accelerator.prepare(optimizer, scheduler)
         for i in range(num_epochs):
             self.train_one_epoch(optimizer, scheduler)
             eval_stats = self.evaluate()
+            scheduler.step(eval_stats['eval acc'])
             eval_stats['epoch'] = i + 1 
+            print(eval_stats)
             self.log(eval_stats)
             
 
@@ -193,17 +195,17 @@ class Engine:
 
     def train_one_epoch(self, optimizer, scheduler):
         self.model.train()
-        pbar = tqdm(cycle(self.train_loader), total=self.max_train_steps)
+        pbar = tqdm(self.train_loader, total=len(self.train_loader))
         for i, (inputs, target) in enumerate(pbar):
-            self.accelerator.free_memory()
-            optimizer.zero_grad()
             outputs = self.model(**inputs, return_dict=False)
             loss = F.cross_entropy(outputs[0], target)
             self.accelerator.backward(loss)
             optimizer.step()
+            optimizer.zero_grad()
             cur_acc = accuracy_score(outputs[0], target)
-            pbar.set_postfix_str(f"loss: {loss.item():.4f} accuracy: {cur_acc:.2f} gflops: {outputs[3]/1e9:.2f}")
+            pbar.set_postfix_str(f"loss: {loss.item():.4f} accuracy: {cur_acc*100:.2f} gflops: {outputs[3]/1e9:.2f}")
             self.log({'logits/loss': loss.item(), 'logits/acc':cur_acc, 'gflops': outputs[3]/1e9})
+        self.accelerator.clear()
 
 
 
@@ -213,7 +215,6 @@ class Engine:
         eval_running_acc = 0.
         eval_pbar = tqdm(self.eval_loader, total=len(self.eval_loader))
         for j, (inputs, target) in enumerate(eval_pbar):
-            self.accelerator.free_memory()
             outputs = self.model(**inputs, return_dict=False)
             loss = F.cross_entropy(outputs[0], target)
             eval_running_loss += loss.item()
