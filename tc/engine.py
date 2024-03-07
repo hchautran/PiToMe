@@ -121,10 +121,8 @@ class Engine:
             wandb.log(stats)
 
     def _prepare_bert_model(self, model_ckt, algo=None):
-        if self.ori_model is None:
-            self.ori_model = BertForSequenceClassification.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
+        self.model= BertForSequenceClassification.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
 
-        self.model = deepcopy(self.ori_model) 
         if algo is not None:
             self.algo = algo
         if self.algo == PITOME:
@@ -141,10 +139,7 @@ class Engine:
 
 
     def _prepare_distil_model(self, model_ckt, algo=None):
-        if self.ori_model is None:
-            self.ori_model = DistilBertForSequenceClassification.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
-
-        self.model = deepcopy(self.ori_model) 
+        self.model = DistilBertForSequenceClassification.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
         if self.algo is not None:
             self.algo = algo
         if self.algo == PITOME:

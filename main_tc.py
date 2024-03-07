@@ -27,6 +27,8 @@ from algo import (
     tome,
     PITOME,
     TOME,
+    TOFU,
+    DCT,
     NONE
 )
 import os
@@ -140,14 +142,16 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--task", default="imdb", choices=TASKS.keys(),
                         help="choose an LRA dataset from available options")
-    parser.add_argument("--cm", default="dct", choices=TASKS.keys(),
+    parser.add_argument("--algo", default=PITOME, choices=[PITOME, TOME, NONE, TOFU, DCT],
                         help="choose an LRA dataset from available options")
-    parser.add_argument("--deepspeed", action="store_true",
-                        help="use deepspeed optimization for better performance")
+    parser.add_argument("--ratio", default=0.505,
+                        help="remain ratio")
+    args = parser.parse_args()
     args = parser.parse_args()
     batch_size = 4 
     avg_factor = 0.95
     task_name = args.task
+    algo = args.algo
 
 
     for model_ckt in [
@@ -157,23 +161,12 @@ if __name__ == "__main__":
         engine = Engine(
             task_name=task_name,
             model_ckt=model_ckt,
-            ratio=1.0,
-            algo=None,
+            ratio=float(args.ratio),
+            algo=args.algo,
             batch_size=64,
             enable_log=False
         )
-        for algo in [
-            PITOME,
-            TOME, 
-            # 'dct', 
-            # NONE,
-        ]:
-            engine.prepare_model(model_ckt, algo)
-        
-            for ratio in [0.6, 0.505, 0.55, 0.6, 0.625, .65, .7]:
-                engine.set_ratio(ratio)
-                engine.evaluate()
-                engine.train(num_epochs=10)
+        engine.train(num_epochs=1)
                 
                     
                 
