@@ -421,7 +421,7 @@ def main(args):
         model.load_state_dict(checkpoint_model, strict=False)
 
     args.use_k = False
-    args.ratio = 0.9125
+    args.ratio = 0.925
     # args.reduced_token = 11 
     print(args)
     if args.algo == TOME:
@@ -438,10 +438,7 @@ def main(args):
     # lr_scheduler = PlateauLRScheduler(optimizer, patience_t=3, lr_min=1e-6, mode='max', decay_rate=0.5)
     loss_scaler = ic.utils.NativeScalerWithGradNormCount()
     optimizer, lr_scheduler, data_loader_train, data_loader_val = accelerator.prepare(optimizer, lr_scheduler, data_loader_train, data_loader_val)
-
-
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-
     accelerator.print(f'number of params: {n_parameters}')
 
     linear_scaled_lr = args.lr * args.batch_size * ic.utils.get_world_size() / 512.0
@@ -465,7 +462,6 @@ def main(args):
         #         }
         #     )
     
-
     criterion = LabelSmoothingCrossEntropy()
 
     if mixup_active:
@@ -510,20 +506,6 @@ def main(args):
             logger=logger,
             mixup_fn=mixup_fn,
         )
-        # train_stats = train_one_epoch(
-        #     model=model, 
-        #     criterion=criterion, 
-        #     data_loader=data_loader_train,
-        #     optimizer=optimizer, 
-        #     epoch=epoch, 
-        #     mixup_fn=mixup_fn,
-        #     loss_scaler=loss_scaler,
-        #     set_training_mode=True,  # keep in eval mode during finetuning
-        #     logger=logger, 
-        #     target_flops=args.target_flops,
-        #     warm_up=args.warmup_compression_rate
-        # )
-
         # if accelerator.is_main_process:
             # wandb.log(train_stats)
 

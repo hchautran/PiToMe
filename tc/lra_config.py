@@ -99,6 +99,7 @@ def get_text_classification_config(num_labels=2):
     config.learning_rate = 0.05
     config.weight_decay = 1e-1
     config.warmup_steps = 8000
+    config.lr_scheduler = create_learning_rate_scheduler("constant * linear_warmup * cosine_decay", config)
     config.tokenizer = ascii_tokenizer
     config.tied_weights = False
     config.max_length = 1000

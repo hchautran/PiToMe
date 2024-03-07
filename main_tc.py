@@ -39,8 +39,7 @@ accelerator = Accelerator(
     mixed_precision='fp16',
     gradient_accumulation_steps=4
 )
-
-
+from tc.engine import Engine
 
 
 def transformers_collator(batch, tokenizer):
@@ -96,37 +95,6 @@ def prepare_distil_model(model_ckt, compress_method='none', ratio=1.0):
 
 
 
-def train(model, config, dataset ,use_deepspeed):
-    dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=transformers_collator)
-    lr = config.learning_rate
-    wd = config.weight_decay
- 
-    
-    optimizer = Adam(model.parameters(), lr=lr, weight_decay=wd)
-    scheduler_fn = config.lr_scheduler
-    scheduler = scheduler_fn(optimizer)
-    
-    if use_deepspeed:
-            optimizer, dataloader, scheduler= accelerator.prepare(optimizer, dataloader, scheduler)
-    
-    # train model
-    model.train()
-    avg_loss = None
-    avg_acc = None
-    pbar = tqdm(cycle(dataloader), total=max_train_steps)
-    for i, (inputs, target) in enumerate(pbar):
-        accelerator.free_memory()
-        optimizer.zero_grad()
-        outputs = model(**inputs)
-        loss = F.cross_entropy(outputs.logits, target)
-        accelerator.backward(loss)
-        optimizer.step()
-        cur_loss = loss.item()
-        cur_acc = accuracy_score(outputs.logits, target)
-        avg_loss = cur_loss if avg_loss is None else avg_factor * avg_loss + (1-avg_factor) * cur_loss  
-        avg_acc = cur_acc if avg_acc is None else avg_factor * avg_acc + (1-avg_factor) * cur_acc
-        pbar.set_postfix_str(f"loss: {avg_loss:.2f} accuracy: {avg_acc:.2f}")
-
 
 def eval(model, eval_dataset, tokenizer,batch_size=4):
     model.eval()
@@ -181,47 +149,31 @@ if __name__ == "__main__":
     avg_factor = 0.95
     task_name = args.task
 
-    for method in [
-        # PITOME,
-        TOME, 
-        # 'dct', 
-        # NONE,
+
+    for model_ckt in [
+        DISTILBERT_BASE, 
+        BERT_BASE 
     ]:
-        for model_ckt in [
-            DISTILBERT_BASE, 
-            # BERT_BASE 
+        engine = Engine(
+            task_name=task_name,
+            model_ckt=model_ckt,
+            ratio=1.0,
+            algo=None,
+            batch_size=256,
+            enable_log=False
+        )
+        for algo in [
+            PITOME,
+            TOME, 
+            # 'dct', 
+            # NONE,
         ]:
-            wandb.init(
-                name=f'{method}_{model_ckt}',
-                project='tc_off_the_shell',
-                config={
-                    'algo': method, 
-                    'model': model_ckt, 
-                    },
-                reinit=True
-            )
+            engine.prepare_model(model_ckt, algo)
+        
             for ratio in [0.505,0.525, 0.55, 0.6, 0.625, .65, .7]:
-                 
-                    if model_ckt == BERT_BASE:
-                        model, tokenizer = prepare_bert_model(
-                            model_ft_dict[model_ckt], 
-                            compress_method=method,
-                            ratio=ratio
-                        )
-                    else:
-                        model, tokenizer = prepare_distil_model(
-                            model_ft_dict[model_ckt], 
-                            compress_method=method,
-                            ratio=ratio
-                        )
-
-                    task = TASKS[task_name]
-                    config, model_config = task.config_getter()    
-                    config.tokenizer = tokenizer
-
-                    dataset = task.dataset_fn(config, split='train')
-                    eval_dataset = task.dataset_fn(config, split='eval')    
-                    max_train_steps = int(np.ceil(config.total_train_samples / batch_size))
-
-                    res = eval(model, eval_dataset, tokenizer ,batch_size=64)
-                    wandb.log(res)
+                engine.set_ratio(ratio)
+                # engine.evaluate()
+                engine.train(num_epochs=10)
+                
+                    
+                

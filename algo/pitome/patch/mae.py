@@ -52,10 +52,9 @@ def make_pitome_class(transformer_class):
             x = torch.cat((cls_tokens, x), dim=1)
             x = x + self.pos_embed
             x = self.pos_drop(x)
-            pos_embed = self.pos_embed.expand(x.shape)
 
             for blk in self.blocks:
-                x, pos_embed = blk(x, pos_embed)
+                x = blk(x)
                 self.total_flop += self.calculate_block_flop(x.shape) 
 
             if self.global_pool:
@@ -128,7 +127,7 @@ def apply_patch(
     current_layer = 0
     num_layers = len(model.blocks)
     # margins = [0.9- 0.9*(i/num_layers) for i in range(num_layers)]
-    margins = [.8 - 0.8*(i/num_layers) for i in range(num_layers)]
+    margins = [.9 - 0.9*(i/num_layers) for i in range(num_layers)]
     print(margins)
 
     if hasattr(model, "dist_token") and model.dist_token is not None:

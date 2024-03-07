@@ -107,7 +107,6 @@ def pitome_vision(
     if class_token:
         # return merge, torch.cat([torch.ones(B, 1).to(metric.device), isolation_score], dim=-1)[..., None]
         return merge, None 
-    # return merge, isolation_score[..., None] 
     return merge, None 
 
 def pitome_text(
