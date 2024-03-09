@@ -2,9 +2,10 @@ import argparse
 from dotenv import load_dotenv
 import os
 import torch
-from consts import DATA_PATH
+# from consts import DATA_PATH
 
-torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
+DATA_PATH = '/media/caduser/MyBook/chau'
+torch.hub.set_dir(f'{DATA_PATH}/.cache')
 
 def add_flags_from_config(parser, config_dict):
     """

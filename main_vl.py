@@ -93,9 +93,9 @@ def get_diffrate_model(model, args):
 
 def get_tofu_model(model, args):
     if 'blip2' in args.model:
-        DiffRate.patch.blip2(model.visual_encoder, prune_granularity=args.granularity, merge_granularity=args.granularity)
+        tofu.patch.blip2(model.visual_encoder, prune_granularity=args.granularity, merge_granularity=args.granularity)
     elif 'blip' in args.model:
-        DiffRate.patch.blip(model.visual_encoder, prune_granularity=args.granularity, merge_granularity=args.granularity)
+        tofu.patch.blip(model.visual_encoder, prune_granularity=args.granularity, merge_granularity=args.granularity)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
     if args.use_k:
@@ -114,6 +114,7 @@ def parse_args():
     parser.add_argument("--use_k", default=False)
     parser.add_argument("--ratio", default=0.9, type=float)
     parser.add_argument("--reduced_token", default=12, type=int)
+    parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
     parser.add_argument(
         "--options",
         nargs="+",
@@ -161,7 +162,6 @@ def main():
     datasets = task.build_datasets(cfg)
     model = task.build_model(cfg)
 
-
     if args.algo == TOME:
         get_tome_model(model, args)
     elif args.algo == PITOME:
@@ -177,10 +177,14 @@ def main():
     runner = RunnerBase(
         cfg=cfg, job_id=job_id, task=task, model=model, datasets=datasets
     )
-    metrics = runner.evaluate(skip_reload=True)['test']
+    # metrics = runner.evaluate(skip_reload=True)['test']
+    if args.eval:
+        metrics = runner.evaluate(skip_reload=True)['test']
+        if metrics is not None:
+            print('r_sum', metrics['txt_r10'] + metrics['txt_r5'] + metrics['txt_r1'] + metrics['img_r10'] + metrics['img_r5'] + metrics['img_r1'])
+    else:
+        runner.train()
     print('gflops', model.visual_encoder.total_flop/1e9)
-    if metrics is not None:
-        print('r_sum', metrics['txt_r10'] + metrics['txt_r5'] + metrics['txt_r1'] + metrics['img_r10'] + metrics['img_r5'] + metrics['img_r1'])
 
 
 if __name__ == "__main__":
