@@ -43,13 +43,13 @@ class PiToMeBlock(Block):
         if self.gamma_1 is None:
             x_attn, metric, attn = self.attn(self.norm1(x), attn_size, rel_pos_bias=rel_pos_bias)
             x = x + self.drop_path(x_attn)
-            x = self.compress_x(metric, x)
             x = x + self.drop_path(self.mlp(self.norm2(x)))
+            x = self.compress_x(x,x)
         else:
             x_attn, metric, attn = self.attn(self.norm1(x), attn_size, rel_pos_bias=rel_pos_bias)
             x = x + self.drop_path(x_attn)
-            x = self.compress_x(metric,x)
             x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))
+            x = self.compress_x(x,x)
         return x
 
 class PiToMeAttention(Attention):
@@ -101,7 +101,7 @@ def make_pitome_class(transformer_class):
         - Initialize r, token size, and token sources.
         """
 
-        def forward(self, x, return_flop=True) -> torch.Tensor:
+        def forward(self, x) -> torch.Tensor:
       
             self._tome_info["r"] = [self.r]* len(self.blocks) 
             self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
@@ -110,10 +110,7 @@ def make_pitome_class(transformer_class):
             self.total_flop = 0
 
             x = super().forward(x)
-            if return_flop:
-                return x, self.total_flop
-            else:
-                return x
+            return x
                 
         def forward_features(self, x):
             x = self.patch_embed(x)
@@ -171,15 +168,14 @@ def apply_patch(
         "size": None,
         "source": None,
         "trace_source": trace_source,
-        "prop_attn": prop_attn,
-        "class_token": model.cls_token is not None,
+        "prop_attn": False,
+        "class_token": False,
         "distill_token": False,
     }
     current_layer = 0
     margin = margin 
     num_layers = len(model.blocks)
-    # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
-    margins = [.9 - 1.9*(i/num_layers) for i in range(num_layers)]
+    margins = [.9 - .9*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tome_info["distill_token"] = True

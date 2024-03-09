@@ -112,7 +112,7 @@ def make_pitome_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 x = blk(x, register_blk == i)
-                self.total_flop = self.calculate_block_flop(x.shape)
+                self.total_flop += self.calculate_block_flop(x.shape)
             x = self.norm(x)
             return x
 

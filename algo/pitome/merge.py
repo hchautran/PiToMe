@@ -57,8 +57,8 @@ def pitome_vision(
     with torch.no_grad():
         if class_token:
             metric=metric[:,1:,:]
-        B,T,C = metric.shape
 
+        B,T,C = metric.shape
         if r > 0:
             r = min(r, T // 2)
         elif ratio < 1.0:
@@ -76,8 +76,7 @@ def pitome_vision(
         else:
             # print('got here')
             batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
-            sim = F.elu((metric@metric.transpose(-1,-2) - 0.45)/0.1) 
-            # sim = F.elu(25 - torch.cdist(metric, metric), alpha=margin) 
+            sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.1) 
             isolation_score = sim.sum(dim=-1) 
             indices =  torch.argsort(isolation_score, descending=True)
             merge_idx = indices[..., :2*r]
@@ -101,12 +100,7 @@ def pitome_vision(
             return torch.cat([x_cls, protected, dst], dim=1)
         else:
             return torch.cat([protected, dst], dim=1)
-
-
     isolation_score = 1 - F.softmax(isolation_score, dim=-1) 
-    if class_token:
-        # return merge, torch.cat([torch.ones(B, 1).to(metric.device), isolation_score], dim=-1)[..., None]
-        return merge, None 
     return merge, None 
 
 def pitome_text(

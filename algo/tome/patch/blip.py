@@ -80,7 +80,7 @@ class ToMeAttention(Attention):
         x = self.proj_drop(x)
         return x, k.mean(1), attn
 
-def make_pitome_class(transformer_class):
+def make_tome_class(transformer_class):
     class ToMeVisionTransformer(transformer_class):
         """
         Modifications:
@@ -108,7 +108,7 @@ def make_pitome_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 x = blk(x, register_blk == i)
-                self.total_flop = self.calculate_block_flop(x.shape)
+                self.total_flop += self.calculate_block_flop(x.shape)
             x = self.norm(x)
             return x
 
@@ -136,8 +136,8 @@ def apply_patch(
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    ToMeVisionTransformer = make_pitome_class(model.__class__)
-    print('using', 'pitome')
+    ToMeVisionTransformer = make_tome_class(model.__class__)
+    print('using', 'tome')
 
     model.__class__ = ToMeVisionTransformer
     model.ratio = 1.0 
