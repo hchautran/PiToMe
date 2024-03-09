@@ -4,9 +4,9 @@ import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 from copy import copy
 
-from ..merge import bipartite_soft_matching, merge_source, merge_wavg, pitome
+from ..merge import bipartite_soft_matching, merge_source, merge_wavg
 from ..utils import parse_r
-from .timm import ToMeBlock, ToMeBlockUsingRatio, ToMeAttention 
+from .timm import LTPMBlock, LTPMAttention 
 
 def make_tome_class(transformer_class):
     class ToMeVisionTransformer(transformer_class):

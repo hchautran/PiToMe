@@ -8,6 +8,7 @@ from itr.utils.data_utils import  get_loaders
 from lavis.models import load_model_and_preprocess
 from transformers import CLIPTokenizerFast, CLIPImageProcessor, CLIPModel
 from itr.config import parser
+import lavis
 import pandas as pd
 from itr.config import (
     COCO_PATH, 

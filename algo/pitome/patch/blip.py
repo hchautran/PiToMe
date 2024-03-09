@@ -13,7 +13,7 @@ class PiToMeBlock(Block):
         self.margin = margin
     
     def compress_x(self, metric, x):
-        ratio = self._tome_info["ratio"].pop(0)
+        ratio = self._tome_info["ratio"].pop()
         if ratio < 1.0:
             merge, isolated_score = pitome_vision(
                 ratio=ratio,
@@ -35,12 +35,18 @@ class PiToMeBlock(Block):
         return x
 
     def forward(self, x, register_hook=False):
-        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        x_attn, metric, attn = self.attn(self.norm1(x), register_hook=register_hook)
-        x = x + self.drop_path(x_attn)
-        x = self.compress_x(metric, x) 
+        # attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
+        # x_attn, metric, attn = self.attn(self.norm1(x), register_hook=register_hook)
+        # x = x + self.drop_path(x_attn)
+        # x = self.compress_x(metric, x) 
+        # x = x + self.drop_path(self.mlp(self.norm2(x)))
+        # return x
+        x = x + self.drop_path(self.attn(self.norm1(x), register_hook=register_hook))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
+        x = self.compress_x(x, x) 
+        # print(x.shape)
         return x
+
 
 
 
@@ -85,7 +91,7 @@ def make_pitome_class(transformer_class):
         - Initialize r, token size, and token sources.
         """
 
-        def forward(self, x, register_blk=-1, return_flop=True) -> torch.Tensor:
+        def forward_features(self, x, register_blk=-1) -> torch.Tensor:
       
             self._tome_info["r"] = [self.r]* len(self.blocks) 
             self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
@@ -108,11 +114,7 @@ def make_pitome_class(transformer_class):
                 x = blk(x, register_blk == i)
                 self.total_flop = self.calculate_block_flop(x.shape)
             x = self.norm(x)
-
-            if return_flop:
-                return x, self.total_flop
-            else:
-                return x
+            return x
 
 
         def calculate_block_flop(self, shape):
@@ -172,5 +174,5 @@ def apply_patch(
             module.init_margin(margins[current_layer])
             module._tome_info = model._tome_info
             current_layer +=1
-        elif isinstance(module, Attention):
-            module.__class__ = PiToMeAttention
+        # elif isinstance(module, Attention):
+        #     module.__class__ = PiToMeAttention

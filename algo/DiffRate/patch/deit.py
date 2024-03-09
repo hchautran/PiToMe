@@ -16,10 +16,10 @@ from timm.models.vision_transformer import Attention, Block, VisionTransformer
 import torch.nn as nn
 
 # import DiffRate.ddp as ddp
-from DiffRate.ddp import DiffRate
-from DiffRate.merge import get_merge_func
+from ..ddp import DiffRate
+from ..merge import get_merge_func
 
-from DiffRate.utils import ste_min
+from ..utils import ste_min
 
 
 

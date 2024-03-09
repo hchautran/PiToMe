@@ -144,7 +144,7 @@ if __name__ == "__main__":
                         help="choose an LRA dataset from available options")
     parser.add_argument("--algo", default=PITOME, choices=[PITOME, TOME, NONE, TOFU, DCT],
                         help="choose an LRA dataset from available options")
-    parser.add_argument("--ratio", default=0.505,
+    parser.add_argument("--ratio", default=0.55,
                         help="remain ratio")
     args = parser.parse_args()
     args = parser.parse_args()
@@ -155,8 +155,8 @@ if __name__ == "__main__":
 
 
     for model_ckt in [
-        BERT_BASE,
-        # DISTILBERT_BASE, 
+        # BERT_BASE,
+        DISTILBERT_BASE, 
     ]:
         engine = Engine(
             task_name=task_name,
@@ -166,7 +166,7 @@ if __name__ == "__main__":
             batch_size=64,
             enable_log=False
         )
-        engine.train(num_epochs=1)
+        engine.train(num_epochs=2)
                 
                     
                 

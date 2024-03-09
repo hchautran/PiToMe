@@ -16,7 +16,7 @@ from timm.models.vision_transformer import Attention, Block, VisionTransformer
 
 from .deit import DiffRateBlock, DiffRateAttention
 
-from DiffRate.utils import ste_min
+from ..utils import ste_min
 
 
 

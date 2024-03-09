@@ -4,7 +4,7 @@ Differentiable Discrte Proxy
 
 import torch.nn as nn
 import torch
-from DiffRate.utils import ste_ceil
+from .utils import ste_ceil
 
 
     

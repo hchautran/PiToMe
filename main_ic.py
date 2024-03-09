@@ -377,13 +377,7 @@ def main(args):
         drop_path_rate=args.drop_path,
         drop_block_rate=None,
     )
-    # model = get_lora_timm(model, target_modules=[
-    #    'qkv', 
-    #    'head', 
-    #    'proj', 
-    #    'fc1', 
-    #    'fc2', 
-    # ])
+
             
     if args.finetune:
         if args.finetune.startswith('https'):

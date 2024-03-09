@@ -151,6 +151,7 @@ class Engine:
 
         self.model.distilbert.transformer.ratio = self.ratio 
         self.tokenizer = AutoTokenizer.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
+        self.model = self.accelerator.prepare(self.model)
     
 
     def set_ratio(self, ratio):
