@@ -10,6 +10,8 @@ from .aug import apply_patch as aug
 from .mae  import apply_patch as mae
 from .bert import apply_patch as bert 
 from .bart import apply_patch as bart 
+from .blip import apply_patch as blip 
+
 from .distilbert import apply_patch as distilbert 
 
-__all__ = ["deit", "swag", "mae", "aug", "bert", "distilbert", "bart"]
+__all__ = ["deit", "swag", "mae", "aug", "bert", "distilbert", "bart","blip"]

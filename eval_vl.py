@@ -46,15 +46,20 @@ from algo import (
 def get_tome_model(model, args):
     if 'blip2' in args.model:
         tome.patch.blip2(model.visual_encoder,use_k=args.use_k)
-        model.ratio=float(args.ratio)
+        model.visual_encoder.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
     elif 'blip' in args.model:
         tome.patch.blip(model.visual_encoder,use_k=args.use_k)
-        model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
+        tome.patch.blip(model.visual_encoder_m,use_k=args.use_k)
+        model.visual_encoder.ratio=float(args.ratio)
+        model.visual_encoder_m.ratio=float(args.ratio)
+        model.visual_encoder.r=int(args.reduced_token)
+        model.visual_encoder_m.r=int(args.reduced_token)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
-    
+
+
+
 
 def get_pitome_model(model, args):
     if 'blip2' in args.model:
@@ -141,10 +146,11 @@ def main():
     task = tasks.setup_task(cfg)
     datasets = task.build_datasets(cfg)
     model = task.build_model(cfg)
+    # cfg.algo= PITOME
     cfg.algo= PITOME
     cfg.model = 'blip' 
     cfg.use_k  = False 
-    cfg.ratio = 0.9 
+    cfg.ratio = 0.925 
     cfg.reduced_token = 13 
 
     if cfg.algo == TOME:
@@ -156,7 +162,6 @@ def main():
     else:
         get_tome_model(model, cfg)
 
-    print(model)
 
     runner = RunnerBase(
         cfg=cfg, job_id=job_id, task=task, model=model, datasets=datasets

@@ -1,11 +1,11 @@
-from model.compressedModel import CompressedLAVISLIPWithQueue 
+from itr.model.compressedModel import CompressedLAVISLIPWithQueue 
 from lavis.datasets.builders import load_dataset
-from trainer_queue import MyTrainer as LavisTrainer 
-from trainer import MyTrainer as Blip2Trainer 
-from utils.data_utils import  get_loaders
+from itr.trainer_queue import MyTrainer as LavisTrainer 
+from itr.trainer import MyTrainer as Blip2Trainer 
+from itr.utils.data_utils import  get_loaders
 from lavis.models import load_model_and_preprocess
-from config import parser
-from config import LAVIS_BLIP_BASE_FLICKR, LAVIS_BLIP_BASE_COCO, COCO, FLICKR, DATA_PATH
+from itr.config import parser
+from itr.config import LAVIS_BLIP_BASE_FLICKR, LAVIS_BLIP_BASE_COCO, COCO, FLICKR, DATA_PATH
 from dotenv import load_dotenv
 import os
 import torch

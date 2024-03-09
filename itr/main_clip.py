@@ -3,16 +3,15 @@ from transformers import (
     CLIPProcessor,
 )
 from lavis.datasets.builders import load_dataset
-from model.compressedModel import CompressedHFWithQueue
+from itr.model.compressedModel import CompressedHFWithQueue
 from transformers import CLIPProcessor, BlipProcessor
-from trainer_queue import MyTrainer 
-from utils.data_utils import get_loaders 
+from itr.trainer_queue import MyTrainer 
+from itr.utils.data_utils import get_loaders 
 
 
 if __name__ == "__main__":
-    from config import parser
-    from config import EUCLID, LORENTZ
-    from config import COCO_PATH, FLICKR_PATH, CLIP_LARGE_PATCH_14, CLIP_BASE_PATCH_16, BLIP_BASE_FLICKR, FLICKR, COCO
+    from itr.config import parser
+    from itr.config import COCO_PATH, FLICKR_PATH, CLIP_LARGE_PATCH_14, CLIP_BASE_PATCH_16, BLIP_BASE_FLICKR, FLICKR, COCO
     config = parser.parse_args()
     for dataset in [COCO]:
         config.dataset = dataset

@@ -1,19 +1,17 @@
-from model.compressedModel import CompressedLAVISBLIP2WithQueue 
+from itr.model.compressedModel import CompressedLAVISBLIP2WithQueue 
 from lavis.datasets.builders import load_dataset
-from trainer_queue import MyTrainer as LavisTrainer 
-from trainer import MyTrainer as Blip2Trainer 
-from utils.data_utils import  get_loaders
+from itr.trainer import MyTrainer as Blip2Trainer 
+from itr.utils.data_utils import  get_loaders
 from lavis.models import load_model_and_preprocess
 
 if __name__ == "__main__":
-    from config import parser
-    from config import FLICKR_PATH, COCO_PATH, COCO, FLICKR
+    from itr.config import parser
+    from itr.config import FLICKR_PATH, COCO_PATH, COCO, FLICKR
     config = parser.parse_args()
     for dataset in [COCO]:
         config.dataset =dataset
 
         model, vis_processors, txt_processors = load_model_and_preprocess("blip2", "coco", is_eval=False, device="cuda")
-        # tokenizer = model.tokenizer
         config.model_ckt = 'blip2' 
         if "flickr" in config.dataset:
             dataset = load_dataset("flickr30k", vis_path=FLICKR_PATH, cfg_path=None)
