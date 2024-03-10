@@ -81,7 +81,6 @@ def apply_patch(
     
     # model.compress_method = 'tome' 
     model._tome_info = {
-        "r": model.r,
         "ratio": model.ratio,
         "margin":  [],
         "size": None,
@@ -98,7 +97,7 @@ def apply_patch(
     for module in model.modules():
 
         if isinstance(module, Block):
-            module.__class__ = ToMeBlock if use_k  else ToMeBlockUsingRatio
+            module.__class__ = ToMeBlockUsingRatio
             module._tome_info = model._tome_info
         elif isinstance(module, Attention):
             module.__class__ = ToMeAttention

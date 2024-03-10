@@ -71,11 +71,8 @@ def bipartite_soft_matching(
         unm_len = unm_idx.shape[1]
         unm, dst = x[..., :unm_len, :], x[..., unm_len:, :]
         n, _, c = unm.shape
-
         src = dst.gather(dim=-2, index=dst_idx.expand(n, r, c))
-
         out = torch.zeros(n, metric.shape[1], c, device=x.device, dtype=x.dtype)
-
         out[..., 1::2, :] = dst
         out.scatter_(dim=-2, index=(2 * unm_idx).expand(n, unm_len, c), src=unm)
         out.scatter_(dim=-2, index=(2 * src_idx).expand(n, r, c), src=src)

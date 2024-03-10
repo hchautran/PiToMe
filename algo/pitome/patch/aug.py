@@ -17,6 +17,7 @@ from timm.models.vision_transformer import Attention, Block, VisionTransformer
 from .timm import PiToMeAttention, PiToMeBlock, PiToMeBlockUsingRatio
 
 
+
 def make_pitome_class(transformer_class):
     class PiToMeVisionTransformer(transformer_class):
         """
@@ -25,7 +26,6 @@ def make_pitome_class(transformer_class):
         """
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
-      
             self._tome_info["r"] = [self.r]* len(self.blocks) 
             self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
             self._tome_info["size"] = None
@@ -103,14 +103,15 @@ def apply_patch(
     margin = margin 
     num_layers = len(model.blocks)
     # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
-    margins = [0.9 - 0.9*(i/num_layers) for i in range(num_layers)]
+    margins = [.9 - .9*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tome_info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, Block):
-            module.__class__ = PiToMeBlock if use_k else PiToMeBlockUsingRatio 
+            # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
+            module.__class__ = PiToMeBlockUsingRatio 
             module.init_margin(margins[current_layer])
             module._tome_info = model._tome_info
             current_layer +=1

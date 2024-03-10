@@ -76,8 +76,8 @@ def process_image(batch, transform):
     return images_tensor, labels_tensor
 
 def get_args_parser():
-    parser = argparse.ArgumentParser('Diffrate training and evaluation script', add_help=False)
-    parser.add_argument('--use_k', type=bool)
+    parser = argparse.ArgumentParser('ic training and evaluation script', add_help=False)
+    parser.add_argument('--use_k', default=False, type=bool)
     parser.add_argument('--batch-size', default=100, type=int)
     parser.add_argument('--epochs', default=10, type=int)
     parser.add_argument('--ratio', default=0.9125, type=float)
@@ -253,6 +253,11 @@ def get_tome_model(model, args):
         algo.tome.patch.mae(model,use_k=args.use_k)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
+    elif 'vit' in args.model:
+        algo.tome.patch.aug(model,use_k=args.use_k)
+        model.ratio=float(args.ratio)
+        model.r=int(args.reduced_token)
+
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
     
@@ -264,6 +269,10 @@ def get_pitome_model(model, args):
         model.r=int(args.reduced_token)
     elif 'mae' in args.model:
         algo.pitome.patch.mae(model,use_k=args.use_k)
+        model.ratio=float(args.ratio)
+        model.r=int(args.reduced_token)
+    elif 'vit' in args.model:
+        algo.pitome.patch.aug(model,use_k=args.use_k)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
     else:
@@ -414,10 +423,6 @@ def main(args):
         checkpoint_model['pos_embed'] = new_pos_embed
         model.load_state_dict(checkpoint_model, strict=False)
 
-    args.use_k = False
-    args.ratio = 0.925
-    # args.reduced_token = 11 
-    print(args)
     if args.algo == TOME:
         get_tome_model(model, args)
     elif args.algo == PITOME:

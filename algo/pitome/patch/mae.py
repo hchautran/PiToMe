@@ -13,8 +13,6 @@
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 from copy import copy
-
-
 from .timm import PiToMeBlock, PiToMeAttention, PiToMeBlockUsingRatio
 import torch.nn as nn
 
@@ -44,9 +42,9 @@ def make_pitome_class(transformer_class):
         def forward_features(self, x: torch.Tensor) -> torch.Tensor:
             # From the MAE implementation
             B = x.shape[0]
-            x = self.patch_embed(x)
-
             T = x.shape[1]
+
+            x = self.patch_embed(x)
 
             cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
             x = torch.cat((cls_tokens, x), dim=1)
@@ -120,7 +118,7 @@ def apply_patch(
         "size": None,
         "source": None,
         "trace_source": trace_source,
-        "prop_attn": prop_attn,
+        "prop_attn": False,
         "class_token": model.cls_token is not None,
         "distill_token": False,
     }

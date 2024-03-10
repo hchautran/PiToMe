@@ -14,7 +14,7 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 from transformers.models.distilbert.modeling_distilbert import Transformer, TransformerBlock, MultiHeadSelfAttention, apply_chunking_to_forward
-from ..merge import merge_source, bipartite_soft_matching,  merge_wavg, merge_attention_mask
+from ..merge import bipartite_soft_matching,  merge_wavg, merge_attention_mask
 from typing import Optional, Union 
 import math
 from transformers.modeling_utils import ModuleUtilsMixin 

@@ -13,8 +13,8 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
-from timm.models.vision_transformer import Attention, Block, VisionTransformer
-from ..merge import merge_source, pitome_vision, prune, merge_mean, merge_wavg
+from timm.models.vision_transformer import Attention, Block
+from ..merge import merge_source, pitome_vision, merge_wavg
 
 
 
@@ -37,14 +37,15 @@ class PiToMeBlockUsingRatio(Block):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
 
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
+        x_attn, metric = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
+
+        # print(x.shape)
         ratio = self._tome_info["ratio"].pop(0)
         if ratio < 1.0:
             merge, isolated_score = pitome_vision(
                 ratio=ratio,
-                attn=None,
                 metric=x,
                 margin=self.margin,
                 class_token=self._tome_info["class_token"]
@@ -84,7 +85,7 @@ class PiToMeBlock(Block):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         r = self._tome_info["r"].pop(0)
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
+        x_attn, metric = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
         if r > 0:
@@ -152,5 +153,5 @@ class PiToMeAttention(Attention):
         x = self.proj_drop(x)
         # print(attn.shape)
 
-        return x, k.sum(1), attn.mean(1)[...,1:, 1:].mean(1).squeeze()
+        return x, k.mean(1)
 

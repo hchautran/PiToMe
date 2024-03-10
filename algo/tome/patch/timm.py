@@ -79,7 +79,7 @@ class ToMeBlockUsingRatio(Block):
         if ratio < 1.0:
             # Apply ToMe here
             merge, _ = bipartite_soft_matching(
-                metric,
+                metric=x,
                 ratio=ratio,
                 class_token=self._tome_info["class_token"],
                 distill_token=self._tome_info["distill_token"],
