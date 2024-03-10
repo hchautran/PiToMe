@@ -9,6 +9,7 @@ import math
 from typing import Callable, Tuple
 import torch
 import torch.nn.functional as F
+from geoopt import Lorentz
 
 
 def do_nothing(x, mode=None):
@@ -67,6 +68,7 @@ def pitome_vision(
             return do_nothing, do_nothing
         metric = F.normalize(metric, p=2, dim=-1) 
 
+
     with torch.no_grad():
         if margin >= 0.45:
             a, b = metric[..., ::2, :], metric[..., 1::2, :]
@@ -74,10 +76,10 @@ def pitome_vision(
             node_max, node_idx = scores.max(dim=-1)
             return get_bsm_merge(node_max=node_max, node_idx=node_idx, r=r, class_token=class_token)
         else:
-            # print('got here')
             batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
-            sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.1) 
-            isolation_score = sim.sum(dim=-1) 
+            sim = metric@metric.transpose(-1,-2) - torch.eye(T)[None,...].to(metric.device)
+            sim = F.elu((sim - 0.25)/0.1) 
+            isolation_score = sim.mean(dim=-1) 
             indices =  torch.argsort(isolation_score, descending=True)
             merge_idx = indices[..., :2*r]
             protected_idx = indices[..., 2*r:]
@@ -100,7 +102,7 @@ def pitome_vision(
             return torch.cat([x_cls, protected, dst], dim=1)
         else:
             return torch.cat([protected, dst], dim=1)
-    isolation_score = 1 - F.softmax(isolation_score, dim=-1) 
+
     return merge, None 
 
 def pitome_text(

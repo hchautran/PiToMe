@@ -39,59 +39,16 @@ class PiToMeBlock(Block):
 
 
     def forward(self, x, rel_pos_bias=None):
-        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
         if self.gamma_1 is None:
-            x_attn, metric, attn = self.attn(self.norm1(x), attn_size, rel_pos_bias=rel_pos_bias)
+            x_attn = self.attn(self.norm1(x), rel_pos_bias=rel_pos_bias)
             x = x + self.drop_path(x_attn)
             x = x + self.drop_path(self.mlp(self.norm2(x)))
-            x = self.compress_x(x,x)
         else:
-            x_attn, metric, attn = self.attn(self.norm1(x), attn_size, rel_pos_bias=rel_pos_bias)
+            x_attn = self.attn(self.norm1(x), rel_pos_bias=rel_pos_bias)
             x = x + self.drop_path(x_attn)
             x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))
-            x = self.compress_x(x,x)
+        x = self.compress_x(x,x)
         return x
-
-class PiToMeAttention(Attention):
-    """
-    Modifications:
-     - Apply proportional attention
-     - Return the mean of k over heads from attention
-    """
-
-    def forward(self, x:torch.Tensor, isolation_score: torch.Tensor = None, rel_pos_bias=None):
-        B, N, C = x.shape
-        qkv_bias = None
-        if self.q_bias is not None:
-            qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
-        # qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
-        qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
-
-        q = q * self.scale
-        attn = (q @ k.transpose(-2, -1))
-        if isolation_score is not None:
-            attn = attn +  isolation_score.log()[:, None, None, :, 0]
-
-        if self.relative_position_bias_table is not None:
-            relative_position_bias = \
-                self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
-                    self.window_size[0] * self.window_size[1] + 1,
-                    self.window_size[0] * self.window_size[1] + 1, -1)  # Wh*Ww,Wh*Ww,nH
-            relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
-            attn = attn + relative_position_bias.unsqueeze(0)
-
-        if rel_pos_bias is not None:
-            attn = attn + rel_pos_bias
-        
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, N, -1)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x, k.mean(1), attn
 
 
 def make_pitome_class(transformer_class):
@@ -175,7 +132,7 @@ def apply_patch(
     current_layer = 0
     margin = margin 
     num_layers = len(model.blocks)
-    margins = [.9 - .9*(i/num_layers) for i in range(num_layers)]
+    margins = [.75 - 0.5*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tome_info["distill_token"] = True
@@ -187,5 +144,5 @@ def apply_patch(
             module.init_margin(margins[current_layer])
             module._tome_info = model._tome_info
             current_layer +=1
-        elif isinstance(module, Attention):
-            module.__class__ = PiToMeAttention
+        # elif isinstance(module, Attention):
+        #     module.__class__ = PiToMeAttention
