@@ -430,6 +430,7 @@ def main(args):
     elif args.algo == DIFFRATE:
         get_diffrate_model(model, args)
     else:
+        args.ratio = 1.0
         get_tome_model(model, args)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,weight_decay=0)
