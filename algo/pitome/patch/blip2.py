@@ -15,7 +15,7 @@ class PiToMeBlock(Block):
         self.margin = margin
     
     def compress_x(self, metric, x):
-        ratio = self._tome_info["ratio"].pop(0)
+        ratio = self._tome_info["ratio"]
         if ratio < 1.0:
             merge, isolated_score = pitome_vision(
                 ratio=ratio,
@@ -29,12 +29,15 @@ class PiToMeBlock(Block):
                     merge, x, self._tome_info["source"]
                 )
 
-            if isolated_score is not None and self._tome_info["size"] is not None:
-                weight = self._tome_info["size"] + isolated_score
-                x, self._tome_info["size"] = merge_wavg(merge, x, weight)
-            else:
-                weight = self._tome_info["size"] 
-                x, self._tome_info["size"] = merge_wavg(merge, x, weight)
+            # if isolated_score is not None and self._tome_info["size"] is not None:
+            #     weight = self._tome_info["size"] + isolated_score
+            #     x, self._tome_info["size"] = merge_wavg(merge, x, weight)
+            # else:
+            weight = self._tome_info["size"] 
+            # print(x.shape)
+            # print(weight.shape)
+            x, self._tome_info["size"] = merge_wavg(merge, x, weight )
+            # print(x.shape)
         return x
 
 
@@ -61,7 +64,7 @@ def make_pitome_class(transformer_class):
         def forward(self, x) -> torch.Tensor:
       
             self._tome_info["r"] = [self.r]* len(self.blocks) 
-            self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._tome_info["ratio"] = self.ratio
             self._tome_info["size"] = None
             self._tome_info["source"] = None
             self.total_flop = 0
