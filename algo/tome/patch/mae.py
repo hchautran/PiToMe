@@ -51,8 +51,8 @@ def make_tome_class(transformer_class):
             x = self.pos_drop(x)
 
             for blk in self.blocks:
-                x = blk(x)
                 self.total_flop += self.calculate_block_flop(x.shape) 
+                x = blk(x)
 
             if self.global_pool:
                 # ---- ToMe changes this ----

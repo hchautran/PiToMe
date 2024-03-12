@@ -169,6 +169,7 @@ def make_dct_class(transformer_class):
             hidden_state = x
             flops = 0
             for i, layer_module in enumerate(self.layer):
+                flops += self.calculate_block_flop(hidden_state.shape)
                 if output_hidden_states:
                     all_hidden_states = all_hidden_states + (hidden_state,)
 
@@ -182,7 +183,6 @@ def make_dct_class(transformer_class):
                 # print('mask',attn_mask.shape)
                 # print('x',hidden_state.shape)
                     
-                flops += self.calculate_block_flop(hidden_state.shape)
 
 
             # Add last layer

@@ -80,9 +80,12 @@ def idct(X, norm=None):
 
 
 
-def dc_transform(x, ratio:float=None, k:int=None ):
+def dc_transform(x, ratio:float=None, k:int=None, class_token:bool=True ):
     # cufft doesn't accept fp16
     # dct along T dimension
+    if class_token:
+        x_cls = x[:,0,:].unsqueeze_(1)
+        x = x[:,1:,:]
     x = x.type(torch.float32).permute(1,0,2)
     x_dct = dct(x.transpose(0,2), norm='ortho').transpose(0,2)
     T, B, C = x_dct.size()
@@ -93,7 +96,10 @@ def dc_transform(x, ratio:float=None, k:int=None ):
     else:
         x_dct = x_dct[:T-k, :, :]
 
-    return idct(x_dct.transpose(0,2), norm='ortho').transpose(0,2).type(torch.half).permute(1,0,2), x_dct.permute(1,0,2)
+    x = idct(x_dct.transpose(0,2), norm='ortho').transpose(0,2).type(torch.half).permute(1,0,2)
+    
+    return torch.cat([x_cls, x], dim=1)
+    
 
 
 

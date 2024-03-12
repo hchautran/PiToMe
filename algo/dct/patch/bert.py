@@ -13,7 +13,7 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
-from transformers.models.bert.modeling_bert import BertLayer, BertEncoder, BertSelfAttention, BertAttention, apply_chunking_to_forward
+from transformers.models.bert.modeling_bert import BertLayer, BertEncoder, apply_chunking_to_forward
 from ..merge import dc_transform 
 from typing import Optional, Union 
 import math
@@ -47,8 +47,9 @@ class DCTBertLayer(BertLayer):
 
         if ratio < 1.0:
             merge, _ = dc_transform(
-                x=x
+                x=x,
                 ratio=ratio,
+                class_token=self._dct_info["class_token"],
             )
             attention_mask = torch.ones_like(x).to(x.device) 
 

@@ -108,8 +108,8 @@ def make_pitome_class(transformer_class):
             x = self.pos_drop(x)
 
             for i, blk in enumerate(self.blocks):
-                x = blk(x, register_blk == i)
                 self.total_flop += self.calculate_block_flop(x.shape)
+                x = blk(x, register_blk == i)
             x = self.norm(x)
             return x
 
@@ -133,8 +133,8 @@ def make_pitome_class(transformer_class):
             x = self.pos_drop(x)
 
             for i, blk in enumerate(self.blocks):
-                x = blk(x, register_blk == i)
                 self.total_flop += self.calculate_block_flop(x.shape)
+                x = blk(x, register_blk == i)
             x = self.norm(x)
             return x
 

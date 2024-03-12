@@ -40,6 +40,7 @@ from algo import (
     tome,
     DiffRate,
     tofu,
+    dct, 
     # ltmp
 )
 
@@ -62,9 +63,6 @@ def get_tome_model(model, args):
     else:
         raise ValueError("only support clip, blip and blip2 for image-text retrieval task")
 
-
-
-
 def get_pitome_model(model, args):
     if 'clip' in args.model:
         pitome.patch.clip(model.visual.transformer, use_k=args.use_k)
@@ -85,8 +83,6 @@ def get_pitome_model(model, args):
     else:
         raise ValueError("only support clip, blip and blip2 in this codebase")
 
-
-
 def get_diffrate_model(model, args):
     if 'blip2' in args.model:
         DiffRate.patch.blip2(model.visual_encoder, prune_granularity=args.granularity, merge_granularity=args.granularity)
@@ -98,21 +94,45 @@ def get_diffrate_model(model, args):
         model.init_kept_num_using_r(args.reduced_token)
     else:
         model.init_kept_num_using_ratio(args.ratio)
-    
 
 def get_tofu_model(model, args):
-    if 'blip2' in args.model:
-        tofu.patch.blip2(model.visual_encoder, prune_granularity=args.granularity, merge_granularity=args.granularity)
-    elif 'blip' in args.model:
-        tofu.patch.blip(model.visual_encoder, prune_granularity=args.granularity, merge_granularity=args.granularity)
-    else:
-        raise ValueError("only support deit, mae and caformer in this codebase")
-    if args.use_k:
-        model.init_kept_num_using_r(args.reduced_token)
-    else:
-        model.init_kept_num_using_ratio(args.ratio)
+    if 'clip' in args.model:
+        tofu.patch.clip(model.visual.transformer, use_k=args.use_k)
+        model.visual.transformer.ratio=float(args.ratio)
+        model.visual.transformer.r=int(args.reduced_token)
     
-            
+    elif 'blip2' in args.model:
+        tofu.patch.blip2(model.visual_encoder,use_k=args.use_k)
+        model.visual_encoder.ratio=float(args.ratio)
+        model.visual_encoder.r=int(args.reduced_token)
+    elif 'blip' in args.model:
+        tofu.patch.blip(model.visual_encoder,use_k=args.use_k)
+        tofu.patch.blip(model.visual_encoder_m,use_k=args.use_k)
+        model.visual_encoder.ratio=float(args.ratio)
+        model.visual_encoder_m.ratio=float(args.ratio)
+        model.visual_encoder.r=int(args.reduced_token)
+        model.visual_encoder_m.r=int(args.reduced_token)
+    else:
+        raise ValueError("only support clip, blip and blip2 in this codebase")
+
+def get_dct_model(model, args):
+    if 'clip' in args.model:
+        dct.patch.clip(model.visual.transformer, use_k=args.use_k)
+        model.visual.transformer.ratio=float(args.ratio)
+        model.visual.transformer.r=int(args.reduced_token)
+    elif 'blip2' in args.model:
+        dct.patch.blip2(model.visual_encoder,use_k=args.use_k)
+        model.visual_encoder.ratio=float(args.ratio)
+        model.visual_encoder.r=int(args.reduced_token)
+    elif 'blip' in args.model:
+        dct.patch.blip(model.visual_encoder,use_k=args.use_k)
+        dct.patch.blip(model.visual_encoder_m,use_k=args.use_k)
+        model.visual_encoder.ratio=float(args.ratio)
+        model.visual_encoder_m.ratio=float(args.ratio)
+        model.visual_encoder.r=int(args.reduced_token)
+        model.visual_encoder_m.r=int(args.reduced_token)
+    else:
+        raise ValueError("only support clip, blip and blip2 in this codebase")
 
 
 def parse_args():
@@ -186,8 +206,13 @@ def main():
         get_diffrate_model(model, args)
     elif args.algo == TOFU:
         get_tofu_model(model, args)
-    else:
+    elif args.algo == DCT:
+        get_dct_model(model, args)
+    elif args.algo == NONE:
+        args.ratio = 1.0
         get_tome_model(model, args)
+    else:
+        raise ValueError("only support pitome, tome, tofu, dct, diffrate for image retrieval task")
 
 
     runner = RunnerBase(

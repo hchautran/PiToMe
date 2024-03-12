@@ -1,12 +1,12 @@
 from typing import Tuple
 
 import torch
-from timm.models.vision_transformer import Attention, Block, VisionTransformer
+from timm.models.vision_transformer import Block, VisionTransformer
 from copy import copy
 
-from .timm import ToMeBlock, ToMeBlockUsingRatio, ToMeAttention 
+from .timm import DCTBlockUsingRatio
 
-def make_tome_class(transformer_class):
+def make_dct_class(transformer_class):
     class ToMeVisionTransformer(transformer_class):
         """
         Modifications:
@@ -15,10 +15,10 @@ def make_tome_class(transformer_class):
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
 
-            self._tome_info["r"] = [self.r] * len(self.blocks) 
-            self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
-            self._tome_info["size"] = None
-            self._tome_info["source"] = None
+            self._dct_info["r"] = [self.r] * len(self.blocks) 
+            self._dct_info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._dct_info["size"] = None
+            self._dct_info["source"] = None
             self.total_flop = 0
 
             x = super().forward(x)
@@ -36,9 +36,8 @@ def make_tome_class(transformer_class):
                 x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
             x = self.pos_drop(x + self.pos_embed)
             for blk in self.blocks:
-                x = blk(x)
                 self.total_flop += self.calculate_block_flop(x.shape) 
-            self.total_flop += self.calculate_block_flop(x.shape) 
+                x = blk(x)
             x = self.norm(x)
             if self.dist_token is None:
                 return self.pre_logits(x[:, 0])
@@ -66,21 +65,21 @@ def apply_patch(
     Applies ToMe to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tome_info["source"] afterward.
+    The sources will be available at model._dct_info["source"] afterward.
 
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    ToMeVisionTransformer = make_tome_class(model.__class__)
-    print('using', 'tome')
+    ToMeVisionTransformer = make_dct_class(model.__class__)
+    print('using', 'dct')
 
     model.__class__ = ToMeVisionTransformer
     model.r = 0
     model.ratio = 1.0 
     model.use_k = use_k
     
-    # model.compress_method = 'tome' 
-    model._tome_info = {
+    # model.compress_method = 'dct' 
+    model._dct_info = {
         "ratio": model.ratio,
         "margin":  [],
         "size": None,
@@ -92,12 +91,10 @@ def apply_patch(
     }
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._tome_info["distill_token"] = True
+        model._dct_info["distill_token"] = True
 
     for module in model.modules():
 
         if isinstance(module, Block):
-            module.__class__ = ToMeBlockUsingRatio
-            module._tome_info = model._tome_info
-        elif isinstance(module, Attention):
-            module.__class__ = ToMeAttention
+            module.__class__ = DCTBlockUsingRatio
+            module._dct_info = model._dct_info

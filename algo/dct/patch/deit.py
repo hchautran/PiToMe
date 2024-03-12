@@ -2,7 +2,7 @@ from typing import Tuple
 
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
-from .timm import DCTBlock, DCTBlockUsingRatio, DCTAttention 
+from .timm import DCTBlock, DCTBlockUsingRatio
 
 def make_dct_class(transformer_class):
     class DCTVisionTransformer(transformer_class):
@@ -34,9 +34,8 @@ def make_dct_class(transformer_class):
                 x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
             x = self.pos_drop(x + self.pos_embed)
             for blk in self.blocks:
-                x = blk(x)
                 self.total_flop += self.calculate_block_flop(x.shape) 
-            self.total_flop += self.calculate_block_flop(x.shape) 
+                x = blk(x)
             x = self.norm(x)
             if self.dist_token is None:
                 return self.pre_logits(x[:, 0])

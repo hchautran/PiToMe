@@ -18,10 +18,10 @@ from copy import copy
 from ..merge import dc_transform 
 
 
-class ToMeBlock(Block):
+class DCTBlock(Block):
     """
     Modifications:
-     - Apply ToMe between the attention and mlp blocks
+     - Apply DCT between the attention and mlp blocks
      - Compute and propogate token size and potentially the token sources.
     """
 
@@ -44,10 +44,10 @@ class ToMeBlock(Block):
         return x
 
 
-class ToMeBlockUsingRatio(Block):
+class DCTBlockUsingRatio(Block):
     """
     Modifications:
-     - Apply ToMe between the attention and mlp blocks
+     - Apply DCT between the attention and mlp blocks
      - Compute and propogate token size and potentially the token sources.
     """
 
@@ -65,7 +65,7 @@ class ToMeBlockUsingRatio(Block):
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
         ratio = self._dct_info["ratio"].pop(0)
         if ratio < 1.0:
-            x = dc_transform(x, ratio=ratio)
+            x = dc_transform(x, ratio=ratio, class_token=self._dct_info["class_token"])
 
         return x
 

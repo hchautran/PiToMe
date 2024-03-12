@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F 
 import torch.utils.checkpoint as checkpoint
-from lavis.models.eva_vit import VisionTransformer,Attention,Block
+from lavis.models.eva_vit import VisionTransformer,Block
 from ..merge import dc_transform 
 
 class DCTBlock(Block):
@@ -17,6 +17,7 @@ class DCTBlock(Block):
             x = dc_transform(
                 x=x,
                 ratio=ratio,
+                class_token=self._dct_info["class_token"]
             )
         return x
 

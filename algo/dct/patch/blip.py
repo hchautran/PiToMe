@@ -1,5 +1,5 @@
 import torch
-from lavis.models.vit import VisionTransformer, Attention, Block
+from lavis.models.vit import VisionTransformer,  Block
 from ..merge import dc_transform 
 
 class DCTBlock(Block):
@@ -12,7 +12,11 @@ class DCTBlock(Block):
     def compress_x(self, metric, x):
         ratio = self._dct_info["ratio"].pop()
         if ratio < 1.0:
-            x = dc_transform(x, ratio=ratio)
+            x = dc_transform(
+                x, 
+                ratio=ratio, 
+                class_token=self._dct_info["class_token"]
+            )
 
         return x
 
@@ -59,8 +63,8 @@ def make_dct_class(transformer_class):
             x = self.pos_drop(x)
 
             for i, blk in enumerate(self.blocks):
-                x = blk(x, register_blk == i)
                 self.total_flop += self.calculate_block_flop(x.shape)
+                x = blk(x, register_blk == i)
             x = self.norm(x)
             return x
 

@@ -11,6 +11,7 @@ from .mae  import apply_patch as mae
 from .bert import apply_patch as bert 
 from .bart import apply_patch as bart 
 from .blip import apply_patch as blip 
+from .clip import apply_patch as clip 
 from .blip2 import apply_patch as blip2
 
 from .distilbert import apply_patch as distilbert 

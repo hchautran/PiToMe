@@ -18,14 +18,16 @@ class ToMeBartEncoderLayer(BartEncoderLayer):
         self.margin = margin
 
     def compress_x(self, metric, x, attention_mask):
-        ratio = self._tome_info["ratio"].pop(0)
+        ratio = self._dct_info["ratio"].pop(0)
         if ratio < 1.0:
             print(ratio)
-            merge, isolated_score = dc_transform(
-                x=x
+            x = dc_transform(
+                x=x,
                 ratio=ratio,
+                class_token=self._dct_info["class_token"]
+
             )
-            attention_mask = torch.ones_like(x).to(device) 
+            attention_mask = torch.ones_like(x).to(x.device) 
         return x, attention_mask
 
 
@@ -181,6 +183,7 @@ class ToMeBartEncoder(BartEncoder):
                 )
 
         for idx, encoder_layer in enumerate(self.layers):
+            self.total_flop += self.calculate_block_flop(hidden_states.shape)
             if output_hidden_states:
                 encoder_states = encoder_states + (hidden_states,)
             # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
@@ -217,7 +220,6 @@ class ToMeBartEncoder(BartEncoder):
 
                 hidden_states = layer_outputs[0]
                 attention_mask = layer_outputs[1]
-                self.total_flop += self.calculate_block_flop(hidden_states.shape)
 
             if output_attentions:
                 all_attentions = all_attentions + (layer_outputs[1],)
@@ -243,20 +245,20 @@ class ToMeBartEncoder(BartEncoder):
         return flops
 
 
-def make_tome_class(transformer_class:BartModel):
+def make_dct_class(transformer_class:BartModel):
     class ToMeBartModel(transformer_class):
         def init_r(self):
             len_layers = len(self.encoder.layers)
-            self._tome_info["ratio"] = [self.ratio if i in [
+            self._dct_info["ratio"] = [self.ratio if i in [
                 0,1,2
                 # len_layers - 1, 
                 # len_layers - 2,
                 # len_layers - 3,
                 # len_layers - 9,
             ] else 1.0 for i in range(len_layers) ]
-            print(self._tome_info['ratio'])
-            self._tome_info["size"] = None
-            self._tome_info["source"] = None
+            print(self._dct_info['ratio'])
+            self._dct_info["size"] = None
+            self._dct_info["source"] = None
             
 
         def forward(
@@ -358,19 +360,19 @@ def apply_patch(
     Applies ToMe to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tome_info["source"] afterward.
+    The sources will be available at model._dct_info["source"] afterward.
 
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    ToMeBartModel = make_tome_class(model.__class__)
-    print('using', 'tome')
+    ToMeBartModel = make_dct_class(model.__class__)
+    print('using', 'dct')
 
     model.__class__ = ToMeBartModel
     model.encoder.__class__ = BartEncoder
     model.ratio = ratio 
-    # model.compress_method = 'tome' 
-    model._tome_info = {
+    # model.compress_method = 'dct' 
+    model._dct_info = {
         "ratio": model.ratio,
         "margin":  [],
         "size": None,
@@ -387,13 +389,13 @@ def apply_patch(
     num_layers = len(model.encoder.layers)
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._tome_info["distill_token"] = True
+        model._dct_info["distill_token"] = True
 
     for module in model.encoder.modules():
         if isinstance(module, BartEncoder):
             module.__class__ = ToMeBartEncoder
         if isinstance(module, BartEncoderLayer):
             module.__class__ = ToMeBartEncoderLayer 
-            module._tome_info = model._tome_info
+            module._dct_info = model._dct_info
             current_layer +=1
 

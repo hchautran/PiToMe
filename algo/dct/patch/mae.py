@@ -13,7 +13,7 @@
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 
-from .timm import DCTAttention, DCTBlockUsingRatio, DCTBlock
+from .timm import  DCTBlockUsingRatio, DCTBlock
 
 
 def make_dct_class(transformer_class):
@@ -48,20 +48,14 @@ def make_dct_class(transformer_class):
             x = torch.cat((cls_tokens, x), dim=1)
             x = x + self.pos_embed
             x = self.pos_drop(x)
-
             for blk in self.blocks:
-                x = blk(x)
                 self.total_flop += self.calculate_block_flop(x.shape) 
+                x = blk(x)
 
             if self.global_pool:
                 # ---- DCT changes this ----
                 # Global average pool proportional to token size
-                if self._dct_info["size"] is not None:
-                    x = (x * self._dct_info["size"])[:, 1:, :].sum(dim=1) / T
-                else:
-                    x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
-                # ---- End of change ----
-
+                x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
                 outcome = self.fc_norm(x)
             else:
                 x = self.norm(x)

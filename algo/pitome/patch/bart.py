@@ -320,6 +320,7 @@ class PiToMeBartEncoder(BartEncoder):
                 )
 
         for idx, encoder_layer in enumerate(self.layers):
+            self.total_flop += self.calculate_block_flop(hidden_states.shape)
             if output_hidden_states:
                 encoder_states = encoder_states + (hidden_states,)
             # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
@@ -356,7 +357,6 @@ class PiToMeBartEncoder(BartEncoder):
 
                 hidden_states = layer_outputs[0]
                 attention_mask = layer_outputs[1]
-                self.total_flop += self.calculate_block_flop(hidden_states.shape)
 
             if output_attentions:
                 all_attentions = all_attentions + (layer_outputs[1],)
