@@ -8,7 +8,6 @@ from transformers import (
     BertForSequenceClassification,
     DistilBertForSequenceClassification,
 )
-
 from tqdm import tqdm
 from torch.optim import Adam
 from torch.utils.data import DataLoader
@@ -38,12 +37,10 @@ from consts import (
 )
 from copy import deepcopy
 
-
 def transformers_collator(batch, tokenizer):
     input_list, target_list = zip(*batch)
     inputs = tokenizer(input_list, truncation=True,max_length=512, padding=True, return_tensors='pt')
     return inputs, torch.cat(target_list)
-
 
 def accuracy_score(outp, target):
     assert len(outp.shape) == 2, "accuracy score must receive 2d output tensor"
