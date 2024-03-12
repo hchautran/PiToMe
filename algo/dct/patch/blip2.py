@@ -11,7 +11,7 @@ class DCTBlock(Block):
      - Compute and propogate token size and potentially the token sources.
     """
 
-    def compress_x(self, metric, x):
+    def compress_x(self, x):
         ratio = self._dct_info["ratio"].pop(0)
         if ratio < 1.0:
             x = dc_transform(
@@ -25,14 +25,14 @@ class DCTBlock(Block):
     def forward(self, x, rel_pos_bias=None):
         attn_size = self._dct_info["size"] if self._dct_info["prop_attn"] else None
         if self.gamma_1 is None:
-            x_attn, metric, attn = self.attn(self.norm1(x), attn_size, rel_pos_bias=rel_pos_bias)
+            x_attn = self.attn(self.norm1(x), rel_pos_bias=rel_pos_bias)
             x = x + self.drop_path(x_attn)
-            x = self.compress_x(metric, x)
+            x = self.compress_x(x)
             x = x + self.drop_path(self.mlp(self.norm2(x)))
         else:
-            x_attn, metric, attn = self.attn(self.norm1(x), attn_size, rel_pos_bias=rel_pos_bias)
+            x_attn = self.attn(self.norm1(x), rel_pos_bias=rel_pos_bias)
             x = x + self.drop_path(x_attn)
-            x = self.compress_x(metric,x)
+            x = self.compress_x(x)
             x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))
         return x
 
