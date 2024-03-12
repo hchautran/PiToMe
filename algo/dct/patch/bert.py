@@ -14,7 +14,7 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 from transformers.models.bert.modeling_bert import BertLayer, BertEncoder, BertSelfAttention, BertAttention, apply_chunking_to_forward
-from ..merge import merge_source, bipartite_soft_matching,  merge_wavg, merge_attention_mask
+from ..merge import dc_transform 
 from typing import Optional, Union 
 import math
 from transformers.modeling_utils import ModuleUtilsMixin 
@@ -46,20 +46,11 @@ class DCTBertLayer(BertLayer):
     
 
         if ratio < 1.0:
-            merge, _ = bipartite_soft_matching(
+            merge, _ = dc_transform(
+                x=x
                 ratio=ratio,
-                metric=key,
-                class_token=self._dct_info["class_token"]
             )
-
-            weight = self._dct_info["size"] 
-            x, self._dct_info["size"] = merge_wavg(merge, x, None)
-            # print(attention_mask.shape)
-
-            attention_mask = torch.where(attention_mask.squeeze_() >= 0, 1, 0)
-            attention_mask = merge_attention_mask(merge, attention_mask=attention_mask[..., None]).squeeze_()
-        else:
-            attention_mask = torch.where(attention_mask.squeeze_() >= 0, 1, 0)
+            attention_mask = torch.ones_like(x).to(x.device) 
 
 
         x = apply_chunking_to_forward(
@@ -74,97 +65,6 @@ class DCTBertLayer(BertLayer):
         outputs = (x, attention_mask, )  + outputs
         return outputs
 
-
-
-class DCTBertAttention(BertAttention):
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        attention_mask: Optional[torch.FloatTensor] = None,
-        head_mask: Optional[torch.FloatTensor] = None,
-        encoder_hidden_states: Optional[torch.FloatTensor] = None,
-        encoder_attention_mask: Optional[torch.FloatTensor] = None,
-        past_key_value: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
-        output_attentions: Optional[bool] = False,
-    ) -> Tuple[torch.Tensor]:
-        self_outputs, key = self.self(
-            hidden_states,
-            attention_mask,
-            head_mask,
-            encoder_hidden_states,
-            encoder_attention_mask,
-            past_key_value,
-            output_attentions,
-        )
-        attention_output = self.output(self_outputs[0], hidden_states)
-        outputs = (attention_output,) + (key,) + self_outputs[1:]  # add attentions if we output them
-        return outputs
-
-class DCTBertSelfAttention(BertSelfAttention):
-
-   def forward(
-        self,
-        hidden_states: torch.Tensor,
-        attention_mask: Optional[torch.FloatTensor] = None,
-        head_mask: Optional[torch.FloatTensor] = None,
-        encoder_hidden_states: Optional[torch.FloatTensor] = None,
-        encoder_attention_mask: Optional[torch.FloatTensor] = None,
-        past_key_value: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
-        output_attentions: Optional[bool] = False,
-    ) -> Tuple[torch.Tensor]:
-        mixed_query_layer = self.query(hidden_states)
-
-      
-        key_layer = self.transpose_for_scores(self.key(hidden_states))
-        value_layer = self.transpose_for_scores(self.value(hidden_states))
-        query_layer = self.transpose_for_scores(mixed_query_layer)
-
-
-        # Take the dot product between "query" and "key" to get the raw attention scores.
-        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
-
-        if self.position_embedding_type == "relative_key" or self.position_embedding_type == "relative_key_query":
-            query_length, key_length = query_layer.shape[2], key_layer.shape[2]
-            position_ids_l = torch.arange(query_length, dtype=torch.long, device=hidden_states.device).view(-1, 1)
-            position_ids_r = torch.arange(key_length, dtype=torch.long, device=hidden_states.device).view(1, -1)
-            distance = position_ids_l - position_ids_r
-
-            positional_embedding = self.distance_embedding(distance + self.max_position_embeddings - 1)
-            positional_embedding = positional_embedding.to(dtype=query_layer.dtype)  # fp16 compatibility
-
-            if self.position_embedding_type == "relative_key":
-                relative_position_scores = torch.einsum("bhld,lrd->bhlr", query_layer, positional_embedding)
-                attention_scores = attention_scores + relative_position_scores
-            elif self.position_embedding_type == "relative_key_query":
-                relative_position_scores_query = torch.einsum("bhld,lrd->bhlr", query_layer, positional_embedding)
-                relative_position_scores_key = torch.einsum("bhrd,lrd->bhlr", key_layer, positional_embedding)
-                attention_scores = attention_scores + relative_position_scores_query + relative_position_scores_key
-
-        attention_scores = attention_scores / math.sqrt(self.attention_head_size)
-        if attention_mask is not None:
-            # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
-            attention_scores = attention_scores + attention_mask
-
-        # Normalize the attention scores to probabilities.
-        attention_probs = nn.functional.softmax(attention_scores, dim=-1)
-
-        # This is actually dropping out entire tokens to attend to, which might
-        # seem a bit unusual, but is taken from the original Transformer paper.
-        attention_probs = self.dropout(attention_probs)
-
-        # Mask heads if we want to
-
-        context_layer = torch.matmul(attention_probs, value_layer)
-        context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-        new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
-        context_layer = context_layer.view(new_context_layer_shape)
-
-        outputs = (context_layer, attention_probs) if output_attentions else (context_layer,)
-        
-
-    
-        return outputs, key_layer.mean(1)
 
 
 def make_dct_class(transformer_class):
@@ -290,8 +190,4 @@ def apply_patch(
             module.init_margin(margins[current_layer])
             module._dct_info = model._dct_info
             current_layer +=1
-        if isinstance(module, BertAttention):
-            module.__class__ = DCTBertAttention 
-        if isinstance(module, BertSelfAttention):
-            module.__class__ = DCTBertSelfAttention 
 

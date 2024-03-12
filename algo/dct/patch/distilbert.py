@@ -14,13 +14,13 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 from transformers.models.distilbert.modeling_distilbert import Transformer, TransformerBlock, MultiHeadSelfAttention, apply_chunking_to_forward
-from ..merge import bipartite_soft_matching,  merge_wavg, merge_attention_mask
+from ..merge import dc_transform 
 from typing import Optional, Union 
 import math
 from transformers.modeling_utils import ModuleUtilsMixin 
 
 
-class ToMeDistilBertBlock(TransformerBlock):
+class DCTDistilBertBlock(TransformerBlock):
     def init_margin(self, margin):
         self.margin = margin
    
@@ -58,27 +58,12 @@ class ToMeDistilBertBlock(TransformerBlock):
             sa_output, metric = sa_output
     
         sa_output = self.sa_layer_norm(sa_output + x)  # (bs, seq_length, dim)
-
-        if ratio < 1.0:
-            merge, _ = bipartite_soft_matching(
-                ratio=ratio,
-                metric=metric,
-                class_token=self._dct_info["class_token"]
-            )
-            # weight = self._dct_info["size"] 
-            sa_output, self._dct_info["size"] = merge_wavg(merge, sa_output, None)
-            # print(attention_mask.shape)
-
-            # attn_mask = torch.where(attn_mask.squeeze_() >= 0, 1, 0)
-            attn_mask = merge_attention_mask(merge, attention_mask=attn_mask[..., None]).squeeze_()
-        else:
-            attn_mask = attn_mask
-
-
-        # Feed Forward Network
         ffn_output = self.ffn(sa_output)  # (bs, seq_length, dim)
         ffn_output: torch.Tensor = self.output_layer_norm(ffn_output + sa_output)  # (bs, seq_length, dim)
 
+        if ratio < 1.0:
+            output = dc_transform(ffn_output, ratio=ratio)
+            attn_mask = torch.ones_like(output).to(output.device)
         output = ffn_output
         if output_attentions:
             output = (attn_mask, sa_weights, output)
@@ -86,7 +71,7 @@ class ToMeDistilBertBlock(TransformerBlock):
 
 
 
-class ToMeDistilBertAttention(MultiHeadSelfAttention):
+class DCTDistilBertAttention(MultiHeadSelfAttention):
 
     def forward(
         self,
@@ -154,7 +139,7 @@ class ToMeDistilBertAttention(MultiHeadSelfAttention):
 
 
 def make_dct_class(transformer_class):
-    class ToMeTransformers(transformer_class):
+    class DCTTransformers(transformer_class):
         """
         Modifications:
         - Initialize r, token size, and token sources.
@@ -216,14 +201,14 @@ def make_dct_class(transformer_class):
             return flops
 
 
-    return ToMeTransformers
+    return DCTTransformers
 
 
 
 def apply_patch(
    model: Transformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
     """
-    Applies ToMe to this transformer. Afterward, set r using model.r.
+    Applies DCT to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
     The sources will be available at model._dct_info["source"] afterward.
@@ -231,10 +216,10 @@ def apply_patch(
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    ToMeTransformers = make_dct_class(model.__class__)
+    DCTTransformers = make_dct_class(model.__class__)
     print('using', 'dct')
 
-    model.__class__ = ToMeTransformers
+    model.__class__ = DCTTransformers
     model.ratio = 1.0 
     model.r=0.0
     
@@ -257,10 +242,8 @@ def apply_patch(
 
     for module in model.modules():
         if isinstance(module, TransformerBlock):
-            module.__class__ = ToMeDistilBertBlock 
+            module.__class__ = DCTDistilBertBlock 
             module.init_margin(margins[current_layer])
             module._dct_info = model._dct_info
             current_layer +=1
-        if isinstance(module, MultiHeadSelfAttention):
-            module.__class__ = ToMeDistilBertAttention 
 

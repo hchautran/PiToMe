@@ -32,40 +32,6 @@ class DCTBlock(Block):
 
 
 
-class DCTAttention(Attention):
-    """
-    Modifications:
-     - Apply proportional attention
-     - Return the mean of k over heads from attention
-    """
-
-
-    def forward(self, x, register_hook=False):
-        B, N, C = x.shape
-        qkv = (
-            self.qkv(x)
-            .reshape(B, N, 3, self.num_heads, C // self.num_heads)
-            .permute(2, 0, 3, 1, 4)
-        )
-        q, k, v = (
-            qkv[0],
-            qkv[1],
-            qkv[2],
-        )  # make torchscript happy (cannot use tensor as tuple)
-
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        if register_hook:
-            self.save_attention_map(attn)
-            # attn.register_hook(self.save_attn_gradients)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x, k.mean(1), attn
-
 def make_dct_class(transformer_class):
     class DCTVisionTransformer(transformer_class):
         """

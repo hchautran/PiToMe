@@ -13,7 +13,6 @@
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 
-
 from .timm import DCTAttention, DCTBlockUsingRatio, DCTBlock
 
 
@@ -132,5 +131,3 @@ def apply_patch(
             module.__class__ = DCTBlockUsingRatio if not use_k else DCTBlock
             # module.__class__ = DCTBlock if compress_method == 'dct' else PiDCTBlock 
             module._dct_info = model._dct_info
-        elif isinstance(module, Attention):
-            module.__class__ = DCTAttention

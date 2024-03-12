@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F 
 import torch.utils.checkpoint as checkpoint
 from lavis.models.eva_vit import VisionTransformer,Attention,Block
-from ..merge import merge_source, bipartite_soft_matching, merge_wavg
+from ..merge import dc_transform 
 
 class DCTBlock(Block):
     """
@@ -14,23 +14,10 @@ class DCTBlock(Block):
     def compress_x(self, metric, x):
         ratio = self._dct_info["ratio"].pop(0)
         if ratio < 1.0:
-            merge, isolated_score = bipartite_soft_matching(
+            x = dc_transform(
+                x=x,
                 ratio=ratio,
-                metric=metric,
-                class_token=self._dct_info["class_token"]
             )
-
-            if self._dct_info["trace_source"]:
-                self._dct_info["source"] = merge_source(
-                    merge, x, self._dct_info["source"]
-                )
-
-            if isolated_score is not None and self._dct_info["size"] is not None:
-                weight = self._dct_info["size"] + isolated_score
-                x, self._dct_info["size"] = merge_wavg(merge, x, weight)
-            else:
-                weight = self._dct_info["size"] 
-                x, self._dct_info["size"] = merge_wavg(merge, x, weight)
         return x
 
 
@@ -48,49 +35,8 @@ class DCTBlock(Block):
             x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))
         return x
 
-class DCTAttention(Attention):
-    """
-    Modifications:
-     - Apply proportional attention
-     - Return the mean of k over heads from attention
-    """
 
-    def forward(self, x:torch.Tensor, isolation_score: torch.Tensor = None, rel_pos_bias=None):
-        B, N, C = x.shape
-        qkv_bias = None
-        if self.q_bias is not None:
-            qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
-        # qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
-        qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
-
-        q = q * self.scale
-        attn = (q @ k.transpose(-2, -1))
-        if isolation_score is not None:
-            attn = attn +  isolation_score.log()[:, None, None, :, 0]
-
-        if self.relative_position_bias_table is not None:
-            relative_position_bias = \
-                self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
-                    self.window_size[0] * self.window_size[1] + 1,
-                    self.window_size[0] * self.window_size[1] + 1, -1)  # Wh*Ww,Wh*Ww,nH
-            relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
-            attn = attn + relative_position_bias.unsqueeze(0)
-
-        if rel_pos_bias is not None:
-            attn = attn + rel_pos_bias
-        
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, N, -1)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x, k.mean(1), attn
-
-
-def make_pidct_class(transformer_class):
+def make_dct_class(transformer_class):
     class DCTVisionTransformer(transformer_class):
         """
         Modifications:
@@ -150,7 +96,7 @@ def apply_patch(
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    DCTVisionTransformer = make_pidct_class(model.__class__)
+    DCTVisionTransformer = make_dct_class(model.__class__)
     print('using', 'dct')
 
     model.__class__ = DCTVisionTransformer
@@ -182,5 +128,3 @@ def apply_patch(
             module.__class__ = DCTBlock
             module._dct_info = model._dct_info
             current_layer +=1
-        elif isinstance(module, Attention):
-            module.__class__ = DCTAttention

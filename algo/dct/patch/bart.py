@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
-from transformers.models.bart.modeling_bart import BartModel, BartEncoder, BartEncoderLayer, BartAttention, _expand_mask, shift_tokens_right
+from transformers.models.bart.modeling_bart import BartModel, BartEncoder, BartEncoderLayer, _expand_mask, shift_tokens_right
 from transformers.modeling_outputs import BaseModelOutput, Seq2SeqModelOutput, dataclass, ModelOutput 
 from typing import Optional, Tuple, Union, List
-from ..merge import merge_source, merge_wavg, merge_attention_mask, bipartite_soft_matching
+from ..merge import dc_transform 
 
 
 @dataclass
@@ -13,32 +13,19 @@ class BaseModelOutputWithMask(ModelOutput):
     attentions: Optional[Tuple[torch.FloatTensor]] = None
     attention_mask: Optional[Tuple[torch.FloatTensor]] = None
 
-class DCTBartEncoderLayer(BartEncoderLayer):
+class ToMeBartEncoderLayer(BartEncoderLayer):
     def init_margin(self, margin):
         self.margin = margin
 
     def compress_x(self, metric, x, attention_mask):
-        ratio = self._dct_info["ratio"].pop(0)
+        ratio = self._tome_info["ratio"].pop(0)
         if ratio < 1.0:
             print(ratio)
-            merge, isolated_score = bipartite_soft_matching(
+            merge, isolated_score = dc_transform(
+                x=x
                 ratio=ratio,
-                metric=metric,
-                class_token=self._dct_info["class_token"]
             )
-
-            if self._dct_info["trace_source"]:
-                self._dct_info["source"] = merge_source(
-                    merge, x, self._dct_info["source"]
-                )
-            if isolated_score is not None and self._dct_info["size"] is not None:
-                weight = self._dct_info["size"] + isolated_score
-                x, self._dct_info["size"] = merge_wavg(merge, x, weight)
-            else:
-                weight = self._dct_info["size"] 
-                x, self._dct_info["size"] = merge_wavg(merge, x, weight)
-            attention_mask = merge_attention_mask(merge, attention_mask=attention_mask[..., None]).squeeze_(-1)
-
+            attention_mask = torch.ones_like(x).to(device) 
         return x, attention_mask
 
 
@@ -94,134 +81,8 @@ class DCTBartEncoderLayer(BartEncoderLayer):
 
         return outputs
 
-class DCTBartAttention(BartAttention):
-    """Multi-headed attention from 'Attention Is All You Need' paper"""
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        key_value_states: Optional[torch.Tensor] = None,
-        past_key_value: Optional[Tuple[torch.Tensor]] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        layer_head_mask: Optional[torch.Tensor] = None,
-        output_attentions: bool = False,
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
-        """Input shape: Batch x Time x Channel"""
 
-        # if key_value_states are provided this layer is used as a cross-attention layer
-        # for the decoder
-        is_cross_attention = key_value_states is not None
-
-        bsz, tgt_len, _ = hidden_states.size()
-
-        # get query proj
-        query_states = self.q_proj(hidden_states) * self.scaling
-        # get key, value proj
-        # `past_key_value[0].shape[2] == key_value_states.shape[1]`
-        # is checking that the `sequence_length` of the `past_key_value` is the same as
-        # the provided `key_value_states` to support prefix tuning
-        if (
-            is_cross_attention
-            and past_key_value is not None
-            and past_key_value[0].shape[2] == key_value_states.shape[1]
-        ):
-            # reuse k,v, cross_attentions
-            key_states = past_key_value[0]
-            value_states = past_key_value[1]
-        elif is_cross_attention:
-            # cross_attentions
-            key_states = self._shape(self.k_proj(key_value_states), -1, bsz)
-            value_states = self._shape(self.v_proj(key_value_states), -1, bsz)
-        elif past_key_value is not None:
-            # reuse k, v, self_attention
-            key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
-            value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
-            key_states = torch.cat([past_key_value[0], key_states], dim=2)
-            value_states = torch.cat([past_key_value[1], value_states], dim=2)
-        else:
-            # self_attention
-            key_states = self._shape(self.k_proj(hidden_states), -1, bsz)
-            value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
-
-        if self.is_decoder:
-            # if cross_attention save Tuple(torch.Tensor, torch.Tensor) of all cross attention key/value_states.
-            # Further calls to cross_attention layer can then reuse all cross-attention
-            # key/value_states (first "if" case)
-            # if uni-directional self-attention (decoder) save Tuple(torch.Tensor, torch.Tensor) of
-            # all previous decoder key/value_states. Further calls to uni-directional self-attention
-            # can concat previous decoder key/value_states to current projected key/value_states (third "elif" case)
-            # if encoder bi-directional self-attention `past_key_value` is always `None`
-            past_key_value = (key_states, value_states)
-
-        proj_shape = (bsz * self.num_heads, -1, self.head_dim)
-        query_states = self._shape(query_states, tgt_len, bsz).view(*proj_shape)
-        key_states = key_states.reshape(*proj_shape)
-        value_states = value_states.reshape(*proj_shape)
-
-        src_len = key_states.size(1)
-        attn_weights = torch.bmm(query_states, key_states.transpose(1, 2))
-
-        if attn_weights.size() != (bsz * self.num_heads, tgt_len, src_len):
-            raise ValueError(
-                f"Attention weights should be of size {(bsz * self.num_heads, tgt_len, src_len)}, but is"
-                f" {attn_weights.size()}"
-            )
-
-        if attention_mask is not None:
-            if attention_mask.size() != (bsz, 1, tgt_len, src_len):
-                raise ValueError(
-                    f"Attention mask should be of size {(bsz, 1, tgt_len, src_len)}, but is {attention_mask.size()}"
-                )
-            attn_weights = attn_weights.view(bsz, self.num_heads, tgt_len, src_len) + attention_mask
-            attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
-
-        attn_weights = nn.functional.softmax(attn_weights, dim=-1)
-
-        if layer_head_mask is not None:
-            if layer_head_mask.size() != (self.num_heads,):
-                raise ValueError(
-                    f"Head mask for a single layer should be of size {(self.num_heads,)}, but is"
-                    f" {layer_head_mask.size()}"
-                )
-            attn_weights = layer_head_mask.view(1, -1, 1, 1) * attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
-            attn_weights = attn_weights.view(bsz * self.num_heads, tgt_len, src_len)
-
-        if output_attentions:
-            # this operation is a bit awkward, but it's required to
-            # make sure that attn_weights keeps its gradient.
-            # In order to do so, attn_weights have to be reshaped
-            # twice and have to be reused in the following
-            attn_weights_reshaped = attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
-            attn_weights = attn_weights_reshaped.view(bsz * self.num_heads, tgt_len, src_len)
-        else:
-            attn_weights_reshaped = None
-
-        attn_probs = nn.functional.dropout(attn_weights, p=self.dropout, training=self.training)
-
-        attn_output = torch.bmm(attn_probs, value_states)
-
-        if attn_output.size() != (bsz * self.num_heads, tgt_len, self.head_dim):
-            raise ValueError(
-                f"`attn_output` should be of size {(bsz * self.num_heads, tgt_len, self.head_dim)}, but is"
-                f" {attn_output.size()}"
-            )
-
-        attn_output = attn_output.view(bsz, self.num_heads, tgt_len, self.head_dim)
-        attn_output = attn_output.transpose(1, 2)
-
-        # Use the `embed_dim` from the config (stored in the class) rather than `hidden_state` because `attn_output` can be
-        # partitioned across GPUs when using tensor-parallelism.
-        attn_output = attn_output.reshape(bsz, tgt_len, self.embed_dim)
-
-        attn_output = self.out_proj(attn_output)
-
-        if len(key_states.shape) == 3:
-            key_states = key_states.mean(0)
-        else:
-            key_states = key_states.mean(1)
-
-        return attn_output, attn_weights_reshaped, key_states, past_key_value
-
-class DCTBartEncoder(BartEncoder):
+class ToMeBartEncoder(BartEncoder):
     """
     Modifications:
     - Initialize r, token size, and token sources.
@@ -382,20 +243,20 @@ class DCTBartEncoder(BartEncoder):
         return flops
 
 
-def make_dct_class(transformer_class:BartModel):
-    class DCTBartModel(transformer_class):
+def make_tome_class(transformer_class:BartModel):
+    class ToMeBartModel(transformer_class):
         def init_r(self):
             len_layers = len(self.encoder.layers)
-            self._dct_info["ratio"] = [self.ratio if i in [
+            self._tome_info["ratio"] = [self.ratio if i in [
                 0,1,2
                 # len_layers - 1, 
                 # len_layers - 2,
                 # len_layers - 3,
                 # len_layers - 9,
             ] else 1.0 for i in range(len_layers) ]
-            print(self._dct_info['ratio'])
-            self._dct_info["size"] = None
-            self._dct_info["source"] = None
+            print(self._tome_info['ratio'])
+            self._tome_info["size"] = None
+            self._tome_info["source"] = None
             
 
         def forward(
@@ -488,28 +349,28 @@ def make_dct_class(transformer_class:BartModel):
                 encoder_attentions=encoder_outputs.attentions,
             )
 
-    return DCTBartModel
+    return ToMeBartModel
 
 
 def apply_patch(
    model: BartEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, ratio=1.0):
     """
-    Applies DCT to this transformer. Afterward, set r using model.r.
+    Applies ToMe to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._dct_info["source"] afterward.
+    The sources will be available at model._tome_info["source"] afterward.
 
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    DCTBartModel = make_dct_class(model.__class__)
-    print('using', 'dct')
+    ToMeBartModel = make_tome_class(model.__class__)
+    print('using', 'tome')
 
-    model.__class__ = DCTBartModel
+    model.__class__ = ToMeBartModel
     model.encoder.__class__ = BartEncoder
     model.ratio = ratio 
-    # model.compress_method = 'dct' 
-    model._dct_info = {
+    # model.compress_method = 'tome' 
+    model._tome_info = {
         "ratio": model.ratio,
         "margin":  [],
         "size": None,
@@ -526,14 +387,13 @@ def apply_patch(
     num_layers = len(model.encoder.layers)
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._dct_info["distill_token"] = True
+        model._tome_info["distill_token"] = True
 
     for module in model.encoder.modules():
         if isinstance(module, BartEncoder):
-            module.__class__ = DCTBartEncoder
+            module.__class__ = ToMeBartEncoder
         if isinstance(module, BartEncoderLayer):
-            module.__class__ = DCTBartEncoderLayer 
-            module._dct_info = model._dct_info
+            module.__class__ = ToMeBartEncoderLayer 
+            module._tome_info = model._tome_info
             current_layer +=1
-        elif isinstance(module, BartAttention):
-            module.__class__ = DCTBartAttention
+
