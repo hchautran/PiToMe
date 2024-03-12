@@ -9,7 +9,7 @@ model:
   model_type: ViT-L-14-336
 
 datasets:
-  coco_retrieval: # name of the dataset builder
+  flickr30k: # name of the dataset builder
     vis_processor:
         train:
           name: "clip_image_train"
@@ -42,6 +42,6 @@ run:
 
   # misc
   seed: 42
-  output_dir: "output/clip/Retrieval_COCO"
+  output_dir: "output/clip/Retrieval_Flickr"
 
   evaluate: True

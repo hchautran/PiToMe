@@ -44,7 +44,11 @@ from algo import (
 )
 
 def get_tome_model(model, args):
-    if 'blip2' in args.model:
+    if 'clip' in args.model:
+        tome.patch.clip(model.visual.transformer,use_k=args.use_k)
+        model.visual.transformer.ratio=float(args.ratio)
+        model.visual.transformer.r=float(args.reduced_token)
+    elif 'blip2' in args.model:
         tome.patch.blip2(model.visual_encoder,use_k=args.use_k)
         model.visual_encoder.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
@@ -56,16 +60,21 @@ def get_tome_model(model, args):
         model.visual_encoder.r=int(args.reduced_token)
         model.visual_encoder_m.r=int(args.reduced_token)
     else:
-        raise ValueError("only support deit, mae and caformer in this codebase")
+        raise ValueError("only support clip, blip and blip2 for image-text retrieval task")
 
 
 
 
 def get_pitome_model(model, args):
-    if 'blip2' in args.model:
+    if 'clip' in args.model:
+        pitome.patch.clip(model.visual.transformer, use_k=args.use_k)
+        model.visual.transformer.ratio=float(args.ratio)
+        model.visual.transformer.r=int(args.reduced_token)
+    
+    elif 'blip2' in args.model:
         pitome.patch.blip2(model.visual_encoder,use_k=args.use_k)
         model.visual_encoder.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
+        model.visual_encoder.r=int(args.reduced_token)
     elif 'blip' in args.model:
         pitome.patch.blip(model.visual_encoder,use_k=args.use_k)
         pitome.patch.blip(model.visual_encoder_m,use_k=args.use_k)
@@ -74,7 +83,7 @@ def get_pitome_model(model, args):
         model.visual_encoder.r=int(args.reduced_token)
         model.visual_encoder_m.r=int(args.reduced_token)
     else:
-        raise ValueError("only support deit, mae and caformer in this codebase")
+        raise ValueError("only support clip, blip and blip2 in this codebase")
 
 
 
@@ -137,6 +146,12 @@ def setup_seeds(config):
     cudnn.benchmark = False
     cudnn.deterministic = True
 
+def print_gflops(args, model):
+    if 'clip' in args.model:
+        print('gflops', model.visual.transformer.total_flop/1e9)
+    else:
+        print('gflops', model.visual_encoder.total_flop/1e9)
+    
 
 def main():
     # allow auto-dl completes on main process without timeout when using NCCL backend.
@@ -161,6 +176,7 @@ def main():
     task = tasks.setup_task(cfg)
     datasets = task.build_datasets(cfg)
     model = task.build_model(cfg)
+    print(model)
 
     if args.algo == TOME:
         get_tome_model(model, args)
@@ -184,7 +200,7 @@ def main():
             print('r_sum', metrics['txt_r10'] + metrics['txt_r5'] + metrics['txt_r1'] + metrics['img_r10'] + metrics['img_r5'] + metrics['img_r1'])
     else:
         runner.train()
-    print('gflops', model.visual_encoder.total_flop/1e9)
+    print_gflops(args, model)
 
 
 if __name__ == "__main__":
