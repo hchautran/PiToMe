@@ -31,27 +31,26 @@ def train_one_epoch(model: torch.nn.Module, criterion,
 
     for data_iter_step, (samples, targets) in enumerate(metric_logger.log_every(data_loader, logger.info_freq, header,logger)):
         # print('got here')
-        # with accelerator.autocast():
-        #     optimizer.zero_grad()
-            # print(samples.shape)
+        with accelerator.autocast():
+            optimizer.zero_grad()
 
-            # if mixup_fn is not None:
-            #     samples, targets = mixup_fn(samples, targets)
+            if mixup_fn is not None:
+                samples, targets = mixup_fn(samples, targets)
 
-            # outputs, flops = model(samples)
-            # loss = criterion(outputs, targets)
-            # # if utils.is_main_process():
-            #     # wandb.log({'current loss': loss_cls_value})
+            outputs, flops = model(samples)
+            loss = criterion(outputs, targets)
+            # if utils.is_main_process():
+                # wandb.log({'current loss': loss_cls_value})
             
-            # accelerator.backward(loss)
-            # if accelerator.sync_gradients:
-            #     accelerator.clip_grad_norm_(model.parameters(), 1.0)
-            # optimizer.step() 
+            accelerator.backward(loss)
+            if accelerator.sync_gradients:
+                accelerator.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step() 
             
-            # metric_logger.update(loss_cls=loss.item())
-            # metric_logger.update(flops=flops/1e9)
-            metric_logger.update(loss_cls=0.0)
-            metric_logger.update(flops=0.0)
+            metric_logger.update(loss_cls=loss.item())
+            metric_logger.update(flops=flops/1e9)
+            # metric_logger.update(loss_cls=0.0)
+            # metric_logger.update(flops=0.0)
 
 
     metric_logger.synchronize_between_processes()

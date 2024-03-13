@@ -288,6 +288,7 @@ def main(args):
     # random.seed(seed)
 
     cudnn.benchmark = True
+    args.data_path = DATA_PATH + '/.cache/'
 
     dataset_train, args.nb_classes = utils.build_dataset(is_train=True, args=args)
     dataset_val, _ = utils.build_dataset(is_train=False, args=args)
