@@ -1,1 +1,1 @@
-sh train_scripts/train_ic.sh $1 small 224 0.9125 $2 
+sh train_scripts/train_ic.sh $1 small 224 0.925 $2 

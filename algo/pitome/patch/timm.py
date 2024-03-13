@@ -63,6 +63,7 @@ class PiToMeBlockUsingRatio(Block):
                 weight = self._tome_info["size"] 
                 x, self._tome_info["size"] = merge_wavg(merge, x, weight)
 
+        # print(x.shape)
         return x 
 
 

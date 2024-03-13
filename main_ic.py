@@ -354,6 +354,7 @@ def main(args):
         drop_block_rate=None,
     )
     
+    args.use_k=False
 
     if args.algo == TOME:
         get_tome_model(model, args)
