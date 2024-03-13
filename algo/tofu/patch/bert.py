@@ -20,7 +20,7 @@ import math
 from transformers.modeling_utils import ModuleUtilsMixin 
 
 
-class ToMeBertLayer(BertLayer):
+class ToFuBertLayer(BertLayer):
     def init_margin(self, margin):
         self.margin = margin
    
@@ -31,7 +31,7 @@ class ToMeBertLayer(BertLayer):
         head_mask: Optional[torch.FloatTensor] = None,
         output_attentions: Optional[bool] = False,
     ) -> Tuple[torch.Tensor]:
-        # attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
+        # attn_size = self._tofu_info["size"] if self._tofu_info["prop_attn"] else None
 
         self_attention_outputs = self.attention(
             hidden_states,
@@ -39,7 +39,7 @@ class ToMeBertLayer(BertLayer):
             head_mask,
             output_attentions=output_attentions,
         )
-        ratio = self._tome_info["ratio"].pop()
+        ratio = self._tofu_info["ratio"].pop()
         x = self_attention_outputs[0]
         key = self_attention_outputs[1]
 
@@ -49,12 +49,10 @@ class ToMeBertLayer(BertLayer):
             merge, _ = bipartite_soft_matching(
                 ratio=ratio,
                 metric=key,
-                class_token=self._tome_info["class_token"]
+                class_token=self._tofu_info["class_token"]
             )
-
-            weight = self._tome_info["size"] 
-            x, self._tome_info["size"] = merge_wavg(merge, x, None)
-            # print(attention_mask.shape)
+            weight = self._tofu_info["size"] 
+            x, self._tofu_info["size"] = merge(x, mode=self.strategy)
 
             attention_mask = torch.where(attention_mask.squeeze_() >= 0, 1, 0)
             attention_mask = merge_attention_mask(merge, attention_mask=attention_mask[..., None]).squeeze_()
@@ -76,7 +74,7 @@ class ToMeBertLayer(BertLayer):
 
 
 
-class ToMeBertAttention(BertAttention):
+class ToFuBertAttention(BertAttention):
 
     def forward(
         self,
@@ -101,7 +99,7 @@ class ToMeBertAttention(BertAttention):
         outputs = (attention_output,) + (key,) + self_outputs[1:]  # add attentions if we output them
         return outputs
 
-class ToMeBertSelfAttention(BertSelfAttention):
+class ToFuBertSelfAttention(BertSelfAttention):
 
    def forward(
         self,
@@ -167,8 +165,8 @@ class ToMeBertSelfAttention(BertSelfAttention):
         return outputs, key_layer.mean(1)
 
 
-def make_tome_class(transformer_class):
-    class ToMeBertEncoder(transformer_class, ModuleUtilsMixin):
+def make_tofu_class(transformer_class):
+    class ToFuBertEncoder(transformer_class, ModuleUtilsMixin):
         """
         Modifications:
         - Initialize r, token size, and token sources.
@@ -188,14 +186,14 @@ def make_tome_class(transformer_class):
             output_hidden_states: Optional[bool] = False,
         ): 
             len_layers = len(self.layer)
-            self._tome_info["ratio"] = [self.ratio if i in [
+            self._tofu_info["ratio"] = [self.ratio if i in [
                 len_layers - 1, 
                 len_layers - 2,
                 len_layers - 3,
                 # len_layers - 6,
                 # len_layers - 9,
             ] else 1.0 for i in range(len_layers) ]
-            # self._tome_info["ratio"] = [self.ratio for i in range(len(self.layer))]
+            # self._tofu_info["ratio"] = [self.ratio for i in range(len(self.layer))]
             all_hidden_states = () if output_hidden_states else None
             all_self_attentions = () if output_attentions else None
             flops = 0
@@ -245,30 +243,30 @@ def make_tome_class(transformer_class):
             return flops
 
 
-    return ToMeBertEncoder
+    return ToFuBertEncoder
 
 
 
 def apply_patch(
    model: BertEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
     """
-    Applies ToMe to this transformer. Afterward, set r using model.r.
+    Applies ToFu to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tome_info["source"] afterward.
+    The sources will be available at model._tofu_info["source"] afterward.
 
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    ToMeBertEncoder = make_tome_class(model.__class__)
-    print('using', 'tome')
+    ToFuBertEncoder = make_tofu_class(model.__class__)
+    print('using', 'tofu')
 
-    model.__class__ = ToMeBertEncoder
+    model.__class__ = ToFuBertEncoder
     model.ratio = 1.0 
     model.r=0.0
     
-    # model.compress_method = 'tome' 
-    model._tome_info = {
+    # model.compress_method = 'tofu' 
+    model._tofu_info = {
         "ratio": model.ratio,
         "margin":  [],
         "size": None,
@@ -286,12 +284,12 @@ def apply_patch(
 
     for module in model.modules():
         if isinstance(module, BertLayer):
-            module.__class__ = ToMeBertLayer
-            module.init_margin(margins[current_layer])
-            module._tome_info = model._tome_info
+            module.__class__ = ToFuBertLayer
+            module.init_strategy(margins[current_layer])
+            module._tofu_info = model._tofu_info
             current_layer +=1
         if isinstance(module, BertAttention):
-            module.__class__ = ToMeBertAttention 
+            module.__class__ = ToFuBertAttention 
         if isinstance(module, BertSelfAttention):
-            module.__class__ = ToMeBertSelfAttention 
+            module.__class__ = ToFuBertSelfAttention 
 

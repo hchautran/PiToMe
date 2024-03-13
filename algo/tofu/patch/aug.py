@@ -4,10 +4,10 @@ import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 from copy import copy
 
-from .timm import ToMeBlock, ToMeBlockUsingRatio, ToMeAttention 
+from .timm import ToFuBlock, ToFuBlockUsingRatio, ToFuAttention 
 
-def make_tome_class(transformer_class):
-    class ToMeVisionTransformer(transformer_class):
+def make_tofu_class(transformer_class):
+    class ToFuVisionTransformer(transformer_class):
         """
         Modifications:
         - Initialize r, token size, and token sources.
@@ -15,10 +15,10 @@ def make_tome_class(transformer_class):
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
 
-            self._tome_info["r"] = [self.r] * len(self.blocks) 
-            self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
-            self._tome_info["size"] = None
-            self._tome_info["source"] = None
+            self._tofu_info["r"] = [self.r] * len(self.blocks) 
+            self._tofu_info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._tofu_info["size"] = None
+            self._tofu_info["source"] = None
             self.total_flop = 0
 
             x = super().forward(x)
@@ -54,7 +54,7 @@ def make_tome_class(transformer_class):
             return flops
 
 
-    return ToMeVisionTransformer
+    return ToFuVisionTransformer
 
 
 
@@ -62,24 +62,24 @@ def apply_patch(
    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, use_k=False
 ):
     """
-    Applies ToMe to this transformer. Afterward, set r using model.r.
+    Applies ToFu to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tome_info["source"] afterward.
+    The sources will be available at model._tofu_info["source"] afterward.
 
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    ToMeVisionTransformer = make_tome_class(model.__class__)
-    print('using', 'tome')
+    ToFuVisionTransformer = make_tofu_class(model.__class__)
+    print('using', 'tofu')
 
-    model.__class__ = ToMeVisionTransformer
+    model.__class__ = ToFuVisionTransformer
     model.r = 0
     model.ratio = 1.0 
     model.use_k = use_k
     
-    # model.compress_method = 'tome' 
-    model._tome_info = {
+    # model.compress_method = 'tofu' 
+    model._tofu_info = {
         "r": model.r,
         "ratio": model.ratio,
         "margin":  [],
@@ -92,12 +92,15 @@ def apply_patch(
     }
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._tome_info["distill_token"] = True
+        model._tofu_info["distill_token"] = True
+    current_layer = 0
+    num_layers = len(model.blocks)
 
     for module in model.modules():
 
         if isinstance(module, Block):
-            module.__class__ = ToMeBlock if use_k  else ToMeBlockUsingRatio
-            module._tome_info = model._tome_info
+            module.__class__ = ToFuBlock if use_k  else ToFuBlockUsingRatio
+            module._tofu_info = model._tofu_info
+            module.init_strategy(strategies[current_layer])
         elif isinstance(module, Attention):
-            module.__class__ = ToMeAttention
+            module.__class__ = ToFuAttention

@@ -57,7 +57,7 @@ def bipartite_soft_matching(
         if class_token:
             unm_idx = unm_idx.sort(dim=1)[0]
 
-    def merge(x: torch.Tensor, method, mode="mean") -> torch.Tensor:
+    def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
         n, t1, c = src.shape
         src, dst = x[..., ::2, :], x[..., 1::2, :]
         unm = src.gather(dim=-2, index=unm_idx.expand(n, t1 - r, c))
@@ -71,6 +71,9 @@ def bipartite_soft_matching(
             dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce='mean')
             n = dst_norm.scatter_reduce(-1, dst_idx, src_norm, reduce='amax')
             dst = dst/dst_norm * n 
+        elif mode == 'amax':
+            src = src.gather(dim=-2, index=src_idx.expand(n, r, c))
+            dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce='amax')
 
         return torch.cat([unm, dst], dim=1)
 
@@ -201,7 +204,6 @@ def merge_wavg(
     x = x / size
 
     return x, None 
-
 
 
 def merge_source(

@@ -36,9 +36,12 @@ from peft import get_peft_model, LoraConfig, TaskType
 
 from timm.data import create_transform
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+import os
+import json
+from torchvision.datasets import ImageNet 
 
-# DATA_PATH = '/mnt/data/mount_4TBSSD/nmduy/pitome' 
-DATA_PATH = '/media/caduser/MyBook/chau' 
+
+
 
 def dist_init(port=2333):
     if multiprocessing.get_start_method(allow_none=True) != 'spawn':
@@ -537,16 +540,27 @@ class _RepeatSampler(object):
 
 
 
-
 def build_dataset(is_train, args):
     transform = build_transform(is_train, args)
 
-    root = os.path.join(args.data_path, 'train' if is_train else 'val')
-    dataset = datasets.ImageFolder(root, transform=transform)
+    if args.data_set == 'CIFAR':
+        dataset = datasets.CIFAR100(args.data_path, train=is_train, transform=transform)
+        nb_classes = 100
+    elif args.data_set == 'IMNET':
+        root = os.path.join(args.data_path, 'train' if is_train else 'val')
+        dataset = datasets.ImageFolder(root, transform=transform)
+        nb_classes = 1000
+    elif args.data_set == 'INAT':
+        dataset = INatDataset(args.data_path, train=is_train, year=2018,
+                              category=args.inat_category, transform=transform)
+        nb_classes = dataset.nb_classes
+    elif args.data_set == 'INAT19':
+        dataset = INatDataset(args.data_path, train=is_train, year=2019,
+                              category=args.inat_category, transform=transform)
+        nb_classes = dataset.nb_classes
 
-    print(dataset)
+    return dataset, nb_classes
 
-    return dataset
 
     
 
@@ -565,36 +579,34 @@ def get_lora_timm(model, target_modules=['qkv', 'proj', 'fc1', 'fc2']):
 
 
 def build_transform(is_train, args):
-    mean = IMAGENET_DEFAULT_MEAN
-    std = IMAGENET_DEFAULT_STD
-    # train transform
+    resize_im = args.input_size > 32
     if is_train:
+        # this should always dispatch to transforms_imagenet_train
         transform = create_transform(
             input_size=args.input_size,
             is_training=True,
             color_jitter=args.color_jitter,
             auto_augment=args.aa,
-            interpolation='bicubic',
+            interpolation=args.train_interpolation,
             re_prob=args.reprob,
             re_mode=args.remode,
             re_count=args.recount,
-            mean=mean,
-            std=std,
         )
+        if not resize_im:
+            # replace RandomResizedCropAndInterpolation with
+            # RandomCrop
+            transform.transforms[0] = transforms.RandomCrop(
+                args.input_size, padding=4)
         return transform
 
-    # eval transform
     t = []
-    if args.input_size <= 224:
-        crop_pct = 224 / 256
-    else:
-        crop_pct = 1.0
-    size = int(args.input_size / crop_pct)
-    t.append(
-        transforms.Resize(size, interpolation=PIL.Image.BICUBIC),  # to maintain same ratio w.r.t. 224 images
-    )
-    t.append(transforms.CenterCrop(args.input_size))
+    if resize_im:
+        size = int((256 / 224) * args.input_size)
+        t.append(
+            transforms.Resize(size, interpolation=3),  # to maintain same ratio w.r.t. 224 images
+        )
+        t.append(transforms.CenterCrop(args.input_size))
 
     t.append(transforms.ToTensor())
-    t.append(transforms.Normalize(mean, std))
+    t.append(transforms.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD))
     return transforms.Compose(t)

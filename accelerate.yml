@@ -8,5 +8,5 @@ main_process_port: 29501
 main_training_function: main
 mixed_precision: fp16
 num_machines: 1
-num_processes: 1
+num_processes: 5 
 use_cpu: false

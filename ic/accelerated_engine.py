@@ -31,8 +31,8 @@ def train_one_epoch(model: torch.nn.Module, criterion,
 
     for data_iter_step, (samples, targets) in enumerate(metric_logger.log_every(data_loader, logger.info_freq, header,logger)):
         # print('got here')
-        with accelerator.autocast():
-            optimizer.zero_grad()
+        # with accelerator.autocast():
+        #     optimizer.zero_grad()
             # print(samples.shape)
 
             # if mixup_fn is not None:
@@ -66,7 +66,7 @@ def evaluate(data_loader, model, accelerator=None):
     # switch to evaluation mode
     model.eval()
     
-    for images, targets  in tqdm(data_loader):
+    for  images, targets in tqdm(data_loader):
         # start = time.time()
 
         output, flops = model(images)

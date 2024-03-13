@@ -20,9 +20,9 @@ import math
 from transformers.modeling_utils import ModuleUtilsMixin 
 
 
-class ToMeDistilBertBlock(TransformerBlock):
-    def init_margin(self, margin):
-        self.margin = margin
+class ToFuDistilBertBlock(TransformerBlock):
+    def init_strategy(self, strategy):
+        self.strategy= strategy 
    
     def forward(
         self,
@@ -49,7 +49,7 @@ class ToMeDistilBertBlock(TransformerBlock):
             head_mask=head_mask,
             output_attentions=output_attentions,
         )
-        ratio = self._tome_info["ratio"].pop()
+        ratio = self._tofu_info["ratio"].pop()
         if output_attentions:
             sa_output, metric ,sa_weights = sa_output  # (bs, seq_length, dim), (bs, n_heads, seq_length, seq_length)
         else:  # To handle these `output_attentions` or `output_hidden_states` cases returning tuples
@@ -63,13 +63,9 @@ class ToMeDistilBertBlock(TransformerBlock):
             merge, _ = bipartite_soft_matching(
                 ratio=ratio,
                 metric=metric,
-                class_token=self._tome_info["class_token"]
+                class_token=self._tofu_info["class_token"]
             )
-            # weight = self._tome_info["size"] 
-            sa_output, self._tome_info["size"] = merge_wavg(merge, sa_output, None)
-            # print(attention_mask.shape)
-
-            # attn_mask = torch.where(attn_mask.squeeze_() >= 0, 1, 0)
+            sa_output, self._tofu_info["size"] = merge(sa_output, self.strategy)
             attn_mask = merge_attention_mask(merge, attention_mask=attn_mask[..., None]).squeeze_()
         else:
             attn_mask = attn_mask
@@ -86,7 +82,7 @@ class ToMeDistilBertBlock(TransformerBlock):
 
 
 
-class ToMeDistilBertAttention(MultiHeadSelfAttention):
+class ToFuDistilBertAttention(MultiHeadSelfAttention):
 
     def forward(
         self,
@@ -153,8 +149,8 @@ class ToMeDistilBertAttention(MultiHeadSelfAttention):
             return (context, k.mean(1))
 
 
-def make_tome_class(transformer_class):
-    class ToMeTransformers(transformer_class):
+def make_tofu_class(transformer_class):
+    class ToFuTransformers(transformer_class):
         """
         Modifications:
         - Initialize r, token size, and token sources.
@@ -170,14 +166,14 @@ def make_tome_class(transformer_class):
         ): 
 
             len_layers = len(self.layer)
-            self._tome_info["ratio"] = [self.ratio if i in [
+            self._tofu_info["ratio"] = [self.ratio if i in [
                 len_layers - 1, 
                 len_layers - 2,
                 len_layers - 3,
                 # len_layers - 6,
                 # len_layers - 9,
             ] else 1.0 for i in range(len_layers) ]
-            # self._tome_info["ratio"] = [self.ratio for i in range(len(self.layer))]
+            # self._tofu_info["ratio"] = [self.ratio for i in range(len(self.layer))]
             all_hidden_states = () if output_hidden_states else None
             all_attentions = () if output_attentions else None
 
@@ -216,30 +212,30 @@ def make_tome_class(transformer_class):
             return flops
 
 
-    return ToMeTransformers
+    return ToFuTransformers
 
 
 
 def apply_patch(
    model: Transformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
     """
-    Applies ToMe to this transformer. Afterward, set r using model.r.
+    Applies ToFu to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tome_info["source"] afterward.
+    The sources will be available at model._tofu_info["source"] afterward.
 
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    ToMeTransformers = make_tome_class(model.__class__)
-    print('using', 'tome')
+    ToFuTransformers = make_tofu_class(model.__class__)
+    print('using', 'tofu')
 
-    model.__class__ = ToMeTransformers
+    model.__class__ = ToFuTransformers
     model.ratio = 1.0 
     model.r=0.0
     
-    # model.compress_method = 'tome' 
-    model._tome_info = {
+    # model.compress_method = 'tofu' 
+    model._tofu_info = {
         "ratio": model.ratio,
         "margin":  [],
         "size": None,
@@ -252,15 +248,15 @@ def apply_patch(
     current_layer = 0
     margin = margin 
     num_layers = len(model.layer)
-    margins = [0.75 - 0.25*(i/num_layers) for i in range(num_layers)]
+    strategies = ['mean' if i > num_layers//2 else 'prune' for i in range(num_layers)]
 
 
     for module in model.modules():
         if isinstance(module, TransformerBlock):
-            module.__class__ = ToMeDistilBertBlock 
-            module.init_margin(margins[current_layer])
-            module._tome_info = model._tome_info
+            module.__class__ = ToFuDistilBertBlock 
+            module._tofu_info = model._tofu_info
+            module.init_strategy(strategies[current_layer])
             current_layer +=1
         if isinstance(module, MultiHeadSelfAttention):
-            module.__class__ = ToMeDistilBertAttention 
+            module.__class__ = ToFuDistilBertAttention 
 
