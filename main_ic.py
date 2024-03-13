@@ -60,19 +60,8 @@ warnings.filterwarnings('ignore')
 
 
 def process_image(batch, transform):
-    # batch = pd.DataFrame(batch)
-    # start = time.time()
-    images = []
-    # labels = []
-    images = [transform(item['image']) for item in batch]
+    images_tensor = torch.stack([transform(item['image']) for item in batch])
     labels_tensor = torch.tensor([item['label'] for item in batch])
-
-    # labels_tensor = torch.cat(list(batch['label']))
-    # labels.append(item['label'])
-    images_tensor =   torch.stack(images)
-    # labels_tensor = torch.tensor(labels)
-    # print(time.time() - start)
-
     return images_tensor, labels_tensor
 
 def get_args_parser():
@@ -351,7 +340,7 @@ def main(args):
     data_loader_train = DataLoader(
         dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
-        num_workers=args.num_workers,
+        num_workers=10,
         pin_memory=args.pin_mem,
         drop_last=True,
         collate_fn=lambda batch: process_image(batch, train_transform),
