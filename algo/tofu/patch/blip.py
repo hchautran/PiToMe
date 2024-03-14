@@ -10,7 +10,7 @@ class ToFuBlock(Block):
     """
     def init_strategy(self, strategy='mean'):
         # self.margin = nn.Parameter(torch.tensor(margin)) 
-        self.merge_strategy = strategy 
+        self.strategy = strategy 
 
     
     def compress_x(self, metric, x):
@@ -26,7 +26,7 @@ class ToFuBlock(Block):
                 self._tofu_info["source"] = merge_source(
                     merge, x, self._tofu_info["source"]
                 )
-            x, self._tofu_info["size"] = merge(x, mode=self.strategy)
+            x = merge(x, mode=self.strategy)
         return x
 
     def forward(self, x, register_hook=False):
@@ -156,7 +156,7 @@ def apply_patch(
     current_layer = 0
     num_layers = len(model.blocks)
     # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
-    strategies = ['mean' if i > num_layers //2 else 'prune' for i in range(num_layers)]
+    strategies = ['tofu' if i > num_layers //2 else 'prune' for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tofu_info["distill_token"] = True

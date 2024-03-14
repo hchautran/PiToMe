@@ -53,7 +53,7 @@ def get_bsm_merge(
 
 def pitome_vision(
     metric: torch.Tensor, 
-    size:torch.Tensor,
+    size:torch.Tensor=None,
     r:int=0,
     ratio:float=1.0,
     margin:torch.Tensor=0.5,
@@ -80,7 +80,8 @@ def pitome_vision(
 
     with torch.no_grad():
         if margin >= 0.45:
-            isolation_score = sim.mean(dim=-1) 
+            sim = F.elu((sim - 0.45)/0.1) 
+            isolation_score = sim.sum(dim=-1) 
             if size is not None:
                 isolation_score = isolation_score - size 
             indices =  torch.argsort(isolation_score, descending=True)
@@ -90,8 +91,9 @@ def pitome_vision(
             node_max, node_idx = scores.max(dim=-1)
             return get_bsm_merge(node_max=node_max, node_idx=node_idx, r=r, class_token=class_token, a_idx=a_idx, b_idx=b_idx)
         else:
-            sim = F.elu((sim - margin)/0.1) 
-            isolation_score = sim.mean(dim=-1) - size 
+            isolation_score = F.elu((sim - margin)/0.1).mean(dim=-1)
+            if size is not None:
+                isolation_score = isolation_score - size 
             # print(isolation_score.shape, size.shape)
             indices =  torch.argsort(isolation_score, descending=True)
             merge_idx = indices[..., :2*r]

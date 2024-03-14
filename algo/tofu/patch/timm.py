@@ -42,7 +42,7 @@ class ToFuBlock(Block):
         if r > 0:
             # Apply ToFu here
             merge, _ = bipartite_soft_matching(
-                metric,
+                metric=metric,
                 r=r,
                 class_token=self._tofu_info["class_token"],
                 # distill_token=self._tofu_info["distill_token"],
@@ -83,7 +83,7 @@ class ToFuBlockUsingRatio(Block):
         if ratio < 1.0:
             # Apply ToFu here
             merge, _ = bipartite_soft_matching(
-                metric,
+                metric=metric,
                 ratio=ratio,
                 class_token=self._tofu_info["class_token"],
                 distill_token=self._tofu_info["distill_token"],
@@ -94,7 +94,7 @@ class ToFuBlockUsingRatio(Block):
                     merge, x, self._tofu_info["source"]
                 )
 
-            x, self._tofu_info["size"] = merge(x, mode=self.strategy)
+            x = merge(x, mode=self.strategy)
 
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))

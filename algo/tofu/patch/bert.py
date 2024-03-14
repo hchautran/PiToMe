@@ -21,8 +21,8 @@ from transformers.modeling_utils import ModuleUtilsMixin
 
 
 class ToFuBertLayer(BertLayer):
-    def init_margin(self, margin):
-        self.margin = margin
+    def init_margin(self, strategy):
+        self.strategy = strategy 
    
     def forward(
         self,
@@ -51,8 +51,7 @@ class ToFuBertLayer(BertLayer):
                 metric=key,
                 class_token=self._tofu_info["class_token"]
             )
-            weight = self._tofu_info["size"] 
-            x, self._tofu_info["size"] = merge(x, mode=self.strategy)
+            x = merge(x, mode=self.strategy)
 
             attention_mask = torch.where(attention_mask.squeeze_() >= 0, 1, 0)
             attention_mask = merge_attention_mask(merge, attention_mask=attention_mask[..., None]).squeeze_()

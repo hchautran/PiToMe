@@ -65,7 +65,7 @@ class ToFuDistilBertBlock(TransformerBlock):
                 metric=metric,
                 class_token=self._tofu_info["class_token"]
             )
-            sa_output, self._tofu_info["size"] = merge(sa_output, self.strategy)
+            sa_output = merge(sa_output, self.strategy)
             attn_mask = merge_attention_mask(merge, attention_mask=attn_mask[..., None]).squeeze_()
         else:
             attn_mask = attn_mask

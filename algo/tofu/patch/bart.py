@@ -30,12 +30,7 @@ class ToFuBartEncoderLayer(BartEncoderLayer):
                 self._tofu_info["source"] = merge_source(
                     merge, x, self._tofu_info["source"]
                 )
-            if isolated_score is not None and self._tofu_info["size"] is not None:
-                weight = self._tofu_info["size"] + isolated_score
-                x, self._tofu_info["size"] = merge(x, mode=self.strategy)
-            else:
-                weight = self._tofu_info["size"] 
-                x, self._tofu_info["size"] = merge(x, mode=self.strategy)
+            x = merge(x, mode=self.strategy)
             attention_mask = merge_attention_mask(merge, attention_mask=attention_mask[..., None]).squeeze_(-1)
 
         return x, attention_mask

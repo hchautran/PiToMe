@@ -58,19 +58,23 @@ def bipartite_soft_matching(
             unm_idx = unm_idx.sort(dim=1)[0]
 
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
-        n, t1, c = src.shape
         src, dst = x[..., ::2, :], x[..., 1::2, :]
+        n, t1, c = src.shape
         unm = src.gather(dim=-2, index=unm_idx.expand(n, t1 - r, c))
 
         if mode == 'mean':
             src = src.gather(dim=-2, index=src_idx.expand(n, r, c))
             dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce='mean')
         elif mode == 'tofu':
+            # print(dst.shape)
+            dst_norm = torch.norm(dst, dim=-1) 
             src = src.gather(dim=-2, index=src_idx.expand(n, r, c))
-            src_norm, dst_norm = torch.norm(src,-1), torch.norm(dst, -1) 
+            src_norm = torch.norm(src, dim=-1) 
+           
             dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce='mean')
-            n = dst_norm.scatter_reduce(-1, dst_idx, src_norm, reduce='amax')
-            dst = dst/dst_norm * n 
+            n = dst_norm.scatter_reduce(-1, dst_idx.squeeze(), src_norm, reduce='amax')
+            dst = dst/dst_norm[...,None] * n[..., None]
+            
         elif mode == 'amax':
             src = src.gather(dim=-2, index=src_idx.expand(n, r, c))
             dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce='amax')

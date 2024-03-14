@@ -14,25 +14,14 @@ from pathlib import Path
 from timm.data import Mixup
 from timm.models import create_model
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
-from timm.optim import create_optimizer
-from timm.utils import NativeScaler, get_state_dict, ModelEma
-
 import ic.models_mae
 from ic.accelerated_engine import train_one_epoch, evaluate
 from ic.samplers import RASampler
 import ic.utils as utils
 import shutil
 import warnings
-# from timm.scheduler.plateau_lr import PlateauLRScheduler 
 from timm.scheduler.cosine_lr import CosineLRScheduler 
-
-from datasets import load_dataset
-from torchvision import transforms
-import algo.tome
-import algo.pitome
-from PIL import Image
 import torch
-import algo
 from algo import (
     PITOME,
     TOME,
@@ -41,17 +30,15 @@ from algo import (
     LTMP,
     DIFFRATE,
     NONE, 
+    pitome,
+    tome,
+    tofu,
+    DiffRate
 )
-from dotenv import load_dotenv
-from ic.utils import build_transform
 from consts import DATA_PATH 
 import os
 from accelerate import Accelerator
 from torch.utils.data import DataLoader
-import wandb
-import pandas as pd 
-from skimage import color
-from ic.utils import get_lora_timm 
 
 
 torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
@@ -220,15 +207,15 @@ def get_args_parser():
 
 def get_tome_model(model, args):
     if 'deit' in args.model:
-        algo.tome.patch.deit(model,use_k=args.use_k)
+        tome.patch.deit(model,use_k=args.use_k)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
     elif 'mae' in args.model:
-        algo.tome.patch.mae(model,use_k=args.use_k)
+        tome.patch.mae(model,use_k=args.use_k)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
     elif 'vit' in args.model:
-        algo.tome.patch.aug(model,use_k=args.use_k)
+        tome.patch.aug(model,use_k=args.use_k)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
 
@@ -238,15 +225,15 @@ def get_tome_model(model, args):
 
 def get_pitome_model(model, args):
     if 'deit' in args.model:
-        algo.pitome.patch.deit(model,use_k=args.use_k)
+        pitome.patch.deit(model,use_k=args.use_k)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
     elif 'mae' in args.model:
-        algo.pitome.patch.mae(model,use_k=args.use_k)
+        pitome.patch.mae(model,use_k=args.use_k)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
     elif 'vit' in args.model:
-        algo.pitome.patch.aug(model,use_k=args.use_k)
+        pitome.patch.aug(model,use_k=args.use_k)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
     else:
@@ -254,11 +241,28 @@ def get_pitome_model(model, args):
 
 
 
+def get_tofu_model(model, args):
+    if 'deit' in args.model:
+        tofu.patch.deit(model,use_k=args.use_k)
+        model.ratio=float(args.ratio)
+        model.r=int(args.reduced_token)
+    elif 'mae' in args.model:
+        tofu.patch.mae(model,use_k=args.use_k)
+        model.ratio=float(args.ratio)
+        model.r=int(args.reduced_token)
+    elif 'vit' in args.model:
+        tofu.patch.aug(model,use_k=args.use_k)
+        model.ratio=float(args.ratio)
+        model.r=int(args.reduced_token)
+    else:
+        raise ValueError("only support deit, mae and caformer in this codebase")
+
+
 def get_diffrate_model(model, args):
     if 'deit' in args.model:
-        algo.DiffRate.patch.deit(model, prune_granularity=args.granularity, merge_granularity=args.granularity)
+        DiffRate.patch.deit(model, prune_granularity=args.granularity, merge_granularity=args.granularity)
     elif 'mae' in args.model:
-        algo.DiffRate.patch.mae(model, prune_granularity=args.granularity, merge_granularity=args.granularity)
+        DiffRate.patch.mae(model, prune_granularity=args.granularity, merge_granularity=args.granularity)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
 
@@ -362,6 +366,8 @@ def main(args):
         get_pitome_model(model, args)
     elif args.algo == DIFFRATE:
         get_diffrate_model(model, args)
+    elif args.algo == TOFU:
+        get_tofu_model(model, args)
     else:
         args.ratio = 1.0
         get_tome_model(model, args)

@@ -26,7 +26,7 @@ class ToFuBlock(ResidualAttentionBlock):
                 )
 
 
-            x, self._tofu_info["size"] = merge(x, mode=self.strategy)
+            x = merge(x, mode=self.strategy)
 
         return x
 
@@ -111,7 +111,7 @@ def apply_patch(
     num_layers = len(model.resblocks)
     # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
     # margins = [.9 - .9*(i/num_layers) for i in range(num_layers)]
-    strategies = ['mean' if i > num_layers//2 else 'prune' for i in range(num_layers)]
+    strategies = ['tofu' if i > num_layers//2 else 'prune' for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tofu_info["distill_token"] = True

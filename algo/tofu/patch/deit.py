@@ -96,6 +96,7 @@ def apply_patch(
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tofu_info["distill_token"] = True
 
+    num_layers = len(model.blocks)
     strategies = ['tofu' if i > num_layers//2 else 'prune' for i in range(num_layers)]
     current_layer = 0 
     for module in model.modules():
