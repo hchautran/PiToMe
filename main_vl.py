@@ -224,6 +224,7 @@ def main():
             print('r_sum', metrics['txt_r10'] + metrics['txt_r5'] + metrics['txt_r1'] + metrics['img_r10'] + metrics['img_r5'] + metrics['img_r1'])
     else:
         runner.train()
+        metrics = runner.evaluate(skip_reload=False)['test']
     print_gflops(args, model)
 
 

@@ -80,7 +80,6 @@ def pitome_vision(
 
     with torch.no_grad():
         if margin >= 0.45:
-            sim = F.elu((sim - 0.45)/0.1) 
             isolation_score = sim.sum(dim=-1) 
             if size is not None:
                 isolation_score = isolation_score - size 
@@ -91,7 +90,8 @@ def pitome_vision(
             node_max, node_idx = scores.max(dim=-1)
             return get_bsm_merge(node_max=node_max, node_idx=node_idx, r=r, class_token=class_token, a_idx=a_idx, b_idx=b_idx)
         else:
-            isolation_score = F.elu((sim - margin)/0.1).mean(dim=-1)
+            isolation_score = sim.sum(dim=-1)
+            # isolation_score = F.elu((sim - margin)/0.1).mean(dim=-1)
             if size is not None:
                 isolation_score = isolation_score - size 
             # print(isolation_score.shape, size.shape)

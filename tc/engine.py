@@ -25,9 +25,11 @@ from algo import (
     pitome, 
     tome,
     tofu,
+    dct,
     PITOME,
     TOME,
     TOFU,
+    DCT,
     NONE
 )
 import os
@@ -127,7 +129,9 @@ class Engine:
         elif self.algo == TOME:
             tome.patch.bert(self.model.bert.encoder)
         elif self.algo == TOFU:
-            tome.patch.bert(self.model.bert.encoder)
+            tofu.patch.bert(self.model.bert.encoder)
+        elif self.algo == DCT:
+            dct.patch.bert(self.model.bert.encoder)
 
         self.model.bert.encoder.ratio = self.ratio 
         self.tokenizer = AutoTokenizer.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
@@ -144,7 +148,9 @@ class Engine:
         elif self.algo == TOME:
             tome.patch.distilbert(self.model.distilbert.transformer)
         elif self.algo == TOFU:
-            tome.patch.distilbert(self.model.distilbert.transformer)
+            tofu.patch.distilbert(self.model.distilbert.transformer)
+        elif self.algo == DCT:
+            dct.patch.distilbert(self.model.distilbert.transformer)
 
         self.model.distilbert.transformer.ratio = self.ratio 
         self.tokenizer = AutoTokenizer.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')

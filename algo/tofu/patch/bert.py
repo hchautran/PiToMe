@@ -14,14 +14,14 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 from transformers.models.bert.modeling_bert import BertLayer, BertEncoder, BertSelfAttention, BertAttention, apply_chunking_to_forward
-from ..merge import merge_source, bipartite_soft_matching,  merge_wavg, merge_attention_mask
+from ..merge import bipartite_soft_matching, merge_attention_mask
 from typing import Optional, Union 
 import math
 from transformers.modeling_utils import ModuleUtilsMixin 
 
 
 class ToFuBertLayer(BertLayer):
-    def init_margin(self, strategy):
+    def init_strategy(self, strategy):
         self.strategy = strategy 
    
     def forward(
@@ -278,13 +278,14 @@ def apply_patch(
     current_layer = 0
     margin = margin 
     num_layers = len(model.layer)
-    margins = [0.75 - 0.25*(i/num_layers) for i in range(num_layers)]
+    # margins = [0.75 - 0.25*(i/num_layers) for i in range(num_layers)]
+    # strategies = ['tofu' for i in range(num_layers)]
 
 
     for module in model.modules():
         if isinstance(module, BertLayer):
             module.__class__ = ToFuBertLayer
-            module.init_strategy(margins[current_layer])
+            module.init_strategy('tofu')
             module._tofu_info = model._tofu_info
             current_layer +=1
         if isinstance(module, BertAttention):

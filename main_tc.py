@@ -144,9 +144,8 @@ if __name__ == "__main__":
                         help="choose an LRA dataset from available options")
     parser.add_argument("--algo", default=PITOME, choices=[PITOME, TOME, NONE, TOFU, DCT],
                         help="choose an LRA dataset from available options")
-    parser.add_argument("--ratio", default=0.55,
-                        help="remain ratio")
-    args = parser.parse_args()
+    parser.add_argument("--ratio", default=0.55, help="remain ratio")
+    parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
     args = parser.parse_args()
     batch_size = 4 
     avg_factor = 0.95
@@ -154,8 +153,15 @@ if __name__ == "__main__":
     algo = args.algo
 
 
+
+    batch_size = 4 
+    avg_factor = 0.95
+    task_name = args.task
+    algo = args.algo
+
+
     for model_ckt in [
-        # BERT_BASE,
+        BERT_BASE,
         DISTILBERT_BASE, 
     ]:
         engine = Engine(
@@ -164,9 +170,13 @@ if __name__ == "__main__":
             ratio=float(args.ratio),
             algo=args.algo,
             batch_size=64,
-            enable_log=False
+            enable_log=False,
+            trained=True
         )
-        engine.train(num_epochs=2)
+        if args.eval:
+            engine.evaluate()
+        else:
+            engine.train(num_epochs=2)
                 
                     
                 

@@ -51,91 +51,92 @@ class DCTDistilBertBlock(TransformerBlock):
         )
         ratio = self._dct_info["ratio"].pop()
         if output_attentions:
-            sa_output, metric ,sa_weights = sa_output  # (bs, seq_length, dim), (bs, n_heads, seq_length, seq_length)
+            sa_output, sa_weights = sa_output  # (bs, seq_length, dim), (bs, n_heads, seq_length, seq_length)
         else:  # To handle these `output_attentions` or `output_hidden_states` cases returning tuples
             if type(sa_output) != tuple:
                 raise TypeError(f"sa_output must be a tuple but it is {type(sa_output)} type")
-            sa_output, metric = sa_output
+            sa_output = sa_output[0]
     
         sa_output = self.sa_layer_norm(sa_output + x)  # (bs, seq_length, dim)
         ffn_output = self.ffn(sa_output)  # (bs, seq_length, dim)
         ffn_output: torch.Tensor = self.output_layer_norm(ffn_output + sa_output)  # (bs, seq_length, dim)
 
         if ratio < 1.0:
-            output = dc_transform(ffn_output, ratio=ratio)
-            attn_mask = torch.ones_like(output).to(output.device)
-        output = ffn_output
+            output  = dc_transform(ffn_output, ratio=ratio, class_token=self._dct_info['class_token'])
+            attn_mask = torch.ones((output.shape[0], output.shape[1])).to(output.device)
+        else:
+            output = ffn_output
         if output_attentions:
             output = (attn_mask, sa_weights, output)
         return attn_mask, output 
 
 
 
-class DCTDistilBertAttention(MultiHeadSelfAttention):
+# class DCTDistilBertAttention(MultiHeadSelfAttention):
 
-    def forward(
-        self,
-        query: torch.Tensor,
-        key: torch.Tensor,
-        value: torch.Tensor,
-        mask: torch.Tensor,
-        head_mask: Optional[torch.Tensor] = None,
-        output_attentions: bool = False,
-    ) -> Tuple[torch.Tensor, ...]:
-        """
-        Parameters:
-            query: torch.tensor(bs, seq_length, dim)
-            key: torch.tensor(bs, seq_length, dim)
-            value: torch.tensor(bs, seq_length, dim)
-            mask: torch.tensor(bs, seq_length)
+#     def forward(
+#         self,
+#         query: torch.Tensor,
+#         key: torch.Tensor,
+#         value: torch.Tensor,
+#         mask: torch.Tensor,
+#         head_mask: Optional[torch.Tensor] = None,
+#         output_attentions: bool = False,
+#     ) -> Tuple[torch.Tensor, ...]:
+#         """
+#         Parameters:
+#             query: torch.tensor(bs, seq_length, dim)
+#             key: torch.tensor(bs, seq_length, dim)
+#             value: torch.tensor(bs, seq_length, dim)
+#             mask: torch.tensor(bs, seq_length)
 
-        Returns:
-            weights: torch.tensor(bs, n_heads, seq_length, seq_length) Attention weights context: torch.tensor(bs,
-            seq_length, dim) Contextualized layer. Optional: only if `output_attentions=True`
-        """
-        bs, q_length, dim = query.size()
-        k_length = key.size(1)
-        # assert dim == self.dim, f'Dimensions do not match: {dim} input vs {self.dim} configured'
-        # assert key.size() == value.size()
+#         Returns:
+#             weights: torch.tensor(bs, n_heads, seq_length, seq_length) Attention weights context: torch.tensor(bs,
+#             seq_length, dim) Contextualized layer. Optional: only if `output_attentions=True`
+#         """
+#         bs, q_length, dim = query.size()
+#         k_length = key.size(1)
+#         # assert dim == self.dim, f'Dimensions do not match: {dim} input vs {self.dim} configured'
+#         # assert key.size() == value.size()
 
-        dim_per_head = self.dim // self.n_heads
+#         dim_per_head = self.dim // self.n_heads
 
-        mask_reshp = (bs, 1, 1, k_length)
+#         mask_reshp = (bs, 1, 1, k_length)
 
-        def shape(x: torch.Tensor) -> torch.Tensor:
-            """separate heads"""
-            return x.view(bs, -1, self.n_heads, dim_per_head).transpose(1, 2)
+#         def shape(x: torch.Tensor) -> torch.Tensor:
+#             """separate heads"""
+#             return x.view(bs, -1, self.n_heads, dim_per_head).transpose(1, 2)
 
-        def unshape(x: torch.Tensor) -> torch.Tensor:
-            """group heads"""
-            return x.transpose(1, 2).contiguous().view(bs, -1, self.n_heads * dim_per_head)
+#         def unshape(x: torch.Tensor) -> torch.Tensor:
+#             """group heads"""
+#             return x.transpose(1, 2).contiguous().view(bs, -1, self.n_heads * dim_per_head)
 
-        q = shape(self.q_lin(query))  # (bs, n_heads, q_length, dim_per_head)
-        k = shape(self.k_lin(key))  # (bs, n_heads, k_length, dim_per_head)
-        v = shape(self.v_lin(value))  # (bs, n_heads, k_length, dim_per_head)
+#         q = shape(self.q_lin(query))  # (bs, n_heads, q_length, dim_per_head)
+#         k = shape(self.k_lin(key))  # (bs, n_heads, k_length, dim_per_head)
+#         v = shape(self.v_lin(value))  # (bs, n_heads, k_length, dim_per_head)
 
-        q = q / math.sqrt(dim_per_head)  # (bs, n_heads, q_length, dim_per_head)
-        scores = torch.matmul(q, k.transpose(2, 3))  # (bs, n_heads, q_length, k_length)
-        mask = (mask == 0).view(mask_reshp).expand_as(scores)  # (bs, n_heads, q_length, k_length)
-        scores = scores.masked_fill(
-            mask, torch.tensor(torch.finfo(scores.dtype).min)
-        )  # (bs, n_heads, q_length, k_length)
+#         q = q / math.sqrt(dim_per_head)  # (bs, n_heads, q_length, dim_per_head)
+#         scores = torch.matmul(q, k.transpose(2, 3))  # (bs, n_heads, q_length, k_length)
+#         mask = (mask == 0).view(mask_reshp).expand_as(scores)  # (bs, n_heads, q_length, k_length)
+#         scores = scores.masked_fill(
+#             mask, torch.tensor(torch.finfo(scores.dtype).min)
+#         )  # (bs, n_heads, q_length, k_length)
 
-        weights = nn.functional.softmax(scores, dim=-1)  # (bs, n_heads, q_length, k_length)
-        weights = self.dropout(weights)  # (bs, n_heads, q_length, k_length)
+#         weights = nn.functional.softmax(scores, dim=-1)  # (bs, n_heads, q_length, k_length)
+#         weights = self.dropout(weights)  # (bs, n_heads, q_length, k_length)
 
-        # Mask heads if we want to
-        if head_mask is not None:
-            weights = weights * head_mask
+#         # Mask heads if we want to
+#         if head_mask is not None:
+#             weights = weights * head_mask
 
-        context = torch.matmul(weights, v)  # (bs, n_heads, q_length, dim_per_head)
-        context = unshape(context)  # (bs, q_length, dim)
-        context = self.out_lin(context)  # (bs, q_length, dim)
+#         context = torch.matmul(weights, v)  # (bs, n_heads, q_length, dim_per_head)
+#         context = unshape(context)  # (bs, q_length, dim)
+#         context = self.out_lin(context)  # (bs, q_length, dim)
 
-        if output_attentions:
-            return (context, k.mean(1), weights)
-        else:
-            return (context, k.mean(1))
+#         if output_attentions:
+#             return (context, k.mean(1), weights)
+#         else:
+#             return (context, k.mean(1))
 
 
 def make_dct_class(transformer_class):
@@ -180,7 +181,6 @@ def make_dct_class(transformer_class):
                 # B, T, _ = hidden_state.shape
 
                 attn_mask = layer_outputs[0]
-                # print('mask',attn_mask.shape)
                 # print('x',hidden_state.shape)
                     
 

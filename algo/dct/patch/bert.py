@@ -41,23 +41,24 @@ class DCTBertLayer(BertLayer):
         )
         ratio = self._dct_info["ratio"].pop()
         x = self_attention_outputs[0]
-        key = self_attention_outputs[1]
 
     
-
-        if ratio < 1.0:
-            merge, _ = dc_transform(
-                x=x,
-                ratio=ratio,
-                class_token=self._dct_info["class_token"],
-            )
-            attention_mask = torch.ones_like(x).to(x.device) 
 
 
         x = apply_chunking_to_forward(
             self.feed_forward_chunk, self.chunk_size_feed_forward, self.seq_len_dim, x
         )
 
+
+        if ratio < 1.0:
+            x = dc_transform(
+                x=x,
+                ratio=ratio,
+                class_token=self._dct_info["class_token"],
+            )
+            attention_mask = torch.ones((x.shape[0], x.shape[1])).to(x.device) 
+        else:
+            attention_mask.squeeze_()
 
 
         # print(x.isnan()._is_any_true())
@@ -114,9 +115,8 @@ def make_dct_class(transformer_class):
                     layer_head_mask,
                     output_attentions,
                 )
-                B, T, _ = hidden_states.shape
-
                 hidden_states = layer_outputs[0]
+                B, T, _ = hidden_states.shape
                 attention_mask =   self.get_extended_attention_mask(
                     layer_outputs[1],
                     (B,T)

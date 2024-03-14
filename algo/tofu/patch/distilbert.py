@@ -248,14 +248,13 @@ def apply_patch(
     current_layer = 0
     margin = margin 
     num_layers = len(model.layer)
-    strategies = ['mean' if i > num_layers//2 else 'prune' for i in range(num_layers)]
 
 
     for module in model.modules():
         if isinstance(module, TransformerBlock):
             module.__class__ = ToFuDistilBertBlock 
             module._tofu_info = model._tofu_info
-            module.init_strategy(strategies[current_layer])
+            module.init_strategy('tofu')
             current_layer +=1
         if isinstance(module, MultiHeadSelfAttention):
             module.__class__ = ToFuDistilBertAttention 
