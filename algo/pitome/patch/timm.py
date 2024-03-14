@@ -35,17 +35,16 @@ class PiToMeBlockUsingRatio(Block):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
         x_attn, metric = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
 
-        # print(x.shape)
         ratio = self._tome_info["ratio"].pop(0)
         if ratio < 1.0:
             merge, isolated_score = pitome_vision(
                 ratio=ratio,
+                size=self._tome_info["size"],
                 metric=x,
                 margin=self.margin,
                 class_token=self._tome_info["class_token"]

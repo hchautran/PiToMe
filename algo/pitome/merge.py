@@ -9,7 +9,6 @@ import math
 from typing import Callable, Tuple
 import torch
 import torch.nn.functional as F
-from geoopt import Lorentz
 
 
 def do_nothing(x, mode=None):
@@ -54,7 +53,7 @@ def get_bsm_merge(
 
 def pitome_vision(
     metric: torch.Tensor, 
-
+    size:torch.Tensor,
     r:int=0,
     ratio:float=1.0,
     margin:torch.Tensor=0.5,
@@ -63,7 +62,10 @@ def pitome_vision(
 
     with torch.no_grad():
         if class_token:
+            
             metric=metric[:,1:,:]
+            if size is not None:
+                size=size.squeeze()[:, 1:]
 
         B,T,C = metric.shape
         if r > 0:
@@ -79,6 +81,8 @@ def pitome_vision(
     with torch.no_grad():
         if margin >= 0.45:
             isolation_score = sim.mean(dim=-1) 
+            if size is not None:
+                isolation_score = isolation_score - size 
             indices =  torch.argsort(isolation_score, descending=True)
             a_idx, b_idx = indices[..., ::2], indices[..., 1::2] 
             scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, b_idx.shape[-1])) 
@@ -87,7 +91,8 @@ def pitome_vision(
             return get_bsm_merge(node_max=node_max, node_idx=node_idx, r=r, class_token=class_token, a_idx=a_idx, b_idx=b_idx)
         else:
             sim = F.elu((sim - margin)/0.1) 
-            isolation_score = sim.mean(dim=-1) 
+            isolation_score = sim.mean(dim=-1) - size 
+            # print(isolation_score.shape, size.shape)
             indices =  torch.argsort(isolation_score, descending=True)
             merge_idx = indices[..., :2*r]
             protected_idx = indices[..., 2*r:]

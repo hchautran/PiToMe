@@ -7,7 +7,7 @@ from copy import copy
 from .timm import DCTBlockUsingRatio
 
 def make_dct_class(transformer_class):
-    class ToMeVisionTransformer(transformer_class):
+    class DCTVisionTransformer(transformer_class):
         """
         Modifications:
         - Initialize r, token size, and token sources.
@@ -54,7 +54,7 @@ def make_dct_class(transformer_class):
             return flops
 
 
-    return ToMeVisionTransformer
+    return DCTVisionTransformer
 
 
 
@@ -62,7 +62,7 @@ def apply_patch(
    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, use_k=False
 ):
     """
-    Applies ToMe to this transformer. Afterward, set r using model.r.
+    Applies DCT to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
     The sources will be available at model._dct_info["source"] afterward.
@@ -70,10 +70,10 @@ def apply_patch(
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    ToMeVisionTransformer = make_dct_class(model.__class__)
+    DCTVisionTransformer = make_dct_class(model.__class__)
     print('using', 'dct')
 
-    model.__class__ = ToMeVisionTransformer
+    model.__class__ = DCTVisionTransformer
     model.r = 0
     model.ratio = 1.0 
     model.use_k = use_k

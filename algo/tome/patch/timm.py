@@ -70,20 +70,19 @@ class ToMeBlockUsingRatio(Block):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Note: this is copied from timm.models.vision_transformer.Block with modifications.
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
         x_attn, metric = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
 
         ratio = self._tome_info["ratio"].pop(0)
         if ratio < 1.0:
-            # Apply ToMe here
             merge, _ = bipartite_soft_matching(
-                metric=x,
+                metric=metric,
                 ratio=ratio,
                 class_token=self._tome_info["class_token"],
                 distill_token=self._tome_info["distill_token"],
             )
+
             if self._tome_info["trace_source"]:
                 self._tome_info["source"] = merge_source(
                     merge, x, self._tome_info["source"]
