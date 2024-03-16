@@ -7,6 +7,7 @@
 
 import argparse
 import random
+import pandas as pd
 
 import numpy as np
 import torch
@@ -166,11 +167,11 @@ def setup_seeds(config):
     cudnn.benchmark = False
     cudnn.deterministic = True
 
-def print_gflops(args, model):
+def get_gflops(args, model):
     if 'clip' in args.model:
-        print('gflops', model.visual.transformer.total_flop/1e9)
+        return model.visual.transformer.total_flop/1e9
     else:
-        print('gflops', model.visual_encoder.total_flop/1e9)
+        return model.visual_encoder.total_flop/1e9
     
 
 def main():
@@ -225,8 +226,36 @@ def main():
     else:
         runner.train()
         metrics = runner.evaluate(skip_reload=False)['test']
-    print_gflops(args, model)
+    gflops = get_gflops(args, model)
+    if metrics is not None:
+        metrics['gflops'] = gflops
+    return metrics, args
 
 
 if __name__ == "__main__":
-    main()
+    import os
+    import pathlib
+    abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
+    file_name = 'test.csv'
+    path = f'{abs_path}/{file_name}'
+    if not pathlib.Path(path).is_file():
+        head = "model, algo, gflops, ratio ,txt_r1, txt_r5, txt_r10, img_r1, img_r5, img_r10, r_sum\n"
+        with open(file_name, "a") as myfile:
+            myfile.write(head)
+    
+    metrics, args = main()
+    if metrics is not None:
+        sum = metrics["txt_r1"] + metrics["txt_r5"] + metrics["txt_r10"] + metrics["img_r1"] + metrics["img_r5"] + metrics["img_r10"]
+        row = f'{args.model}, {args.algo}, {metrics["gflops"]}, {args.ratio}, {metrics["txt_r1"]}, {metrics["txt_r5"]}, {metrics["txt_r10"]}, {metrics["img_r1"]}, {metrics["img_r5"]}, {metrics["img_r10"]}, {sum}\n'
+        with open(file_name, "a") as myfile:
+            myfile.write(row)
+
+    
+
+
+    # df = pd.DataFrame()
+    # print(metrics)
+    # df.to_csv(args.model)
+    
+    
+    

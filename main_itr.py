@@ -199,6 +199,7 @@ if __name__ == '__main__':
                     df = pd.concat([df, pd.DataFrame(metrics,index=[0])]) 
 
                     print(metrics)
+        df = pd.DataFrame(metrics)
 
     df.to_csv(f'{config.dataset}_use_k.csv')
 
