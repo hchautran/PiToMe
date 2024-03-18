@@ -178,12 +178,12 @@ if __name__ == "__main__":
         file_name = 'test_tc.csv'
         path = f'{abs_path}/{file_name}'
         if not pathlib.Path(path).is_file():
-            head = "model, algo, gflops, ratio ,acc\n"
+            head = "dataset, model, algo, gflops, ratio ,acc\n"
             with open(file_name, "a") as myfile:
                 myfile.write(head)
 
         if metrics is not None:
-            row = f'{BERT_BASE}, {args.algo}, {metrics["gflops"]}, {metrics["ratio"]}, {metrics["acc"]}\n'
+            row = f'{args.task}, {model_ckt}, {args.algo}, {metrics["gflops"]}, {metrics["ratio"]}, {metrics["acc"]}\n'
             with open(file_name, "a") as myfile:
                 myfile.write(row)
                         

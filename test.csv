@@ -1,2 +1,0 @@
-model, algo, gflops, ratio ,txt_r1, txt_r5, txt_r10, img_r1, img_r5, img_r10, r_sum
-clip, pitome, 71.417565184, 0.9, 74.1, 92.9, 96.3, 56.36, 81.68, 88.26, 489.6

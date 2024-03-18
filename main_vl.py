@@ -144,6 +144,7 @@ def parse_args():
     parser.add_argument("--use_k", default=False)
     parser.add_argument("--ratio", default=0.9, type=float)
     parser.add_argument("--reduced_token", default=12, type=int)
+    parser.add_argument('--dataset', default='flickr', help='dataset')
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
     parser.add_argument(
         "--options",
@@ -236,17 +237,17 @@ if __name__ == "__main__":
     import os
     import pathlib
     abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
-    file_name = 'test.csv'
+    file_name = f'test_itr.csv'
     path = f'{abs_path}/{file_name}'
     if not pathlib.Path(path).is_file():
-        head = "model, algo, gflops, ratio ,txt_r1, txt_r5, txt_r10, img_r1, img_r5, img_r10, r_sum\n"
+        head = "dataset, model, algo, gflops, ratio ,txt_r1, txt_r5, txt_r10, img_r1, img_r5, img_r10, r_sum\n"
         with open(file_name, "a") as myfile:
             myfile.write(head)
     
     metrics, args = main()
     if metrics is not None:
         sum = metrics["txt_r1"] + metrics["txt_r5"] + metrics["txt_r10"] + metrics["img_r1"] + metrics["img_r5"] + metrics["img_r10"]
-        row = f'{args.model}, {args.algo}, {metrics["gflops"]}, {args.ratio}, {metrics["txt_r1"]}, {metrics["txt_r5"]}, {metrics["txt_r10"]}, {metrics["img_r1"]}, {metrics["img_r5"]}, {metrics["img_r10"]}, {sum}\n'
+        row = f'{args.dataset}, {args.model}, {args.algo}, {metrics["gflops"]}, {args.ratio}, {metrics["txt_r1"]}, {metrics["txt_r5"]}, {metrics["txt_r10"]}, {metrics["img_r1"]}, {metrics["img_r5"]}, {metrics["img_r10"]}, {sum}\n'
         with open(file_name, "a") as myfile:
             myfile.write(row)
 
