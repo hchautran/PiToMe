@@ -59,8 +59,7 @@ class DCTBlockUsingRatio(Block):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Note: this is copied from timm.models.vision_transformer.Block with modifications.
-        attn_size = self._dct_info["size"] if self._dct_info["prop_attn"] else None
-        x_attn, metric = self.attn(self.norm1(x), attn_size)
+        x_attn = self.attn(self.norm1(x))
         x = x + self._drop_path1(x_attn)
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
         ratio = self._dct_info["ratio"].pop(0)

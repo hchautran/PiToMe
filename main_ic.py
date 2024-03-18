@@ -31,6 +31,7 @@ from algo import (
     DIFFRATE,
     NONE, 
     pitome,
+    dct,
     tome,
     tofu,
     DiffRate
@@ -273,9 +274,26 @@ def get_diffrate_model(model, args):
     
             
 
+def get_dct_model(model, args):
+    if 'deit' in args.model:
+        dct.patch.deit(model,use_k=args.use_k)
+        model.ratio=float(args.ratio)
+        model.r=int(args.reduced_token)
+    elif 'mae' in args.model:
+        dct.patch.mae(model,use_k=args.use_k)
+        model.ratio=float(args.ratio)
+        model.r=int(args.reduced_token)
+    elif 'vit' in args.model:
+        dct.patch.aug(model,use_k=args.use_k)
+        model.ratio=float(args.ratio)
+        model.r=int(args.reduced_token)
+    else:
+        raise ValueError("only support deit, mae and caformer in this codebase")
+
 
 
 def main(args):
+
     # utils.init_distributed_mode(args)
     accelerator = Accelerator(mixed_precision='fp16') 
 
@@ -368,6 +386,8 @@ def main(args):
         get_diffrate_model(model, args)
     elif args.algo == TOFU:
         get_tofu_model(model, args)
+    elif args.algo == DCT:
+        get_dct_model(model, args)
     else:
         args.ratio = 1.0
         get_tome_model(model, args)
@@ -388,7 +408,7 @@ def main(args):
     if args.eval:
         test_stats = evaluate(data_loader_val, model, accelerator)
         accelerator.print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
-        return
+        return test_stats
     else:
         pass
         # if accelerator.is_main_process:
@@ -479,8 +499,34 @@ def main(args):
 
 
 if __name__ == '__main__':
+    import pathlib
+    model_dict = {
+        'deit_tiny_patch16_224': 'DEIT-T-16-224',
+        'deit_small_patch16_224': 'DEIT-S-16-224',
+        'deit_base_patch16_224': 'DEIT-B-16-224',
+        'vit_small_patch16_224': 'VIT-S-16-224',
+        'vit_base_patch16_224': 'VIT-B-16-224',
+        'vit_large_patch16_224': 'VIT-L-16-224',
+        'vit_large_patch16_384': 'VIT-L-16-384',
+        'vit_base_patch16_mae': 'MAE-B-16-224',
+        'vit_large_patch16_mae': 'MAE-L-16-224',
+        'vit_huge_patch14_mae': 'MAE-H-14-224',
+    }
     parser = argparse.ArgumentParser('DeiT training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-    main(args)
+
+    abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
+    file_name = 'test_ic.csv'
+    path = f'{abs_path}/{file_name}'
+    if not pathlib.Path(path).is_file():
+        head = "model, algo, gflops, ratio ,acc_1, acc_5\n"
+        with open(file_name, "a") as myfile:
+            myfile.write(head)
+    
+    metrics = main(args)
+    if metrics is not None:
+        row = f'{model_dict[args.model]}, {args.algo}, {metrics["flops"]}, {args.ratio}, {metrics["acc1"]}, {metrics["acc5"]}\n'
+        with open(file_name, "a") as myfile:
+            myfile.write(row)

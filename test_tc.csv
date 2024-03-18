@@ -1,0 +1,3 @@
+model, algo, gflops, ratio ,acc
+bert-base-uncased, pitome, 9.549170688, 0.55, 86.26838235294117
+bert-base-uncased, pitome, 5.784757248, 0.55, 88.0602621483376

@@ -193,6 +193,7 @@ class Engine:
             eval_stats['epoch'] = i + 1 
             print(eval_stats)
             self.log(eval_stats)
+        return eval_stats
             
 
 
@@ -229,6 +230,6 @@ class Engine:
                 f"gflops: {outputs[3]/1e9:.2f}"
             )
         if isinstance(self.model, BertForSequenceClassification):
-            return {'eval acc': 100*eval_running_acc/len(self.eval_loader), 'ratio':self.model.bert.encoder.ratio, 'gflops': outputs[3]/1e9}
+            return {'acc': 100*eval_running_acc/len(self.eval_loader), 'ratio':self.model.bert.encoder.ratio, 'gflops': outputs[3]/1e9}
         else:
-            return {'eval acc': 100*eval_running_acc/len(self.eval_loader), 'ratio':self.model.distilbert.transformer.ratio, 'gflops': outputs[3]/1e9}
+            return {'acc': 100*eval_running_acc/len(self.eval_loader), 'ratio':self.model.distilbert.transformer.ratio, 'gflops': outputs[3]/1e9}

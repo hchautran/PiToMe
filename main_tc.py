@@ -139,6 +139,7 @@ model_dict  = {
 }
 
 if __name__ == "__main__":
+    import pathlib
     parser = ArgumentParser()
     parser.add_argument("--task", default="imdb", choices=TASKS.keys(),
                         help="choose an LRA dataset from available options")
@@ -153,11 +154,6 @@ if __name__ == "__main__":
     algo = args.algo
 
 
-
-    batch_size = 4 
-    avg_factor = 0.95
-    task_name = args.task
-    algo = args.algo
 
 
     for model_ckt in [
@@ -174,9 +170,21 @@ if __name__ == "__main__":
             trained=True
         )
         if args.eval:
-            engine.evaluate()
+            metrics = engine.evaluate()
         else:
-            engine.train(num_epochs=2)
+            metrics = engine.train(num_epochs=2)
                 
-                    
+        abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
+        file_name = 'test_tc.csv'
+        path = f'{abs_path}/{file_name}'
+        if not pathlib.Path(path).is_file():
+            head = "model, algo, gflops, ratio ,acc\n"
+            with open(file_name, "a") as myfile:
+                myfile.write(head)
+
+        if metrics is not None:
+            row = f'{BERT_BASE}, {args.algo}, {metrics["gflops"]}, {metrics["ratio"]}, {metrics["acc"]}\n'
+            with open(file_name, "a") as myfile:
+                myfile.write(row)
+                        
                 

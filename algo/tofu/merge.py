@@ -74,7 +74,6 @@ def bipartite_soft_matching(
             dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce='mean')
             n = dst_norm.scatter_reduce(-1, dst_idx.squeeze(), src_norm, reduce='amax')
             dst = dst/dst_norm[...,None] * n[..., None]
-            
         elif mode == 'amax':
             src = src.gather(dim=-2, index=src_idx.expand(n, r, c))
             dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce='amax')

@@ -36,7 +36,7 @@ class PiToMeBlockUsingRatio(Block):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        x_attn, metric = self.attn(self.norm1(x), attn_size)
+        x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
 
@@ -45,7 +45,8 @@ class PiToMeBlockUsingRatio(Block):
             merge, isolated_score = pitome_vision(
                 ratio=ratio,
                 size=self._tome_info["size"],
-                metric=x,
+                attn=attn,
+                metric=metric,
                 margin=self.margin,
                 class_token=self._tome_info["class_token"]
             )
@@ -91,7 +92,7 @@ class PiToMeBlock(Block):
         if r > 0:
             merge, isolated_score = pitome_vision(
                 r=r,
-                metric=x,
+                metric=metric,
                 margin=self.margin,
                 class_token=self._tome_info["class_token"]
             )
@@ -153,5 +154,5 @@ class PiToMeAttention(Attention):
         x = self.proj_drop(x)
         # print(attn.shape)
 
-        return x, k.mean(1)
+        return x, k.sum(1), attn
 
