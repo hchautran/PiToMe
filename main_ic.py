@@ -56,6 +56,18 @@ def process_image(example, transform):
 
     
 
+model_dict = {
+    'deit_tiny_patch16_224': 'DEIT-T-16-224',
+    'deit_small_patch16_224': 'DEIT-S-16-224',
+    'deit_base_patch16_224': 'DEIT-B-16-224',
+    'vit_small_patch16_224': 'VIT-S-16-224',
+    'vit_base_patch16_224': 'VIT-B-16-224',
+    'vit_large_patch16_224': 'VIT-L-16-224',
+    'vit_large_patch16_384': 'VIT-L-16-384',
+    'vit_base_patch16_mae': 'MAE-B-16-224',
+    'vit_large_patch16_mae': 'MAE-L-16-224',
+    'vit_huge_patch14_mae': 'MAE-H-14-224',
+}
 
 def get_args_parser():
     parser = argparse.ArgumentParser('ic training and evaluation script', add_help=False)
@@ -271,17 +283,9 @@ def get_diffrate_model(model, args):
 
     
     if args.load_compression_rate:
-        model_name_dict = {
-            'vit_deit_tiny_patch16_224':'ViT-T-DeiT',
-            'vit_deit_small_patch16_224':'ViT-S-DeiT',
-            'vit_deit_base_patch16_224': 'ViT-B-DeiT',
-            'vit_base_patch16_mae': 'ViT-B-MAE',
-            'vit_large_patch16_mae': 'ViT-L-MAE',
-            'vit_huge_patch14_mae': 'ViT-H-MAE',
-        }
         with open('compression_rate.json', 'r') as f:
             compression_rate = json.load(f) 
-            model_name = model_name_dict[args.model]
+            model_name = model_dict[args.model]
             if not str(args.target_flops) in compression_rate[model_name]:
                 raise ValueError(f"compression_rate.json does not contaion {model_name} with {args.target_flops}G flops")
             prune_kept_num = eval(compression_rate[model_name][str(args.target_flops)]['prune_kept_num'])
@@ -314,25 +318,15 @@ def get_dct_model(model, args):
 
 
 def main(args):
-
-    # utils.init_distributed_mode(args)
-    accelerator = Accelerator(mixed_precision='fp16') 
-
+    accelerator = Accelerator(mixed_precision='no') 
     output_dir = Path(args.output_dir)
     logger = utils.create_logger(output_dir,dist_rank=utils.get_rank())
     logger.info(args)
-
-    device = torch.device(args.device)
-
-    # fix the seed for reproducibility
     seed = args.seed + utils.get_rank()
     torch.manual_seed(seed)
     np.random.seed(seed)
-    # random.seed(seed)
-
     cudnn.benchmark = True
     args.data_path = DATA_PATH + '/.cache/'
-
     dataset_train, args.nb_classes = utils.build_dataset(is_train=True, args=args)
     dataset_val, _ = utils.build_dataset(is_train=False, args=args)
 
@@ -360,17 +354,16 @@ def main(args):
     data_loader_train = DataLoader(
         dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        pin_memory=args.pin_mem,
+        num_workers=10,
+        pin_memory=True,
         drop_last=True,
-        
     )
 
     data_loader_val = DataLoader(
         dataset_val, sampler=sampler_val,
         batch_size=int(1 * args.batch_size),
-        num_workers=args.num_workers,
-        pin_memory=args.pin_mem,
+        num_workers=10,
+        pin_memory=True,
         drop_last=False
     )
 
@@ -394,7 +387,6 @@ def main(args):
     )
     
     args.use_k=False
-
     if args.algo == TOME:
         get_tome_model(model, args)
     elif args.algo == PITOME:
@@ -416,7 +408,6 @@ def main(args):
                 args.finetune, map_location='cpu', check_hash=True)
         else:
             checkpoint = torch.load(args.finetune, map_location='cpu')
-
         checkpoint_model = checkpoint['model']
         state_dict = model.state_dict()
         for k in ['head.weight', 'head.bias', 'head_dist.weight', 'head_dist.bias']:
@@ -447,6 +438,14 @@ def main(args):
 
     
     model = accelerator.prepare(model)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,weight_decay=0)
+    lr_scheduler = CosineLRScheduler(optimizer, t_initial=args.epochs, lr_min=args.min_lr, decay_rate=args.decay_rate )
+    loss_scaler = ic.utils.NativeScalerWithGradNormCount()
+    optimizer, lr_scheduler, data_loader_train, data_loader_val = accelerator.prepare(optimizer, lr_scheduler, data_loader_train, data_loader_val)
+    n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    accelerator.print(f'number of params: {n_parameters}')
+    linear_scaled_lr = args.lr * args.batch_size * ic.utils.get_world_size() / 512.0
+    args.lr = linear_scaled_lr
 
     if args.eval:
         test_stats = evaluate(data_loader_val, model, accelerator)
@@ -462,14 +461,6 @@ def main(args):
         #             'compress_method': 'pitome'
         #         }
         #     )
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,weight_decay=0)
-        lr_scheduler = CosineLRScheduler(optimizer, t_initial=args.epochs, lr_min=args.min_lr, decay_rate=args.decay_rate )
-        loss_scaler = ic.utils.NativeScalerWithGradNormCount()
-        optimizer, lr_scheduler, data_loader_train, data_loader_val = accelerator.prepare(optimizer, lr_scheduler, data_loader_train, data_loader_val)
-        n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        accelerator.print(f'number of params: {n_parameters}')
-        linear_scaled_lr = args.lr * args.batch_size * ic.utils.get_world_size() / 512.0
-        args.lr = linear_scaled_lr
  
     criterion = LabelSmoothingCrossEntropy()
 
@@ -549,18 +540,7 @@ def main(args):
 
 if __name__ == '__main__':
     import pathlib
-    model_dict = {
-        'deit_tiny_patch16_224': 'DEIT-T-16-224',
-        'deit_small_patch16_224': 'DEIT-S-16-224',
-        'deit_base_patch16_224': 'DEIT-B-16-224',
-        'vit_small_patch16_224': 'VIT-S-16-224',
-        'vit_base_patch16_224': 'VIT-B-16-224',
-        'vit_large_patch16_224': 'VIT-L-16-224',
-        'vit_large_patch16_384': 'VIT-L-16-384',
-        'vit_base_patch16_mae': 'MAE-B-16-224',
-        'vit_large_patch16_mae': 'MAE-L-16-224',
-        'vit_huge_patch14_mae': 'MAE-H-14-224',
-    }
+   
     parser = argparse.ArgumentParser('DeiT training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
     if args.output_dir:

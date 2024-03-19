@@ -82,7 +82,6 @@ def make_diffrate_class(transformer_class):
             classifier_flops = C*self.num_classes
             with torch.cuda.amp.autocast(enabled=False):
                 for prune_kept_number, merge_kept_number in zip(self._diffrate_info["prune_kept_num"],self._diffrate_info["merge_kept_num"]):
-                    # translate fp16 to fp32 for stable training
                     prune_kept_number = prune_kept_number.float()     
                     merge_kept_number = merge_kept_number.float()
                     mhsa_flops = 4*N*C*C + 2*N*N*C

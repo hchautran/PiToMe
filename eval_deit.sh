@@ -2,7 +2,7 @@
 # Loop through each element in the array
 for size in 'tiny' 'small' 'base'
 do
-    for algo in 'pitome' 'tome' 'dct' 'tofu' 
+    for algo in 'tome' 'pitome' 'dct' 'tofu' 
     do
         for ratio in '0.875' '0.9' '0.9125' '0.925' '0.95' 
         do
