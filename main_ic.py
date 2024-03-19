@@ -264,14 +264,35 @@ def get_diffrate_model(model, args):
         DiffRate.patch.deit(model, prune_granularity=args.granularity, merge_granularity=args.granularity)
     elif 'mae' in args.model:
         DiffRate.patch.mae(model, prune_granularity=args.granularity, merge_granularity=args.granularity)
+    elif 'vit' in args.model:
+        DiffRate.patch.aug(model, prune_granularity=args.granularity, merge_granularity=args.granularity)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
 
-    if args.use_k:
-        model.init_kept_num_using_r(args.reduced_token)
-    else:
-        model.init_kept_num_using_ratio(args.ratio)
     
+    if args.load_compression_rate:
+        model_name_dict = {
+            'vit_deit_tiny_patch16_224':'ViT-T-DeiT',
+            'vit_deit_small_patch16_224':'ViT-S-DeiT',
+            'vit_deit_base_patch16_224': 'ViT-B-DeiT',
+            'vit_base_patch16_mae': 'ViT-B-MAE',
+            'vit_large_patch16_mae': 'ViT-L-MAE',
+            'vit_huge_patch14_mae': 'ViT-H-MAE',
+        }
+        with open('compression_rate.json', 'r') as f:
+            compression_rate = json.load(f) 
+            model_name = model_name_dict[args.model]
+            if not str(args.target_flops) in compression_rate[model_name]:
+                raise ValueError(f"compression_rate.json does not contaion {model_name} with {args.target_flops}G flops")
+            prune_kept_num = eval(compression_rate[model_name][str(args.target_flops)]['prune_kept_num'])
+            merge_kept_num = eval(compression_rate[model_name][str(args.target_flops)]['merge_kept_num'])
+            model.set_kept_num(prune_kept_num, merge_kept_num)
+    
+    else:
+        if args.use_k:
+            model.init_kept_num_using_r(args.reduced_token)
+        else:
+            model.init_kept_num_using_ratio(args.ratio)
             
 
 def get_dct_model(model, args):
@@ -315,28 +336,24 @@ def main(args):
     dataset_train, args.nb_classes = utils.build_dataset(is_train=True, args=args)
     dataset_val, _ = utils.build_dataset(is_train=False, args=args)
 
-    if True:  # args.distributed:
-        num_tasks = utils.get_world_size()
-        global_rank = utils.get_rank()
-        if args.repeated_aug:
-            sampler_train = RASampler(
-                dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
-            )
-        else:
-            sampler_train = torch.utils.data.DistributedSampler(
-                dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
-            )
-        if args.dist_eval:
-            if len(dataset_val) % num_tasks != 0:
-                logger.info('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
-                      'This will slightly alter validation results as extra duplicate entries are added to achieve '
-                      'equal num of samples per-process.')
-            sampler_val = torch.utils.data.DistributedSampler(
-                dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=False)
-        else:
-            sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+    num_tasks = utils.get_world_size()
+    global_rank = utils.get_rank()
+    if args.repeated_aug:
+        sampler_train = RASampler(
+            dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
+        )
     else:
-        sampler_train = torch.utils.data.RandomSampler(dataset_train)
+        sampler_train = torch.utils.data.DistributedSampler(
+            dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
+        )
+    if args.dist_eval:
+        if len(dataset_val) % num_tasks != 0:
+            logger.info('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
+                    'This will slightly alter validation results as extra duplicate entries are added to achieve '
+                    'equal num of samples per-process.')
+        sampler_val = torch.utils.data.DistributedSampler(
+            dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=False)
+    else:
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
     # leveraging MultiEpochsDataLoader for faster data loading
@@ -392,19 +409,45 @@ def main(args):
         args.ratio = 1.0
         get_tome_model(model, args)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,weight_decay=0)
-    lr_scheduler = CosineLRScheduler(optimizer, t_initial=args.epochs, lr_min=args.min_lr, decay_rate=args.decay_rate )
-    loss_scaler = ic.utils.NativeScalerWithGradNormCount()
-    optimizer, lr_scheduler, data_loader_train, data_loader_val = accelerator.prepare(optimizer, lr_scheduler, data_loader_train, data_loader_val)
-    n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    accelerator.print(f'number of params: {n_parameters}')
 
-    linear_scaled_lr = args.lr * args.batch_size * ic.utils.get_world_size() / 512.0
+    if args.finetune:
+        if args.finetune.startswith('https'):
+            checkpoint = torch.hub.load_state_dict_from_url(
+                args.finetune, map_location='cpu', check_hash=True)
+        else:
+            checkpoint = torch.load(args.finetune, map_location='cpu')
 
-    args.lr = linear_scaled_lr
+        checkpoint_model = checkpoint['model']
+        state_dict = model.state_dict()
+        for k in ['head.weight', 'head.bias', 'head_dist.weight', 'head_dist.bias']:
+            if k in checkpoint_model and checkpoint_model[k].shape != state_dict[k].shape:
+                logger.info(f"Removing key {k} from pretrained checkpoint")
+                del checkpoint_model[k]
 
+        # interpolate position embedding
+        pos_embed_checkpoint = checkpoint_model['pos_embed']
+        embedding_size = pos_embed_checkpoint.shape[-1]
+        num_patches = model.patch_embed.num_patches
+        num_extra_tokens = model.pos_embed.shape[-2] - num_patches
+        # height (== width) for the checkpoint position embedding
+        orig_size = int((pos_embed_checkpoint.shape[-2] - num_extra_tokens) ** 0.5)
+        # height (== width) for the new position embedding
+        new_size = int(num_patches ** 0.5)
+        # class_token and dist_token are kept unchanged
+        extra_tokens = pos_embed_checkpoint[:, :num_extra_tokens]
+        # only the position tokens are interpolated
+        pos_tokens = pos_embed_checkpoint[:, num_extra_tokens:]
+        pos_tokens = pos_tokens.reshape(-1, orig_size, orig_size, embedding_size).permute(0, 3, 1, 2)
+        pos_tokens = torch.nn.functional.interpolate(
+            pos_tokens, size=(new_size, new_size), mode='bicubic', align_corners=False)
+        pos_tokens = pos_tokens.permute(0, 2, 3, 1).flatten(1, 2)
+        new_pos_embed = torch.cat((extra_tokens, pos_tokens), dim=1)
+        checkpoint_model['pos_embed'] = new_pos_embed
+        model.load_state_dict(checkpoint_model, strict=False)
 
+    
     model = accelerator.prepare(model)
+
     if args.eval:
         test_stats = evaluate(data_loader_val, model, accelerator)
         accelerator.print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
@@ -419,7 +462,15 @@ def main(args):
         #             'compress_method': 'pitome'
         #         }
         #     )
-    
+        optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,weight_decay=0)
+        lr_scheduler = CosineLRScheduler(optimizer, t_initial=args.epochs, lr_min=args.min_lr, decay_rate=args.decay_rate )
+        loss_scaler = ic.utils.NativeScalerWithGradNormCount()
+        optimizer, lr_scheduler, data_loader_train, data_loader_val = accelerator.prepare(optimizer, lr_scheduler, data_loader_train, data_loader_val)
+        n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        accelerator.print(f'number of params: {n_parameters}')
+        linear_scaled_lr = args.lr * args.batch_size * ic.utils.get_world_size() / 512.0
+        args.lr = linear_scaled_lr
+ 
     criterion = LabelSmoothingCrossEntropy()
 
     if mixup_active:
@@ -429,7 +480,6 @@ def main(args):
         criterion = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
     else:
         criterion = torch.nn.CrossEntropyLoss()
-
     if args.autoresume and os.path.exists(os.path.join(args.output_dir, 'checkpoint.pth')):
         args.resume = os.path.join(args.output_dir, 'checkpoint.pth')
     if args.resume:
@@ -484,11 +534,10 @@ def main(args):
             # wandb.log({'max acc': f'{max_accuracy:.2f}%'})
         accelerator.print(f'Max accuracy: {max_accuracy:.2f}%')
 
-        log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-                     **{f'test_{k}': v for k, v in test_stats.items()},
-                     'epoch': epoch,
-                     'n_parameters': n_parameters}
-
+        # log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
+        #              **{f'test_{k}': v for k, v in test_stats.items()},
+        #              'epoch': epoch,
+        #              'n_parameters': n_parameters}
         # if accelerator.is_main_process():
             # wandb.log(log_stats)
 

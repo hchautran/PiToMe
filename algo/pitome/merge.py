@@ -14,6 +14,7 @@ import torch.nn.functional as F
 def do_nothing(x, mode=None):
     return x
 
+
 def get_bsm_merge(
     node_max:torch.Tensor,
     node_idx:torch.Tensor,
@@ -52,6 +53,7 @@ def get_bsm_merge(
             return torch.cat([unm, dst], dim=1)
 
     return merge, None
+
 
 def pitome_vision(
     metric: torch.Tensor, 
@@ -106,6 +108,7 @@ def pitome_vision(
             scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
             _, dst_idx = scores.max(dim=-1) 
     
+    
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
         if class_token:
             x_cls=x[:,0,:].unsqueeze(1)
@@ -123,6 +126,7 @@ def pitome_vision(
             return torch.cat([protected, dst], dim=1)
 
     return merge, None 
+
 
 def pitome_text(
     metric: torch.Tensor, 
@@ -152,6 +156,7 @@ def pitome_text(
         scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
         scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
         _, dst_idx = scores.max(dim=-1) 
+    
     
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
 
