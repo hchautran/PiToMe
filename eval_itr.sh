@@ -3,8 +3,8 @@
 # for dataset in 'flickr' 
 for dataset in 'coco' 
 do
-    for model in 'clip' 'blip' 
-    # for model in 'blip2'
+    # for model in 'clip' 'blip' 
+    for model in 'blip2'
     do
         for algo in 'pitome' 'tome' 'dct' 'tofu' 
         do
