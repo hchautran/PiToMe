@@ -19,8 +19,6 @@ from .timm import DiffRateBlock, DiffRateAttention
 from ..utils import ste_min
 
 
-
-
 def make_diffrate_class(transformer_class):
     class DiffRateVisionTransformer(transformer_class):
         def forward(self, x, return_flop=True) -> torch.Tensor:
@@ -105,6 +103,23 @@ def make_diffrate_class(transformer_class):
                 block.prune_ddp.kept_token_number = prune_kept_number
                 block.merge_ddp.kept_token_number = merge_kept_number
         
+        def init_kept_num_using_ratio(self, ratio):
+            import math
+            N = self.patch_embed.num_patches
+            for block in self.blocks:
+                r = math.floor(N - N*ratio)
+                block.prune_ddp.kept_token_number = N - 1 
+                block.merge_ddp.kept_token_number = N - r
+                N -= r
+            
+        def init_kept_num_using_r(self, r):
+            N = self.patch_embed.num_patches
+            for block in self.blocks:
+                r = min(r, N // 2)
+                block.prune_ddp.kept_token_number = N - 1 
+                block.merge_ddp.kept_token_number = N - r
+                N -= r
+        
         def calculate_flop_training(self):
             C = self.embed_dim
             patch_number = float(self.patch_embed.num_patches)
@@ -151,7 +166,7 @@ def make_diffrate_class(transformer_class):
 
 
 def apply_patch(
-    model: VisionTransformer, trace_source: bool = False,prune_granularity=1, merge_granularity=1
+    model: VisionTransformer, trace_source: bool = False, prune_granularity=1, merge_granularity=1
 ):
     """
     Applies DiffRate to this transformer.
