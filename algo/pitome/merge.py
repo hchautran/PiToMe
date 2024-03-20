@@ -145,6 +145,7 @@ def pitome_vision(
 def pitome_text(
     metric: torch.Tensor, 
     ratio:float=1.0,
+    attn:torch.Tensor = None,
     margin:torch.Tensor=0.5,
     class_token: bool = False,
 ):
@@ -160,10 +161,14 @@ def pitome_text(
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
 
     sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
-    isolation_score = sim.mean(dim=-1) + sim.sum(-1)
+    if attn is not None:
+        isolation_score = attn.mean(dim=1)
+        indices =  torch.argsort(isolation_score, descending=False)
+    else:
+        isolation_score = sim.mean(dim=-1) + sim.sum(-1)
+        indices =  torch.argsort(isolation_score, descending=True)
 
     with torch.no_grad():
-        indices =  torch.argsort(isolation_score, descending=True)
         merge_idx = indices[..., :2*r]
         protected_idx = indices[..., 2*r:]
         a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:]

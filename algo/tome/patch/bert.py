@@ -21,8 +21,6 @@ from transformers.modeling_utils import ModuleUtilsMixin
 
 
 class ToMeBertLayer(BertLayer):
-    def init_margin(self, margin):
-        self.margin = margin
    
     def forward(
         self,
@@ -281,13 +279,11 @@ def apply_patch(
     current_layer = 0
     margin = margin 
     num_layers = len(model.layer)
-    margins = [0.75 - 0.25*(i/num_layers) for i in range(num_layers)]
 
 
     for module in model.modules():
         if isinstance(module, BertLayer):
             module.__class__ = ToMeBertLayer
-            module.init_margin(margins[current_layer])
             module._tome_info = model._tome_info
             current_layer +=1
         if isinstance(module, BertAttention):

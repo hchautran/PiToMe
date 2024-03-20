@@ -30,7 +30,8 @@ from algo import (
     TOME,
     TOFU,
     DCT,
-    NONE
+    NONE,
+    DIFFRATE,
 )
 import os
 import wandb
@@ -57,15 +58,17 @@ TASKS = {
 }
 BERT_BASE = 'bert-base-uncased'
 DISTILBERT_BASE = 'distilbert-base-uncased'
+BERT_LARGE= 'bert-large-uncased'
 model_ft_dict = {
     BERT_BASE: 'JiaqiLee/imdb-finetuned-bert-base-uncased',
     DISTILBERT_BASE: 'lvwerra/distilbert-imdb',
+    BERT_LARGE:'jojoUla/bert-large-uncased-finetuned-imdb'
 }
 model_dict  = {
     BERT_BASE: BERT_BASE,
     DISTILBERT_BASE: DISTILBERT_BASE,
+    BERT_LARGE: BERT_LARGE,
 }
-
 class Engine:
 
     def __init__(self, task_name, model_ckt, ratio=1.0, algo=NONE, batch_size=32, enable_log=False, trained=False):
@@ -110,7 +113,8 @@ class Engine:
     def prepare_model(self, model_ckt, algo=None):
         self.algo = algo
         
-        if model_ckt == BERT_BASE:
+        print(self.model_dict[model_ckt])
+        if model_ckt == BERT_BASE or model_ckt == BERT_LARGE:
             self._prepare_bert_model(self.model_dict[model_ckt],algo=algo)
         else:
             self._prepare_distil_model(self.model_dict[model_ckt],algo=algo)
@@ -132,6 +136,11 @@ class Engine:
             tofu.patch.bert(self.model.bert.encoder)
         elif self.algo == DCT:
             dct.patch.bert(self.model.bert.encoder)
+        elif self.algo == DIFFRATE:
+            pitome.patch.bert(self.model.bert.encoder, use_attn=True)
+        else:
+            pitome.patch.bert(self.model.bert.encoder)
+            self.set_ratio(1.0)
 
         self.model.bert.encoder.ratio = self.ratio 
         self.tokenizer = AutoTokenizer.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
@@ -151,6 +160,11 @@ class Engine:
             tofu.patch.distilbert(self.model.distilbert.transformer)
         elif self.algo == DCT:
             dct.patch.distilbert(self.model.distilbert.transformer)
+        elif self.algo == DIFFRATE:
+            pitome.patch.distilbert(self.model.distilbert.transformer, use_attn=True)
+        else:
+            tome.patch.distilbert(self.model.distilbert.transformer)
+            self.set_ratio(1.0)
 
         self.model.distilbert.transformer.ratio = self.ratio 
         self.tokenizer = AutoTokenizer.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
@@ -159,7 +173,7 @@ class Engine:
 
     def set_ratio(self, ratio):
         self.ratio = ratio
-        if self.model_ckt == BERT_BASE:
+        if self.model_ckt == BERT_BASE or self.model_ckt == BERT_LARGE:
             self.model.bert.encoder.ratio = self.ratio 
         else:
             self.model.distilbert.transformer.ratio = self.ratio 
@@ -183,13 +197,13 @@ class Engine:
 
         lr = self.config.learning_rate
         wd = self.config.weight_decay
-        optimizer = Adam(self.model.parameters(), lr=1e-4)
+        optimizer = Adam(self.model.parameters(), lr=1e-5)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1, min_lr=1e-8, mode='max')
         optimizer, scheduler= self.accelerator.prepare(optimizer, scheduler)
         for i in range(num_epochs):
             self.train_one_epoch(optimizer, scheduler)
             eval_stats = self.evaluate()
-            scheduler.step(eval_stats['eval acc'])
+            scheduler.step(eval_stats['acc'])
             eval_stats['epoch'] = i + 1 
             print(eval_stats)
             self.log(eval_stats)

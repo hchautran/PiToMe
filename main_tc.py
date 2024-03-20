@@ -27,6 +27,7 @@ from algo import (
     tome,
     PITOME,
     TOME,
+    DIFFRATE,
     TOFU,
     DCT,
     NONE
@@ -41,7 +42,7 @@ accelerator = Accelerator(
     mixed_precision='fp16',
     gradient_accumulation_steps=4
 )
-from tc.engine import Engine
+from tc.engine import Engine, BERT_BASE, DISTILBERT_BASE, BERT_LARGE
 
 
 def transformers_collator(batch, tokenizer):
@@ -65,35 +66,6 @@ TASKS = {
     'cifar10': ConfigDict(dict(dataset_fn=Cifar10Dataset, config_getter=get_cifar10_config)),
     'imdb': ConfigDict(dict(dataset_fn=ImdbDataset, config_getter=get_text_classification_config)),
 }
-
-
-def prepare_bert_model(model_ckt, compress_method='none', ratio=1.0):
-    model = BertForSequenceClassification.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
-    if compress_method == PITOME:
-        pitome.patch.bert(model.bert.encoder)
-    elif compress_method == TOME:
-        tome.patch.bert(model.bert.encoder)
-
-    model.bert.encoder.ratio = ratio 
-
-    tokenizer = AutoTokenizer.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
-    model = accelerator.prepare(model)
-
-    return model, tokenizer
-
-def prepare_distil_model(model_ckt, compress_method='none', ratio=1.0):
-    model = DistilBertForSequenceClassification.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
-    if compress_method == PITOME:
-        pitome.patch.distilbert(model.distilbert.transformer)
-    elif compress_method == TOME:
-        tome.patch.distilbert(model.distilbert.transformer)
-
-    model.distilbert.transformer.ratio = ratio 
-
-    tokenizer = AutoTokenizer.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
-    model = accelerator.prepare(model)
-
-    return model, tokenizer
 
 
 
@@ -127,26 +99,17 @@ def eval(model, eval_dataset, tokenizer,batch_size=4):
     else:
         return {'acc': 100*eval_running_acc/len(eval_dataloader), 'ratio':model.distilbert.transformer.ratio, 'gflops': outputs[3]/1e9}
 
-BERT_BASE = 'bert-base-uncased'
-DISTILBERT_BASE = 'distilbert-base-uncased'
-model_ft_dict = {
-    BERT_BASE: 'JiaqiLee/imdb-finetuned-bert-base-uncased',
-    DISTILBERT_BASE: 'lvwerra/distilbert-imdb',
-}
-model_dict  = {
-    BERT_BASE: BERT_BASE,
-    DISTILBERT_BASE: DISTILBERT_BASE,
-}
 
 if __name__ == "__main__":
     import pathlib
     parser = ArgumentParser()
     parser.add_argument("--task", default="imdb", choices=TASKS.keys(),
                         help="choose an LRA dataset from available options")
-    parser.add_argument("--algo", default=PITOME, choices=[PITOME, TOME, NONE, TOFU, DCT],
+    parser.add_argument("--algo", default=PITOME, choices=[PITOME, TOME, NONE, TOFU, DCT, DIFFRATE],
                         help="choose an LRA dataset from available options")
     parser.add_argument("--ratio", default=0.55, help="remain ratio")
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
+    parser.add_argument('--batch_size', default=8, help='Perform evaluation only')
     args = parser.parse_args()
     batch_size = 4 
     avg_factor = 0.95
@@ -157,22 +120,23 @@ if __name__ == "__main__":
 
 
     for model_ckt in [
-        BERT_BASE,
-        DISTILBERT_BASE, 
+        # BERT_BASE,
+        # DISTILBERT_BASE, 
+        BERT_LARGE, 
     ]:
         engine = Engine(
             task_name=task_name,
             model_ckt=model_ckt,
             ratio=float(args.ratio),
             algo=args.algo,
-            batch_size=64,
+            batch_size=32,
             enable_log=False,
             trained=True
         )
         if args.eval:
             metrics = engine.evaluate()
         else:
-            metrics = engine.train(num_epochs=2)
+            metrics = engine.train(num_epochs=10)
                 
         abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
         file_name = 'test_tc.csv'

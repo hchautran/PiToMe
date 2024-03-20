@@ -47,15 +47,10 @@ class PiToMeDistilBertBlock(TransformerBlock):
             value=x,
             mask=attn_mask,
             head_mask=head_mask,
-            output_attentions=output_attentions,
+            output_attentions=True,
         )
         ratio = self._tome_info["ratio"].pop()
-        if output_attentions:
-            sa_output, metric ,sa_weights = sa_output  # (bs, seq_length, dim), (bs, n_heads, seq_length, seq_length)
-        else:  # To handle these `output_attentions` or `output_hidden_states` cases returning tuples
-            if type(sa_output) != tuple:
-                raise TypeError(f"sa_output must be a tuple but it is {type(sa_output)} type")
-            sa_output, metric = sa_output
+        sa_output, metric ,sa_weights = sa_output  # (bs, seq_length, dim), (bs, n_heads, seq_length, seq_length)
     
         sa_output = self.sa_layer_norm(sa_output + x)  # (bs, seq_length, dim)
 
@@ -63,6 +58,7 @@ class PiToMeDistilBertBlock(TransformerBlock):
             merge, isolated_score = pitome_text(
                 ratio=ratio,
                 metric=metric,
+                attn=sa_weights[:,:,0,1:] if self._tome_info["use_attn"] else None,
                 margin=self.margin,
                 class_token=self._tome_info["class_token"]
             )
@@ -222,7 +218,7 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-   model: Transformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
+   model: Transformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_attn=False):
     """
     Applies PiToMe to this transformer. Afterward, set r using model.r.
 
@@ -244,6 +240,7 @@ def apply_patch(
         "ratio": model.ratio,
         "margin":  [],
         "size": None,
+        "use_attn": use_attn,
         "source": None,
         "trace_source": trace_source,
         "prop_attn": prop_attn,

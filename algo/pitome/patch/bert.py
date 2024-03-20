@@ -41,12 +41,14 @@ class PiToMeBertLayer(BertLayer):
         ratio = self._tome_info["ratio"].pop()
         x = self_attention_outputs[0]
         key = self_attention_outputs[1]
+        attn = self_attention_outputs[2][:, :, 0, 1:]
 
     
         if ratio < 1.0:
             merge, isolated_score = pitome_text(
                 ratio=ratio,
                 metric=key,
+                attn=attn if self._tome_info["use_attn"] else None,
                 margin=self.margin,
                 class_token=self._tome_info["class_token"]
             )
@@ -84,7 +86,7 @@ class PiToMeBertAttention(BertAttention):
         past_key_value: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
         output_attentions: Optional[bool] = False,
     ) -> Tuple[torch.Tensor]:
-        self_outputs, key = self.self(
+        self_outputs, key, attn = self.self(
             hidden_states,
             attention_mask,
             head_mask,
@@ -94,7 +96,7 @@ class PiToMeBertAttention(BertAttention):
             output_attentions,
         )
         attention_output = self.output(self_outputs[0], hidden_states)
-        outputs = (attention_output,) + (key,) + self_outputs[1:]  # add attentions if we output them
+        outputs = (attention_output,) + (key,attn, ) + self_outputs[1:]  # add attentions if we output them
         return outputs
 
 class PiToMeBertSelfAttention(BertSelfAttention):
@@ -160,7 +162,7 @@ class PiToMeBertSelfAttention(BertSelfAttention):
         
 
     
-        return outputs, key_layer.sum(1)
+        return outputs, key_layer.sum(1), attention_probs
 
 
 def make_pitome_class(transformer_class):
@@ -246,7 +248,7 @@ def make_pitome_class(transformer_class):
 
 
 def apply_patch(
-   model: BertEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
+   model: BertEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_attn=False):
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.
 
@@ -269,6 +271,7 @@ def apply_patch(
         "margin":  [],
         "size": None,
         "source": None,
+        "use_attn": use_attn,
         "trace_source": trace_source,
         "prop_attn": prop_attn,
         "class_token": True,
