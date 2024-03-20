@@ -39,20 +39,21 @@ class PiToMeBlock(Block):
             # print(weight.shape)
             x, self._tome_info["size"] = merge_wavg(merge, x, weight )
             # print(x.shape)
-        return x
+        return x, isolated_score
 
 
     def forward(self, x, rel_pos_bias=None):
         attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
         if self.gamma_1 is None:
-            x_attn, _, attn = self.attn(self.norm1(x), attn_size, rel_pos_bias=rel_pos_bias)
+            x_attn, metric, attn = self.attn(self.norm1(x), attn_size, rel_pos_bias=rel_pos_bias)
             x = x + self.drop_path(x_attn)
-            x = self.compress_x(x,x, attn)
+            # x, attn_size = self.compress_x(x,x, attn)
+            x, _ = self.compress_x(x=x,metric=x, attn=attn)
             x = x + self.drop_path(self.mlp(self.norm2(x)))
         else:
-            x_attn, _, attn = self.attn(self.norm1(x), attn_size, rel_pos_bias=rel_pos_bias)
+            x_attn, metric, attn = self.attn(self.norm1(x), attn_size, rel_pos_bias=rel_pos_bias)
             x = x + self.drop_path(x_attn)
-            x = self.compress_x(x,x, attn)
+            x, _ = self.compress_x(x=x,metric=x, attn=attn)
             x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))
         return x
 
@@ -175,13 +176,13 @@ def apply_patch(
         "source": None,
         "trace_source": trace_source,
         "prop_attn": False,
-        "class_token": False,
+        "class_token": True,
         "distill_token": False,
     }
     current_layer = 0
     margin = margin 
     num_layers = len(model.blocks)
-    margins = [.75 - 0.5*(i/num_layers) for i in range(num_layers)]
+    margins = [0.75 - .5*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tome_info["distill_token"] = True
