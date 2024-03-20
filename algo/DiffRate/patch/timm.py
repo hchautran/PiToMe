@@ -18,7 +18,6 @@ import torch.nn as nn
 from ..ddp import DiffRate
 from ..merge import get_merge_func
 
-from ..utils import ste_min
 
 class DiffRateBlock(Block):
     """
@@ -64,7 +63,6 @@ class DiffRateBlock(Block):
                 mask = mask * prune_mask.expand(B, -1)
 
             mid_token_number = min(last_token_number, int(prune_kept_num)) # token number after pruning
-                
             # merging
             merge_kept_num = self.merge_ddp.update_kept_token_number()
             self._diffrate_info["merge_kept_num"].append(merge_kept_num)
@@ -109,9 +107,6 @@ class DiffRateBlock(Block):
         return x
                 
 
-                
-
-
 class DiffRateAttention(Attention):
     """
     Modifications:
@@ -127,7 +122,6 @@ class DiffRateAttention(Attention):
         attn_policy = attn_policy + (1.0 - attn_policy) * eye
         max_att = torch.max(attn, dim=-1, keepdim=True)[0]
         attn = attn - max_att
-
         # for stable training
         attn = attn.to(torch.float32).exp_() * attn_policy.to(torch.float32)
         attn = (attn + eps/N) / (attn.sum(dim=-1, keepdim=True) + eps)
@@ -161,11 +155,9 @@ class DiffRateAttention(Attention):
             attn = attn.softmax(dim=-1)
             
         attn = self.attn_drop(attn)
-
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
-
         # Return attention map as well here
         return x, attn
 

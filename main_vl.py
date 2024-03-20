@@ -85,23 +85,37 @@ def get_pitome_model(model, args):
         raise ValueError("only support clip, blip and blip2 in this codebase")
 
 def get_diffrate_model(model, args):
+    if 'clip' in args.model:
+        DiffRate.patch.clip(model.visual.transformer, use_k=args.use_k)
+        if args.use_k:
+            model.visual.transformer.init_kept_num_using_r(args.reduced_token)
+        else:
+            model.visual.transformer.init_kept_num_using_ratio(args.reduced_token)
     if 'blip2' in args.model:
         DiffRate.patch.blip2(model.visual_encoder, prune_granularity=args.granularity, merge_granularity=args.granularity)
+        if args.use_k:
+            model.visual_encoder.init_kept_num_using_r(args.reduced_token)
+        else:
+            model.visual_encoder.init_kept_num_using_ratio(args.ratio)
     elif 'blip' in args.model:
         DiffRate.patch.blip(model.visual_encoder, prune_granularity=args.granularity, merge_granularity=args.granularity)
+        DiffRate.patch.blip(model.visual_encoder_m, prune_granularity=args.granularity, merge_granularity=args.granularity)
+        if not args.use_k:
+            print('got here')
+            model.visual_encoder.init_kept_num_using_r(args.reduced_token)
+            model.visual_encoder_m.init_kept_num_using_r(args.reduced_token)
+        else:
+            print('got here')
+            model.visual_encoder.init_kept_num_using_ratio(args.ratio)
+            model.visual_encoder_m.init_kept_num_using_ratio(args.ratio)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
-    if args.use_k:
-        model.init_kept_num_using_r(args.reduced_token)
-    else:
-        model.init_kept_num_using_ratio(args.ratio)
 
 def get_tofu_model(model, args):
     if 'clip' in args.model:
         tofu.patch.clip(model.visual.transformer, use_k=args.use_k)
         model.visual.transformer.ratio=float(args.ratio)
         model.visual.transformer.r=int(args.reduced_token)
-    
     elif 'blip2' in args.model:
         tofu.patch.blip2(model.visual_encoder,use_k=args.use_k)
         model.visual_encoder.ratio=float(args.ratio)
@@ -144,6 +158,7 @@ def parse_args():
     parser.add_argument("--use_k", default=False)
     parser.add_argument("--ratio", default=0.9, type=float)
     parser.add_argument("--reduced_token", default=12, type=int)
+    parser.add_argument('--granularity', type=int, default=4, help='the token number gap between each compression rate candidate')
     parser.add_argument('--dataset', default='flickr', help='dataset')
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
     parser.add_argument(

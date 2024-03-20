@@ -173,6 +173,7 @@ def apply_patch(
     """
     DiffRateVisionTransformer = make_diffrate_class(model.__class__)
 
+    print('use', 'diffrate')
     model.__class__ = DiffRateVisionTransformer
     model._diffrate_info = {
         "size": None,

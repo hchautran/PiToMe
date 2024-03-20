@@ -350,7 +350,6 @@ def main(args):
     else:
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
-    # leveraging MultiEpochsDataLoader for faster data loading
     data_loader_train = DataLoader(
         dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
