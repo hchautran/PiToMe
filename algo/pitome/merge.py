@@ -63,14 +63,19 @@ def pitome_vision(
     ratio:float=1.0,
     margin:torch.Tensor=0.5,
     class_token: bool = False,
+    alpha=1.0
 ):
 
     with torch.no_grad():
         if class_token:
+            if attn is not None:
+                attn = attn[:,:, 0, 1:]
             
             metric=metric[:,1:,:]
             if size is not None:
                 size=size.squeeze()[:, 1:]
+        else:
+            attn = None 
 
         B,T,C = metric.shape
         if r > 0:
@@ -83,12 +88,14 @@ def pitome_vision(
 
     # sim = metric@metric.transpose(-1,-2) - torch.eye(T)[None,...].to(metric.device)
     sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.1).to(metric.device)
+    isolation_score = sim.sum(dim=-1)
+    if size is not None:
+        isolation_score = isolation_score - size 
+    if attn is not None:
+        isolation_score = isolation_score - alpha*attn.mean(1)
 
     with torch.no_grad():
-        if margin >= 0.45:
-            isolation_score = sim.sum(dim=-1) 
-            if size is not None:
-                isolation_score = isolation_score - size 
+        if margin >= 0.0:
             indices =  torch.argsort(isolation_score, descending=True)
             a_idx, b_idx = indices[..., ::2], indices[..., 1::2] 
             scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, b_idx.shape[-1])) 
@@ -96,9 +103,6 @@ def pitome_vision(
             node_max, node_idx = scores.max(dim=-1)
             return get_bsm_merge(node_max=node_max, node_idx=node_idx, r=r, class_token=class_token, a_idx=a_idx, b_idx=b_idx)
         else:
-            isolation_score = sim.sum(dim=-1)
-            if size is not None:
-                isolation_score = isolation_score - size 
             # print(isolation_score.shape, size.shape)
             indices =  torch.argsort(isolation_score, descending=True)
             merge_idx = indices[..., :2*r]

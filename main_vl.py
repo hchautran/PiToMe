@@ -86,14 +86,14 @@ def get_pitome_model(model, args):
 
 def get_diffrate_model(model, args):
     if 'clip' in args.model:
-        DiffRate.patch.clip(model.visual.transformer, use_k=args.use_k)
-        if args.use_k:
-            model.visual.transformer.init_kept_num_using_r(args.reduced_token)
+        DiffRate.patch.clip(model.visual, prune_granularity=args.granularity, merge_granularity=args.granularity)
+        if not args.use_k:
+            model.visual.init_kept_num_using_r(args.reduced_token)
         else:
-            model.visual.transformer.init_kept_num_using_ratio(args.reduced_token)
-    if 'blip2' in args.model:
+            model.visual.init_kept_num_using_ratio(args.ratio)
+    elif 'blip2' in args.model:
         DiffRate.patch.blip2(model.visual_encoder, prune_granularity=args.granularity, merge_granularity=args.granularity)
-        if args.use_k:
+        if not args.use_k:
             model.visual_encoder.init_kept_num_using_r(args.reduced_token)
         else:
             model.visual_encoder.init_kept_num_using_ratio(args.ratio)
@@ -101,11 +101,9 @@ def get_diffrate_model(model, args):
         DiffRate.patch.blip(model.visual_encoder, prune_granularity=args.granularity, merge_granularity=args.granularity)
         DiffRate.patch.blip(model.visual_encoder_m, prune_granularity=args.granularity, merge_granularity=args.granularity)
         if not args.use_k:
-            print('got here')
             model.visual_encoder.init_kept_num_using_r(args.reduced_token)
             model.visual_encoder_m.init_kept_num_using_r(args.reduced_token)
         else:
-            print('got here')
             model.visual_encoder.init_kept_num_using_ratio(args.ratio)
             model.visual_encoder_m.init_kept_num_using_ratio(args.ratio)
     else:
@@ -185,7 +183,7 @@ def setup_seeds(config):
 
 def get_gflops(args, model):
     if 'clip' in args.model:
-        return model.visual.transformer.total_flop/1e9
+        return model.visual.total_flop/1e9
     else:
         return model.visual_encoder.total_flop/1e9
     

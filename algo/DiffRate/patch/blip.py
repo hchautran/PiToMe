@@ -17,11 +17,10 @@ class DiffRateBlock(Block):
 
     
     def forward(self, x: torch.Tensor, register_hook=True) -> torch.Tensor:
-        B, N, C = x.shape
+        B, _, _ = x.shape
         # Note: this is copied from timm.models.vision_transformer.Block with modifications.
         size = self._diffrate_info["size"]
         mask = self._diffrate_info["mask"]
-        assert isinstance(self.attn, DiffRateAttention)
         # x_attn, attn = self.attn(x=self.norm1(x), size=size, mask=self._diffrate_info["mask"], register_hook=register_hook)
         x_attn = self.attn(x=self.norm1(x), register_hook=True)
         attn = self.attn.get_attention_map()
@@ -97,7 +96,6 @@ class DiffRateBlock(Block):
                 
 
 class DiffRateAttention(Attention):
-
 
     def softmax_with_policy(self, attn, policy, eps=1e-6):
         B, N = policy.size()

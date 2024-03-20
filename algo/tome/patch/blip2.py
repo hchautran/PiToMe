@@ -90,7 +90,7 @@ class ToMeAttention(Attention):
         return x, k.mean(1), attn
 
 
-def make_pitome_class(transformer_class):
+def make_tome_class(transformer_class):
     class ToMeVisionTransformer(transformer_class):
         """
         Modifications:
@@ -150,7 +150,7 @@ def apply_patch(
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    ToMeVisionTransformer = make_pitome_class(model.__class__)
+    ToMeVisionTransformer = make_tome_class(model.__class__)
     print('using', 'tome')
 
     model.__class__ = ToMeVisionTransformer

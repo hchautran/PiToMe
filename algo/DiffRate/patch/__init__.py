@@ -9,14 +9,14 @@ from .deit import apply_patch as deit
 from .mae import apply_patch as mae
 from .aug import apply_patch as aug 
 from .blip import apply_patch as blip 
-# from .blip2 import apply_patch as blip2
-# from .clip import apply_patch as clip
+from .clip import apply_patch as clip 
+from .blip2 import apply_patch as blip2
 
 __all__ = [
     "deit",
     "mae",
     "aug", 
     "blip", 
-    # "blip2", 
-    # "clip" 
+    "clip" 
+    "blip2", 
 ]

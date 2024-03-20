@@ -1,8 +1,8 @@
 import torch
 import torch.nn.functional as F 
 import torch.utils.checkpoint as checkpoint
-from lavis.models.eva_vit import VisionTransformer,Attention,Block
-from ..merge import merge_source, pitome_vision, prune, merge_mean, merge_wavg
+from lavis.models.eva_vit import VisionTransformer, Block, Attention
+from ..merge import merge_source, pitome_vision, merge_wavg
 
 class PiToMeBlock(Block):
     """
@@ -14,12 +14,13 @@ class PiToMeBlock(Block):
         # self.margin = nn.Parameter(torch.tensor(margin)) 
         self.margin = margin
     
-    def compress_x(self, metric, x):
+    def compress_x(self, metric, x, attn):
         ratio = self._tome_info["ratio"]
         if ratio < 1.0:
             merge, isolated_score = pitome_vision(
                 ratio=ratio,
                 metric=metric,
+                attn=attn,
                 margin=self.margin,
                 class_token=self._tome_info["class_token"]
             )
@@ -42,16 +43,60 @@ class PiToMeBlock(Block):
 
 
     def forward(self, x, rel_pos_bias=None):
+        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
         if self.gamma_1 is None:
-            x_attn = self.attn(self.norm1(x), rel_pos_bias=rel_pos_bias)
+            x_attn, _, attn = self.attn(self.norm1(x), attn_size, rel_pos_bias=rel_pos_bias)
             x = x + self.drop_path(x_attn)
+            x = self.compress_x(x,x, attn)
             x = x + self.drop_path(self.mlp(self.norm2(x)))
         else:
-            x_attn = self.attn(self.norm1(x), rel_pos_bias=rel_pos_bias)
+            x_attn, _, attn = self.attn(self.norm1(x), attn_size, rel_pos_bias=rel_pos_bias)
             x = x + self.drop_path(x_attn)
+            x = self.compress_x(x,x, attn)
             x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))
-        x = self.compress_x(x,x)
         return x
+
+
+class PiToMeAttention(Attention):
+    """
+    Modifications:
+     - Apply proportional attention
+     - Return the mean of k over heads from attention
+    """
+
+    def forward(self, x:torch.Tensor, isolation_score: torch.Tensor = None, rel_pos_bias=None):
+        B, N, C = x.shape
+        qkv_bias = None
+        if self.q_bias is not None:
+            qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
+        # qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        qkv = F.linear(input=x, weight=self.qkv.weight, bias=qkv_bias)
+        qkv = qkv.reshape(B, N, 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
+
+        q = q * self.scale
+        attn = (q @ k.transpose(-2, -1))
+        if isolation_score is not None:
+            attn = attn +  isolation_score.log()[:, None, None, :, 0]
+
+        if self.relative_position_bias_table is not None:
+            relative_position_bias = \
+                self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
+                    self.window_size[0] * self.window_size[1] + 1,
+                    self.window_size[0] * self.window_size[1] + 1, -1)  # Wh*Ww,Wh*Ww,nH
+            relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
+            attn = attn + relative_position_bias.unsqueeze(0)
+
+        if rel_pos_bias is not None:
+            attn = attn + rel_pos_bias
+        
+        attn = attn.softmax(dim=-1)
+        attn = self.attn_drop(attn)
+
+        x = (attn @ v).transpose(1, 2).reshape(B, N, -1)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x, k.mean(1), attn
 
 
 def make_pitome_class(transformer_class):
@@ -88,7 +133,7 @@ def make_pitome_class(transformer_class):
                     x = checkpoint.checkpoint(blk, x, rel_pos_bias)
                 else:
                     x = blk(x, rel_pos_bias)
-                self.total_flop+= self.calculate_block_flop(x.shape)
+                self.total_flop += self.calculate_block_flop(x.shape)
             return x
  
         def calculate_block_flop(self, shape):
@@ -101,6 +146,7 @@ def make_pitome_class(transformer_class):
             return flops
 
     return PiToMeVisionTransformer
+
 
 
 def apply_patch(
@@ -147,5 +193,5 @@ def apply_patch(
             module.init_margin(margins[current_layer])
             module._tome_info = model._tome_info
             current_layer +=1
-        # elif isinstance(module, Attention):
-        #     module.__class__ = PiToMeAttention
+        elif isinstance(module, Attention):
+            module.__class__ = PiToMeAttention
