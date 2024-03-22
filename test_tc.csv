@@ -39,7 +39,6 @@ imdb, bert-base-uncased, tofu, 14.495812608, 0.65, 87.93478260869566
 imdb, distilbert-base-uncased, tofu, 8.279620608, 0.65, 89.55003196930946
 imdb, bert-base-uncased, tofu, 17.629168128, 0.7, 89.77221867007673
 imdb, distilbert-base-uncased, tofu, 9.823723008, 0.7, 90.79124040920716
-imdb, bert-base-uncased, diffrate, 8.534466048, 0.525, 81.83823529411765
 imdb, bert-base-uncased, diffrate, 8.534466048, 0.525, 81.83903452685423
 imdb, distilbert-base-uncased, diffrate, 5.253717504, 0.525, 86.40185421994885
 imdb, bert-base-uncased, diffrate, 9.549170688, 0.55, 83.284047314578

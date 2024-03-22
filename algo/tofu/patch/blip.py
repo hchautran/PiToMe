@@ -86,10 +86,10 @@ def make_tofu_class(transformer_class):
         - Initialize r, token size, and token sources.
         """
         def forward(self,x, register_blk=-1):
-            self._tome_info["r"] = [self.r]* len(self.blocks) 
-            self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
-            self._tome_info["size"] = None
-            self._tome_info["source"] = None
+            self._tofu_info["r"] = [self.r]* len(self.blocks) 
+            self._tofu_info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._tofu_info["size"] = None
+            self._tofu_info["source"] = None
             self.total_flop = 0
             B = x.shape[0]
             x = self.patch_embed(x)

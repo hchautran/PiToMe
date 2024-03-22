@@ -128,7 +128,7 @@ def apply_patch(
         model._tofu_info["distill_token"] = True
 
     current_layer = 0
-    num_layers = len(model.layer)
+    num_layers = len(model.blocks)
     strategies = ['mean' if i > num_layers//2 else 'prune' for i in range(num_layers)]
 
     for module in model.modules():

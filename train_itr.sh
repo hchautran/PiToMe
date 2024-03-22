@@ -3,9 +3,10 @@
 # for dataset in 'coco' 
 for dataset in 'flickr' 
 do
-    for model in 'blip' 'clip' 
+    for model in  'clip' 
     # for model in 'blip2' 
     do
+        # for algo in 'tome' 'pitome' 'tofu' 'dct' 'diffrate'
         for algo in 'tome' 'pitome' 'tofu' 'dct' 'diffrate'
         do
             # for ratio in '0.925' 

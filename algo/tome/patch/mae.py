@@ -26,7 +26,6 @@ def make_tome_class(transformer_class):
         """
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
-            margin = 0.95
             self._tome_info["r"] = [self.r]* len(self.blocks) 
             self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
             self._tome_info["size"] = None

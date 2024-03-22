@@ -98,7 +98,9 @@ def dc_transform(x, ratio:float=None, k:int=None, class_token:bool=True ):
 
     x = idct(x_dct.transpose(0,2), norm='ortho').transpose(0,2).type(torch.half).permute(1,0,2)
     
-    return torch.cat([x_cls, x], dim=1)
+    if class_token:
+        return torch.cat([x_cls, x], dim=1)
+    return x
     
 
 

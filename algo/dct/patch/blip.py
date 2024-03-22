@@ -44,10 +44,10 @@ def make_dct_class(transformer_class):
         """
 
         def forward(self,x, register_blk=-1):
-            self._tome_info["r"] = [self.r]* len(self.blocks) 
-            self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
-            self._tome_info["size"] = None
-            self._tome_info["source"] = None
+            self._dct_info["r"] = [self.r]* len(self.blocks) 
+            self._dct_info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._dct_info["size"] = None
+            self._dct_info["source"] = None
             self.total_flop = 0
             B = x.shape[0]
             x = self.patch_embed(x)

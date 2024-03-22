@@ -7,7 +7,7 @@
 # export CKT_SIZE='deit_small_patch16_224'
 # export CKT_SIZE='deit_base_patch16_224'
 
-# export CKT_SIZE='vit_small_patch16_224'
+# export CKT_SIZE='vit_small_patch17_224'
 # export CKT_SIZE='vit_base_patch16_224'
 # export CKT_SIZE='vit_base_patch16_384'
 # export CKT_SIZE='vit_large_patch16_224'
