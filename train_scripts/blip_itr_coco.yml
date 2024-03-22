@@ -36,7 +36,7 @@ run:
   init_lr: 2e-5
   min_lr: 0
   weight_decay: 0.04
-  max_epoch: 6
+  max_epoch: 2
 
   # dataloading
   num_workers: 4

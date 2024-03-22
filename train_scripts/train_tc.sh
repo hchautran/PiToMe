@@ -1,1 +1,1 @@
-python main_tc.py --algo $1 --ratio 0.55
+python main_tc.py --model $1 --algo $2 --ratio $3 

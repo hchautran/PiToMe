@@ -107,6 +107,8 @@ if __name__ == "__main__":
                         help="choose an LRA dataset from available options")
     parser.add_argument("--algo", default=PITOME, choices=[PITOME, TOME, NONE, TOFU, DCT, DIFFRATE],
                         help="choose an LRA dataset from available options")
+    parser.add_argument("--model", default=BERT_BASE, choices=[BERT_BASE, DISTILBERT_BASE, BERT_LARGE],
+                        help="choose an LRA dataset from available options")
     parser.add_argument("--ratio", default=0.55, help="remain ratio")
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
     parser.add_argument('--batch_size', default=8, help='Perform evaluation only')
@@ -119,36 +121,33 @@ if __name__ == "__main__":
 
 
 
-    for model_ckt in [
-        # BERT_BASE,
-        # DISTILBERT_BASE, 
-        BERT_LARGE, 
-    ]:
-        engine = Engine(
-            task_name=task_name,
-            model_ckt=model_ckt,
-            ratio=float(args.ratio),
-            algo=args.algo,
-            batch_size=32,
-            enable_log=False,
-            trained=True
-        )
-        if args.eval:
-            metrics = engine.evaluate()
-        else:
-            metrics = engine.train(num_epochs=10)
-                
-        abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
-        file_name = 'test_tc.csv'
-        path = f'{abs_path}/{file_name}'
-        if not pathlib.Path(path).is_file():
-            head = "dataset, model, algo, gflops, ratio ,acc\n"
-            with open(file_name, "a") as myfile:
-                myfile.write(head)
+    file_name = f'test_tc_train.csv' if not args.eval else 'test_tc.csv'
+    print(file_name)
+    engine = Engine(
+        task_name=task_name,
+        model_ckt=args.model,
+        ratio=float(args.ratio),
+        algo=args.algo,
+        batch_size=32,
+        enable_log=not args.eval,
+        trained=args.eval
+    )
+    engine.init_logger()
+    if args.eval:
+        metrics = engine.evaluate()
+    else:
+        metrics = engine.train(num_epochs=10)
+            
+    abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
+    path = f'{abs_path}/{file_name}'
+    if not pathlib.Path(path).is_file():
+        head = "dataset, model, algo, gflops, ratio ,acc\n"
+        with open(file_name, "a") as myfile:
+            myfile.write(head)
 
-        if metrics is not None:
-            row = f'{args.task}, {model_ckt}, {args.algo}, {metrics["gflops"]}, {metrics["ratio"]}, {metrics["acc"]}\n'
-            with open(file_name, "a") as myfile:
-                myfile.write(row)
-                        
+    if metrics is not None:
+        row = f'{args.task}, {args.model}, {args.algo}, {metrics["gflops"]}, {metrics["ratio"]}, {metrics["acc"]}\n'
+        with open(file_name, "a") as myfile:
+            myfile.write(row)
+                    
                 

@@ -250,7 +250,7 @@ if __name__ == "__main__":
     import os
     import pathlib
     abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
-    file_name = f'test_itr.csv'
+    file_name = f'test_itr_train.csv'
     path = f'{abs_path}/{file_name}'
     if not pathlib.Path(path).is_file():
         head = "dataset, model, algo, gflops, ratio ,txt_r1, txt_r5, txt_r10, img_r1, img_r5, img_r10, r_sum\n"

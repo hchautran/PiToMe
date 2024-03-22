@@ -184,7 +184,7 @@ class Engine:
         if self.enable_log:
             wandb.init(
                 name=f'{self.algo}_{self.model_ckt}',
-                project='tc_off_the_shell',
+                project='tc_train',
                 config={
                     'algo': self.algo, 
                     'model': self.model_ckt, 
@@ -200,13 +200,19 @@ class Engine:
         optimizer = Adam(self.model.parameters(), lr=1e-5)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1, min_lr=1e-8, mode='max')
         optimizer, scheduler= self.accelerator.prepare(optimizer, scheduler)
+        best_acc = 0
         for i in range(num_epochs):
             self.train_one_epoch(optimizer, scheduler)
             eval_stats = self.evaluate()
             scheduler.step(eval_stats['acc'])
+                
             eval_stats['epoch'] = i + 1 
             print(eval_stats)
+            if best_acc < eval_stats['acc']:
+                best_acc = eval_stats['acc']
+                print('best acc:', best_acc)
             self.log(eval_stats)
+        eval_stats['acc'] = best_acc
         return eval_stats
             
 

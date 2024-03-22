@@ -42,7 +42,7 @@ run:
   warmup_lr: 1e-8
   warmup_steps: 1000
   weight_decay: 0.05
-  max_epoch: 5
+  max_epoch: 2
   batch_size_train: 64 
   batch_size_eval: 32 
   lr_layer_decay: 0.95 # layer-wise learning rate decay for the ViT 
