@@ -1,1 +1,2 @@
 dataset, model, algo, gflops, ratio ,txt_r1, txt_r5, txt_r10, img_r1, img_r5, img_r10, r_sum
+flickr, blip, pitome, 41.487277056, 0.95, 96.6, 99.7, 99.9, 86.14, 97.22, 98.6, 578.1600000000001

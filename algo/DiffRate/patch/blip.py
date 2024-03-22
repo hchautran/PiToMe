@@ -159,6 +159,29 @@ def make_diffrate_class(transformer_class):
         Modifications:
         - Initialize r, token size, and token sources.
         """
+        def forward(self,x, register_blk=-1):
+            self._tome_info["r"] = [self.r]* len(self.blocks) 
+            self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._tome_info["size"] = None
+            self._tome_info["source"] = None
+            self.total_flop = 0
+            B = x.shape[0]
+            x = self.patch_embed(x)
+
+            cls_tokens = self.cls_token.expand(
+                B, -1, -1
+            )  # stole cls_tokens impl from Phil Wang, thanks
+            x = torch.cat((cls_tokens, x), dim=1)
+
+            x = x + self.pos_embed[:, : x.size(1), :]
+            x = self.pos_drop(x)
+
+            for i, blk in enumerate(self.blocks):
+                self.total_flop += self.calculate_block_flop(x.shape)
+                x = blk(x, register_blk == i)
+            x = self.norm(x)
+            return x
+
 
         def forward_features(self, x, register_blk=-1) -> torch.Tensor:
       

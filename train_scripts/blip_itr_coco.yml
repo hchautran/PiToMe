@@ -7,7 +7,7 @@ model:
   arch: blip_retrieval
 
   model_type: coco
-  load_finetuned: False
+  load_finetuned: True
 
   queue_size: 57600
   alpha: 0.4
@@ -36,7 +36,7 @@ run:
   init_lr: 2e-5
   min_lr: 0
   weight_decay: 0.04
-  max_epoch: 2
+  max_epoch: 1
 
   # dataloading
   num_workers: 4
