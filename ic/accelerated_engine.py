@@ -11,7 +11,7 @@ import torch
 
 from timm.data import Mixup
 from .utils import *
-from timm.utils import accuracy, ModelEma
+from timm.utils import accuracy
 import time
 import wandb
 from tqdm.auto import tqdm
@@ -39,8 +39,8 @@ def train_one_epoch(model: torch.nn.Module, criterion,
 
             outputs, flops = model(samples)
             loss = criterion(outputs, targets)
-            # if utils.is_main_process():
-                # wandb.log({'current loss': loss_cls_value})
+            if utils.is_main_process():
+                wandb.log({'current loss': loss_cls_value})
             
             accelerator.backward(loss)
             if accelerator.sync_gradients:

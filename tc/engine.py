@@ -17,7 +17,7 @@ from tc.lra_config import (
     get_cifar10_config, 
     get_text_classification_config
 )
-from tc.lra_datasets import (ListOpsDataset, Cifar10Dataset, ImdbDataset)
+from tc.lra_datasets import (ListOpsDataset, Cifar10Dataset, ImdbDataset, RottenTomatoes)
 from argparse import ArgumentParser
 from accelerate import Accelerator
 from dotenv import load_dotenv
@@ -55,14 +55,20 @@ TASKS = {
     'listops': ConfigDict(dict(dataset_fn=ListOpsDataset, config_getter=get_listops_config)),
     'cifar10': ConfigDict(dict(dataset_fn=Cifar10Dataset, config_getter=get_cifar10_config)),
     'imdb': ConfigDict(dict(dataset_fn=ImdbDataset, config_getter=get_text_classification_config)),
+    'rotten': ConfigDict(dict(dataset_fn=RottenTomatoes, config_getter=get_text_classification_config)),
 }
 BERT_BASE = 'bert-base-uncased'
 DISTILBERT_BASE = 'distilbert-base-uncased'
 BERT_LARGE= 'bert-large-uncased'
-model_ft_dict = {
+model_imdb_dict = {
     BERT_BASE: 'JiaqiLee/imdb-finetuned-bert-base-uncased',
     DISTILBERT_BASE: 'lvwerra/distilbert-imdb',
-    BERT_LARGE:'jojoUla/bert-large-uncased-finetuned-imdb'
+    BERT_LARGE:BERT_LARGE
+}
+model_rotten_dict = {
+    BERT_BASE: 'zebans/bert-base-cased-finetuned-rotten-tomatoes-epochs-2',
+    DISTILBERT_BASE: 'lvwerra/distilbert-imdb',
+    BERT_LARGE:BERT_LARGE
 }
 model_dict  = {
     BERT_BASE: BERT_BASE,
@@ -90,7 +96,7 @@ class Engine:
         self.ori_model = None
         self.model_ckt = model_ckt
         if trained:
-            self.model_dict = model_ft_dict
+            self.model_dict = model_imdb_dict if task_name == 'imdb' else model_rotten_dict
         else:
             self.model_dict = model_dict 
         self.prepare_model(self.model_ckt, self.algo)

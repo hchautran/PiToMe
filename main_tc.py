@@ -61,14 +61,12 @@ def accuracy_score(outp, target):
 OUTPUT_DIR = "output_dir/"
 deepspeed_json = "ds_config.json"
 
-TASKS = {
-    'listops': ConfigDict(dict(dataset_fn=ListOpsDataset, config_getter=get_listops_config)),
-    'cifar10': ConfigDict(dict(dataset_fn=Cifar10Dataset, config_getter=get_cifar10_config)),
-    'imdb': ConfigDict(dict(dataset_fn=ImdbDataset, config_getter=get_text_classification_config)),
-}
-
-
-
+TASKS = [
+    'listops',
+    'cifar10',
+    'imdb',
+    'rotten'
+]
 
 def eval(model, eval_dataset, tokenizer,batch_size=4):
     model.eval()
@@ -103,7 +101,7 @@ def eval(model, eval_dataset, tokenizer,batch_size=4):
 if __name__ == "__main__":
     import pathlib
     parser = ArgumentParser()
-    parser.add_argument("--task", default="imdb", choices=TASKS.keys(),
+    parser.add_argument("--task", default="imdb", choices=TASKS,
                         help="choose an LRA dataset from available options")
     parser.add_argument("--algo", default=PITOME, choices=[PITOME, TOME, NONE, TOFU, DCT, DIFFRATE],
                         help="choose an LRA dataset from available options")

@@ -18,5 +18,6 @@ export SIZE=$2
 export INPUT_SIZE=$3
 export RATIO=$4
 export ALGO=$5
+export LR=$6
 
-python -m accelerate.commands.launch --config_file accelerate.yml main_ic.py --batch-size 200 --model ${ARCH}_${SIZE}_patch16_${INPUT_SIZE}  --algo ${ALGO} --use_k False --ratio ${RATIO} --input-size ${INPUT_SIZE} --epoch 10 
+python -m accelerate.commands.launch --config_file accelerate.yml main_ic.py --batch-size 32 --model ${ARCH}_${SIZE}_patch16_${INPUT_SIZE}  --algo ${ALGO} --use_k False --ratio ${RATIO} --input-size ${INPUT_SIZE} --epoch 100  --lr $LR 

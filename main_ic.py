@@ -40,6 +40,7 @@ from consts import DATA_PATH
 import os
 from accelerate import Accelerator
 from torch.utils.data import DataLoader
+import wandb
 
 
 torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
@@ -327,6 +328,7 @@ def main(args):
     np.random.seed(seed)
     cudnn.benchmark = True
     args.data_path = DATA_PATH + '/.cache/'
+    args.data_set  = 'CIFAR'
     dataset_train, args.nb_classes = utils.build_dataset(is_train=True, args=args)
     dataset_val, _ = utils.build_dataset(is_train=False, args=args)
 
@@ -451,15 +453,15 @@ def main(args):
         accelerator.print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
         return test_stats
     else:
-        pass
-        # if accelerator.is_main_process:
-        #     wandb.init(
-        #         name=args.model,
-        #         project='ic',
-        #         config={
-        #             'compress_method': 'pitome'
-        #         }
-        #     )
+        # pass
+        if accelerator.is_main_process:
+            wandb.init(
+                name=args.model,
+                project='ic',
+                config={
+                    'compress_method': 'pitome'
+                }
+            )
  
     criterion = LabelSmoothingCrossEntropy()
 
@@ -520,16 +522,16 @@ def main(args):
         if accelerator.is_main_process and max_accuracy < test_stats['acc1'] :
             shutil.copyfile(checkpoint_path, f'{args.output_dir}/model_best.pth')
             max_accuracy = max(max_accuracy, test_stats["acc1"])
-            # wandb.log({'acc': f'{test_stats["acc1"]}%'})
-            # wandb.log({'max acc': f'{max_accuracy:.2f}%'})
+            wandb.log({'acc': f'{test_stats["acc1"]}%'})
+            wandb.log({'max acc': f'{max_accuracy:.2f}%'})
         accelerator.print(f'Max accuracy: {max_accuracy:.2f}%')
 
-        # log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-        #              **{f'test_{k}': v for k, v in test_stats.items()},
-        #              'epoch': epoch,
-        #              'n_parameters': n_parameters}
-        # if accelerator.is_main_process():
-            # wandb.log(log_stats)
+        log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
+                     **{f'test_{k}': v for k, v in test_stats.items()},
+                     'epoch': epoch,
+                     'n_parameters': n_parameters}
+        if accelerator.is_main_process():
+            wandb.log(log_stats)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))

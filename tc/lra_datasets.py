@@ -5,15 +5,14 @@ from functools import reduce
 import torch
 from glob import glob
 from itertools import cycle
-
 from dotenv import load_dotenv
+from datasets import load_dataset
 import os
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Access the environment variable
-DATA_PATH = os.environ.get('DATA_PATH')
 # DATA_PATH =  '/mnt/data/mount_4TBSSD/nmduy/pitome'
 DATA_PATH = '/media/caduser/MyBook/chau'
 
@@ -37,6 +36,20 @@ class ImdbDataset:
             source = fo.read()
         target = int(data[1])
         return source, torch.LongTensor([target])
+    
+    def __len__(self):
+        return len(self.data)
+
+        
+class RottenTomatoes: 
+    def __init__(self, config ,split='train'):
+        cache_dir = f'{DATA_PATH}/.cache' 
+        self.split = 'train' if split == 'train' else 'test'
+        self.data = load_dataset('rotten_tomatoes', cache_dir=cache_dir)[self.split]
+        
+    def __getitem__(self, i):
+        sample = self.data[i]
+        return sample['text'], torch.LongTensor([sample['label']])
     
     def __len__(self):
         return len(self.data)
