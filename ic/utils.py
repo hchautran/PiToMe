@@ -582,7 +582,8 @@ def build_dataset(is_train, args):
 
     if args.data_set == 'CIFAR':
         dataset = datasets.CIFAR100(args.data_path, train=is_train, transform=transform)
-        print(len(dataset))
+        if is_main_process():
+            print(f'num sample of {"train" if is_train else "eval"} set:', len(dataset))
         nb_classes = 100
     elif args.data_set == 'IMNET':
         dataset = ImageNetKaggle(root=args.data_path, split='train' if is_train else 'val', transform=transform)

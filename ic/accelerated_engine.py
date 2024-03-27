@@ -39,8 +39,8 @@ def train_one_epoch(model: torch.nn.Module, criterion,
 
             outputs, flops = model(samples)
             loss = criterion(outputs, targets)
-            if utils.is_main_process():
-                wandb.log({'current loss': loss_cls_value})
+            if is_main_process():
+                wandb.log({'current loss': loss.item()})
             
             accelerator.backward(loss)
             if accelerator.sync_gradients:
@@ -52,7 +52,6 @@ def train_one_epoch(model: torch.nn.Module, criterion,
             # metric_logger.update(loss_cls=0.0)
             # metric_logger.update(flops=0.0)
 
-
     metric_logger.synchronize_between_processes()
     accelerator.print(f"Averaged stats:{metric_logger}")
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
@@ -61,13 +60,9 @@ def train_one_epoch(model: torch.nn.Module, criterion,
 def evaluate(data_loader, model, accelerator=None):
     criterion = torch.nn.CrossEntropyLoss()
     metric_logger = MetricLogger(delimiter="  ")
-
-    # switch to evaluation mode
     model.eval()
     
     for  images, targets in tqdm(data_loader):
-        # start = time.time()
-
         output, flops = model(images)
         loss = criterion(output, targets)
 
@@ -78,7 +73,6 @@ def evaluate(data_loader, model, accelerator=None):
         metric_logger.update(loss=loss.item())
         metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
         metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
-        # print('eval time:', time.time() - start)
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
 

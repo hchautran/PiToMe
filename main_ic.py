@@ -21,6 +21,7 @@ import ic.utils as utils
 import shutil
 import warnings
 from timm.scheduler.cosine_lr import CosineLRScheduler 
+# from torch.optim.lr_scheduler import ReduceLROnPlateau 
 import torch
 from algo import (
     PITOME,
@@ -112,18 +113,20 @@ def get_args_parser():
     # Learning rate schedule parameters
     parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
                         help='LR scheduler (default: "cosine"')
-    parser.add_argument('--lr', type=float, default=1e-6, metavar='LR',
-                        help='learning rate (default: 1e-5)')
+    parser.add_argument('--lr', type=float, default=5e-4, metavar='LR',
+                        help='learning rate (default: 5e-4)')
     parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct',
                         help='learning rate noise on/off epoch percentages')
     parser.add_argument('--lr-noise-pct', type=float, default=0.67, metavar='PERCENT',
                         help='learning rate noise limit percent (default: 0.67)')
     parser.add_argument('--lr-noise-std', type=float, default=1.0, metavar='STDDEV',
                         help='learning rate noise std-dev (default: 1.0)')
-    parser.add_argument('--warmup-lr', type=float, default=1e-7, metavar='LR',
+    parser.add_argument('--warmup-lr', type=float, default=1e-6, metavar='LR',
                         help='warmup learning rate (default: 1e-6)')
-    parser.add_argument('--min-lr', type=float, default=1e-7, metavar='LR',
+    parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
+
+
     parser.add_argument('--decay-epochs', type=float, default=30, metavar='N',
                         help='epoch interval to decay LR')
     parser.add_argument('--warmup-epochs', type=int, default=5, metavar='N',
@@ -441,6 +444,7 @@ def main(args):
     model = accelerator.prepare(model)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,weight_decay=0)
     lr_scheduler = CosineLRScheduler(optimizer, t_initial=args.epochs, lr_min=args.min_lr, decay_rate=args.decay_rate )
+    # lr_scheduler = ReduceLROnPlateau(optimizer, mode='max', patience=5)
     loss_scaler = ic.utils.NativeScalerWithGradNormCount()
     optimizer, lr_scheduler, data_loader_train, data_loader_val = accelerator.prepare(optimizer, lr_scheduler, data_loader_train, data_loader_val)
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -459,7 +463,9 @@ def main(args):
                 name=args.model,
                 project='ic',
                 config={
-                    'compress_method': 'pitome'
+                    'compress_method': args.algo,
+                    'model': model_dict[args.model],
+                    'ratio': args.ratio
                 }
             )
  
@@ -502,8 +508,8 @@ def main(args):
             logger=logger,
             mixup_fn=mixup_fn,
         )
-        # if accelerator.is_main_process:
-            # wandb.log(train_stats)
+        if accelerator.is_main_process:
+            wandb.log(train_stats)
 
         lr_scheduler.step(epoch)
         if args.output_dir:
@@ -518,6 +524,7 @@ def main(args):
                 }, checkpoint_path)
 
         test_stats = evaluate(data_loader_val, model, accelerator)
+        # lr_scheduler.step(test_stats['acc1'])
         accelerator.print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
         if accelerator.is_main_process and max_accuracy < test_stats['acc1'] :
             shutil.copyfile(checkpoint_path, f'{args.output_dir}/model_best.pth')
@@ -530,12 +537,13 @@ def main(args):
                      **{f'test_{k}': v for k, v in test_stats.items()},
                      'epoch': epoch,
                      'n_parameters': n_parameters}
-        if accelerator.is_main_process():
+        if accelerator.is_main_process:
             wandb.log(log_stats)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     accelerator.print('Training time {}'.format(total_time_str))
+    test_stats['best acc'] = max_accuracy
     return test_stats
 
 
@@ -548,15 +556,17 @@ if __name__ == '__main__':
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
-    file_name = 'test_ic.csv'
+    file_name = f'test_ic_{args.model}.csv'
     path = f'{abs_path}/{file_name}'
     if not pathlib.Path(path).is_file():
-        head = "model, algo, gflops, ratio ,acc_1, acc_5\n"
-        with open(file_name, "a") as myfile:
-            myfile.write(head)
-    
+        head = "model, algo, gflops, ratio ,acc_1\n"
+        if utils.is_main_process():
+            with open(file_name, "a") as myfile:
+                myfile.write(head)
+        
     metrics = main(args)
     if metrics is not None:
-        row = f'{model_dict[args.model]}, {args.algo}, {metrics["flops"]}, {args.ratio}, {metrics["acc1"]}, {metrics["acc5"]}\n'
-        with open(file_name, "a") as myfile:
-            myfile.write(row)
+        row = f'{model_dict[args.model]}, {args.algo}, {metrics["flops"]}, {args.ratio}, {metrics["best acc"]}\n'
+        if utils.is_main_process():
+            with open(file_name, "a") as myfile:
+                myfile.write(row)

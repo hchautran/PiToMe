@@ -1,0 +1,2 @@
+model, algo, gflops, ratio ,acc_1
+DEIT-T-16-224, pitome, 0.7510402559999997, 0.9125, 74.01
