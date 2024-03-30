@@ -21,7 +21,7 @@ import ic.utils as utils
 import shutil
 import warnings
 from timm.scheduler.cosine_lr import CosineLRScheduler 
-# from torch.optim.lr_scheduler import ReduceLROnPlateau 
+from torch.optim.lr_scheduler import ReduceLROnPlateau 
 import torch
 from algo import (
     PITOME,
@@ -66,6 +66,8 @@ model_dict = {
     'vit_base_patch16_224': 'VIT-B-16-224',
     'vit_large_patch16_224': 'VIT-L-16-224',
     'vit_large_patch16_384': 'VIT-L-16-384',
+    'vit_small_patch16_384': 'VIT-S-16-384',
+    'vit_base_patch16_384': 'VIT-B-16-384',
     'vit_base_patch16_mae': 'MAE-B-16-224',
     'vit_large_patch16_mae': 'MAE-L-16-224',
     'vit_huge_patch14_mae': 'MAE-H-14-224',
@@ -123,7 +125,7 @@ def get_args_parser():
                         help='learning rate noise std-dev (default: 1.0)')
     parser.add_argument('--warmup-lr', type=float, default=1e-6, metavar='LR',
                         help='warmup learning rate (default: 1e-6)')
-    parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR',
+    parser.add_argument('--min-lr', type=float, default=1e-7, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
 
 
@@ -332,6 +334,7 @@ def main(args):
     cudnn.benchmark = True
     args.data_path = DATA_PATH + '/.cache/'
     args.data_set  = 'CIFAR'
+    # args.data_set  = 'IMNET'
     dataset_train, args.nb_classes = utils.build_dataset(is_train=True, args=args)
     dataset_val, _ = utils.build_dataset(is_train=False, args=args)
 
@@ -442,9 +445,9 @@ def main(args):
 
     
     model = accelerator.prepare(model)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,weight_decay=0)
-    lr_scheduler = CosineLRScheduler(optimizer, t_initial=args.epochs, lr_min=args.min_lr, decay_rate=args.decay_rate )
-    # lr_scheduler = ReduceLROnPlateau(optimizer, mode='max', patience=5)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    lr_scheduler = CosineLRScheduler(optimizer, t_initial=args.epochs, lr_min=args.min_lr) 
+    # lr_scheduler = ReduceLROnPlateau(optimizer, mode='max', patience=2, min_lr=args.min_lr)
     loss_scaler = ic.utils.NativeScalerWithGradNormCount()
     optimizer, lr_scheduler, data_loader_train, data_loader_val = accelerator.prepare(optimizer, lr_scheduler, data_loader_train, data_loader_val)
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -460,8 +463,8 @@ def main(args):
         # pass
         if accelerator.is_main_process:
             wandb.init(
-                name=args.model,
-                project='ic',
+                name=f'{model_dict[args.model]}-{args.algo}',
+                project=f'ic_{model_dict[args.model]}',
                 config={
                     'compress_method': args.algo,
                     'model': model_dict[args.model],
@@ -529,8 +532,8 @@ def main(args):
         if accelerator.is_main_process and max_accuracy < test_stats['acc1'] :
             shutil.copyfile(checkpoint_path, f'{args.output_dir}/model_best.pth')
             max_accuracy = max(max_accuracy, test_stats["acc1"])
-            wandb.log({'acc': f'{test_stats["acc1"]}%'})
-            wandb.log({'max acc': f'{max_accuracy:.2f}%'})
+            wandb.log({'acc': f'{test_stats["acc1"]}'})
+            wandb.log({'max acc': max_accuracy})
         accelerator.print(f'Max accuracy: {max_accuracy:.2f}%')
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
@@ -543,7 +546,7 @@ def main(args):
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     accelerator.print('Training time {}'.format(total_time_str))
-    test_stats['best acc'] = max_accuracy
+    test_stats['best acc'] = f'{max_accuracy:.2f}'
     return test_stats
 
 
@@ -556,7 +559,7 @@ if __name__ == '__main__':
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
-    file_name = f'test_ic_{args.model}.csv'
+    file_name = f'test_ic_{args.model}{"_eval" if args.eval else ""}.csv'
     path = f'{abs_path}/{file_name}'
     if not pathlib.Path(path).is_file():
         head = "model, algo, gflops, ratio ,acc_1\n"

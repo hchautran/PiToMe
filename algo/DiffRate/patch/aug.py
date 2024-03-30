@@ -1,14 +1,3 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-# --------------------------------------------------------
-# References:
-# timm: https://github.com/rwightman/pytorch-image-models/tree/master/timm
-# mae: https://github.com/facebookresearch/mae
-# --------------------------------------------------------
-
 
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
@@ -24,6 +13,8 @@ def make_diffrate_class(transformer_class):
             self._diffrate_info["mask"] =  torch.ones((B,self.patch_embed.num_patches+1),device=x.device)
             self._diffrate_info["prune_kept_num"] = []
             self._diffrate_info["merge_kept_num"] = []
+            if self._diffrate_info["trace_source"]:
+                self._diffrate_info["source"] = torch.eye(self.patch_embed.num_patches+1, device=x.device)[None, ...].expand(B, self.patch_embed.num_patches+1, self.patch_embed.num_patches+1)
             x = super().forward(x)
             if return_flop:
                 if self.training:
@@ -33,41 +24,6 @@ def make_diffrate_class(transformer_class):
                 return x, flops
             else:
                 return x
-            
-        def forward_features(self, x: torch.Tensor) -> torch.Tensor:
-            # From the MAE implementation
-            B = x.shape[0]
-            x = self.patch_embed(x)
-
-            T = x.shape[1]
-
-            cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
-            x = torch.cat((cls_tokens, x), dim=1)
-            x = x + self.pos_embed
-            x = self.pos_drop(x)
-
-            for blk in self.blocks:
-                x = blk(x)
-
-            if self.global_pool:
-                if self.training:
-                    mask = self._diffrate_info["mask"][...,None]  # [B, N, 1]
-                    num = (self._diffrate_info["size"] * mask)[:, 1:, :].sum(dim=1) # [B,1]
-                    x = (x * self._diffrate_info["size"] * mask)[:, 1:, :].sum(dim=1) / num.detach()
-                    outcome = self.fc_norm(x)
-                else:
-                    T = self._diffrate_info["size"][:, 1:, :].sum(dim=1)
-                    if self._diffrate_info["size"] is not None:
-                        x = (x * (self._diffrate_info["size"]))[:, 1:, :].sum(dim=1) / T
-                    else:
-                        x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
-                    outcome = self.fc_norm(x)
-            else:
-                x = self.norm(x)
-                x = self.pre_logits(x)
-                outcome = x[:, 0]            
-
-            return outcome
         
         def parameters(self, recurse=True):
             # original network parameter
@@ -84,7 +40,6 @@ def make_diffrate_class(transformer_class):
                 if n.find('ddp') > -1:
                     params.append(m)
             return iter(params)    
-    
 
         def get_kept_num(self):
             prune_kept_num = []
@@ -93,7 +48,8 @@ def make_diffrate_class(transformer_class):
                 prune_kept_num.append(int(block.prune_ddp.kept_token_number))
                 merge_kept_num.append(int(block.merge_ddp.kept_token_number))
             return prune_kept_num, merge_kept_num
-        
+                
+
         def set_kept_num(self, prune_kept_numbers, merge_kept_numbers):
             assert len(prune_kept_numbers) == len(self.blocks) and len(merge_kept_numbers) == len(self.blocks)
             for block, prune_kept_number, merge_kept_number in zip(self.blocks, prune_kept_numbers, merge_kept_numbers):
@@ -105,7 +61,7 @@ def make_diffrate_class(transformer_class):
             N = self.patch_embed.num_patches
             for block in self.blocks:
                 r = math.floor(N - N*ratio)
-                block.prune_ddp.kept_token_number = N - 1 
+                block.prune_ddp.kept_token_number = N - 0 
                 block.merge_ddp.kept_token_number = N - r
                 N -= r
             
@@ -113,7 +69,7 @@ def make_diffrate_class(transformer_class):
             N = self.patch_embed.num_patches
             for block in self.blocks:
                 r = min(r, N // 2)
-                block.prune_ddp.kept_token_number = N - 1 
+                block.prune_ddp.kept_token_number = N - 0 
                 block.merge_ddp.kept_token_number = N - r
                 N -= r
         
@@ -126,7 +82,6 @@ def make_diffrate_class(transformer_class):
             classifier_flops = C*self.num_classes
             with torch.cuda.amp.autocast(enabled=False):
                 for prune_kept_number, merge_kept_number in zip(self._diffrate_info["prune_kept_num"],self._diffrate_info["merge_kept_num"]):
-                    # translate fp16 to fp32 for stable training
                     prune_kept_number = prune_kept_number.float()     
                     merge_kept_number = merge_kept_number.float()
                     mhsa_flops = 4*N*C*C + 2*N*N*C
@@ -163,13 +118,13 @@ def make_diffrate_class(transformer_class):
 
 
 def apply_patch(
-    model: VisionTransformer, trace_source: bool = False, prune_granularity=1, merge_granularity=1
+    model: VisionTransformer, trace_source: bool = False,prune_granularity=1, merge_granularity=1
 ):
     """
     Applies DiffRate to this transformer.
     """
-    DiffRateVisionTransformer = make_diffrate_class(model.__class__)
     print('use', 'diffrate')
+    DiffRateVisionTransformer = make_diffrate_class(model.__class__)
 
     model.__class__ = DiffRateVisionTransformer
     model._diffrate_info = {
@@ -181,8 +136,7 @@ def apply_patch(
     }
 
     block_index = 0
-    # non_compressed_block_index = [0]
-    non_compressed_block_index = [0, len(model.blocks)-1]
+    non_compressed_block_index = [0]
     for module in model.modules():
         if isinstance(module, Block):
             module.__class__ = DiffRateBlock

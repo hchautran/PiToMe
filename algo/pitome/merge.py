@@ -107,18 +107,18 @@ def pitome_vision(
     # sim = metric@metric.transpose(-1,-2) - torch.eye(T)[None,...].to(metric.device)
    
     with torch.no_grad():
-            sim = metric@metric.transpose(-1,-2) 
-            sim = F.elu((sim - margin)/0.1)
-            isolation_score = sim.mean(dim=-1) 
-            indices =  torch.argsort(isolation_score, descending=True)
-
-            merge_idx = indices[..., :2*r]
-            protected_idx = indices[..., 2*r:]
-            a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:] 
-
-            scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
-            scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
-            _, dst_idx = scores.max(dim=-1) 
+        sim = metric@metric.transpose(-1,-2) 
+        sim = F.elu((sim - margin)/0.01, alpha=alpha)
+        isolation_score = sim.mean(dim=-1) 
+        indices =  torch.argsort(isolation_score, descending=True)
+        merge_idx = indices[..., :r * 2]
+        protected_idx = indices[..., r * 2:]
+        # even_idx, odd_idx = merge_idx[..., ::2], merge_idx[..., 1::2] 
+        a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:] 
+        # a_idx , b_idx = even_idx[..., :r], torch.cat([even_idx[..., r:], odd_idx ], dim=-1)
+        scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, b_idx.shape[-1])) 
+        scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, a_idx.shape[-1], b_idx.shape[-1] ))
+        _, dst_idx = scores.max(dim=-1) 
     
     
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
@@ -138,8 +138,10 @@ def pitome_vision(
             return torch.cat([protected, dst], dim=1)
 
     if class_token:
+        # return merge,  1- F.normalize(isolation_score, dim=-1)  
         return merge, None
-    return merge, 1- F.softmax(isolation_score, dim=-1) 
+        # return merge, torch.cat([torch.ones(B, 1).to(metric.device), isolation_score], dim=-1)[..., None]
+    return merge, 1- F.normalize(isolation_score, dim=-1) 
 
 
 def pitome_text(

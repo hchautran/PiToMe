@@ -3,6 +3,7 @@ from typing import Tuple
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 from .timm import ToFuBlock, ToFuBlockUsingRatio, ToFuAttention 
+from timm.models.helpers import checkpoint_seq 
 
 def make_tofu_class(transformer_class):
     class ToFuVisionTransformer(transformer_class):
@@ -26,20 +27,16 @@ def make_tofu_class(transformer_class):
 
         def forward_features(self, x):
             x = self.patch_embed(x)
-            cls_token = self.cls_token.expand(x.shape[0], -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
-            if self.dist_token is None:
-                x = torch.cat((cls_token, x), dim=1)
-            else:
-                x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
-            x = self.pos_drop(x + self.pos_embed)
-            for blk in self.blocks:
+            x = self._pos_embed(x)
+            x = self.norm_pre(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
                 self.total_flop += self.calculate_block_flop(x.shape) 
-                x = blk(x)
-            x = self.norm(x)
-            if self.dist_token is None:
-                return self.pre_logits(x[:, 0])
+                x = checkpoint_seq(self.blocks, x)
             else:
-                return x[:, 0], x[:, 1]
+                x = self.blocks(x)
+            x = self.norm(x)
+            return x
+ 
  
         def calculate_block_flop(self, shape):
             flops = 0

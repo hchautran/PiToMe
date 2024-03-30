@@ -9,7 +9,7 @@ log/
 */cnn_dm-bin/
 */cnn_dm/
 */checkpoints/
-
+LLaVA/
 # Byte-compiled / optimized / DLL files
 */__pycache__/
 */*.py[cod]

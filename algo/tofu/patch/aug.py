@@ -2,9 +2,8 @@ from typing import Tuple
 
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
-from copy import copy
-
 from .timm import ToFuBlock, ToFuBlockUsingRatio, ToFuAttention 
+from timm.models.helpers import checkpoint_seq 
 
 def make_tofu_class(transformer_class):
     class ToFuVisionTransformer(transformer_class):
@@ -12,7 +11,6 @@ def make_tofu_class(transformer_class):
         Modifications:
         - Initialize r, token size, and token sources.
         """
-
         def forward(self, x, return_flop=True) -> torch.Tensor:
 
             self._tofu_info["r"] = [self.r] * len(self.blocks) 
@@ -29,20 +27,16 @@ def make_tofu_class(transformer_class):
 
         def forward_features(self, x):
             x = self.patch_embed(x)
-            cls_token = self.cls_token.expand(x.shape[0], -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
-            if self.dist_token is None:
-                x = torch.cat((cls_token, x), dim=1)
-            else:
-                x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
-            x = self.pos_drop(x + self.pos_embed)
-            for blk in self.blocks:
+            x = self._pos_embed(x)
+            x = self.norm_pre(x)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
                 self.total_flop += self.calculate_block_flop(x.shape) 
-                x = blk(x)
-            x = self.norm(x)
-            if self.dist_token is None:
-                return self.pre_logits(x[:, 0])
+                x = checkpoint_seq(self.blocks, x)
             else:
-                return x[:, 0], x[:, 1]
+                x = self.blocks(x)
+            x = self.norm(x)
+            return x
+ 
  
         def calculate_block_flop(self, shape):
             flops = 0
@@ -78,6 +72,7 @@ def apply_patch(
     model.ratio = 1.0 
     model.use_k = use_k
     
+    
     # model.compress_method = 'tofu' 
     model._tofu_info = {
         "r": model.r,
@@ -93,15 +88,16 @@ def apply_patch(
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tofu_info["distill_token"] = True
-    current_layer = 0
+
     num_layers = len(model.blocks)
     strategies = ['tofu' if i > num_layers//2 else 'prune' for i in range(num_layers)]
-
+    current_layer = 0 
     for module in model.modules():
 
         if isinstance(module, Block):
             module.__class__ = ToFuBlock if use_k  else ToFuBlockUsingRatio
-            module._tofu_info = model._tofu_info
             module.init_strategy(strategies[current_layer])
+            module._tofu_info = model._tofu_info
+            current_layer += 1
         elif isinstance(module, Attention):
             module.__class__ = ToFuAttention
