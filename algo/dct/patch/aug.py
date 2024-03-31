@@ -34,7 +34,9 @@ def make_dct_class(transformer_class):
                 self.total_flop += self.calculate_block_flop(x.shape) 
                 x = checkpoint_seq(self.blocks, x)
             else:
-                x = self.blocks(x)
+                for block in self.blocks:
+                    self.total_flop += self.calculate_block_flop(x.shape) 
+                    x = block(x)
             x = self.norm(x)
             return x
  

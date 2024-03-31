@@ -77,6 +77,7 @@ class PiToMeBlock(Block):
     def init_margin(self, margin=0.5):
         # self.margin = nn.Parameter(torch.tensor(margin))
         self.margin = margin
+        self.merge_dropout = nn.Dropout1d(p=0.2)
 
     def _drop_path1(self, x):
         return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
@@ -95,7 +96,8 @@ class PiToMeBlock(Block):
                 r=r,
                 metric=metric,
                 margin=self.margin,
-                class_token=self._tome_info["class_token"]
+                class_token=self._tome_info["class_token"],
+                dropout=self.merge_dropout
             )
 
             if self._tome_info["trace_source"]:
@@ -105,7 +107,7 @@ class PiToMeBlock(Block):
 
             
             if isolated_score is not None and self._tome_info["size"] is not None:
-                weight = self._tome_info["size"] + isolated_score
+                weight = isolated_score
                 x, self._tome_info["size"] = merge_wavg(merge, x, weight)
                 # x = merge_mean(merge, x)
             else:

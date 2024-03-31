@@ -183,7 +183,7 @@ def setup_seeds(config):
 
 def get_gflops(args, model):
     if 'clip' in args.model:
-        return model.visual.total_flop/1e9
+        return model.visual.transformer.total_flop/1e9
     else:
         return model.visual_encoder.total_flop/1e9
     
@@ -249,18 +249,22 @@ def main():
 if __name__ == "__main__":
     import os
     import pathlib
+    model_dict = {
+        'clip': 'CLIP',
+        'blip': 'BLIP',
+        'blip2': 'BLIP2'
+    }
     abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
-    file_name = f'test_itr_train.csv'
+    metrics, args = main()
+    file_name = f'{"eval" if args.eval else "train"}_itr_{model_dict[args.model]}.csv'
     path = f'{abs_path}/{file_name}'
     if not pathlib.Path(path).is_file():
         head = "dataset, model, algo, gflops, ratio ,txt_r1, txt_r5, txt_r10, img_r1, img_r5, img_r10, r_sum\n"
         with open(file_name, "a") as myfile:
             myfile.write(head)
-    
-    metrics, args = main()
     if metrics is not None:
         sum = metrics["txt_r1"] + metrics["txt_r5"] + metrics["txt_r10"] + metrics["img_r1"] + metrics["img_r5"] + metrics["img_r10"]
-        row = f'{args.dataset}, {args.model}, {args.algo}, {metrics["gflops"]}, {args.ratio}, {metrics["txt_r1"]}, {metrics["txt_r5"]}, {metrics["txt_r10"]}, {metrics["img_r1"]}, {metrics["img_r5"]}, {metrics["img_r10"]}, {sum}\n'
+        row = f'{args.dataset}, {model_dict[args.model]}, {args.algo}, {metrics["gflops"]}, {args.ratio}, {metrics["txt_r1"]}, {metrics["txt_r5"]}, {metrics["txt_r10"]}, {metrics["img_r1"]}, {metrics["img_r5"]}, {metrics["img_r10"]}, {sum}\n'
         with open(file_name, "a") as myfile:
             myfile.write(row)
 
