@@ -42,18 +42,7 @@ class PiToMeBlock(ResidualAttentionBlock):
 
 
 class PiToMeTransformer(Transformer):
-    def __init__(
-        self, width: int, layers: int, heads: int, act_layer: Callable = nn.GELU
-    ):
-        super().__init__()
-        self.width = width
-        self.layers = layers
-        self.resblocks = nn.ModuleList(
-            [
-                ResidualAttentionBlock(width, heads, act_layer=act_layer)
-                for _ in range(layers)
-            ]
-        )
+
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
         self._pitome_info["r"] = [self.r]* len(self.resblocks) 

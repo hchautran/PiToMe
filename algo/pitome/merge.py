@@ -90,13 +90,15 @@ def pitome_vision(
     with torch.no_grad():
         if class_token:
             if attn is not None:
-                attn = attn[:,:, 0, 1:]
+                attn = attn[:,:, 0, 1:].mean(dim=1)
+                attn_idx = torch.argsort(attn, descending=False)
             
             metric=metric[:,1:,:]
             if size is not None:
                 size=size.squeeze()[:, 1:]
         else:
-            attn = attn 
+            attn = attn.mean(dim=1).mean(dim=1).mean(dim=-2)
+            attn_idx = torch.argsort(attn, descending=False)
 
         B,T,C = metric.shape
         if r > 0:
@@ -109,10 +111,8 @@ def pitome_vision(
    
     with torch.no_grad():
         sim = metric_normed@metric_normed.transpose(-1,-2) 
-        sim = F.elu((sim - margin)/0.1)
-        isolation_score = sim.mean(dim=-1) 
+        isolation_score = F.elu((sim - margin)/0.1).mean(dim=-1) 
         indices =  torch.argsort(isolation_score, descending=True)
-
         merge_idx = indices[..., :2*r]
         protected_idx = indices[..., 2*r:]
     
@@ -126,6 +126,7 @@ def pitome_vision(
         B, T, C = x.shape
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
         protected = x[batch_idx, protected_idx, :]
+        merged = x[batch_idx, merge_idx, :]
 
         if not prune:
             a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:] 
@@ -142,9 +143,6 @@ def pitome_vision(
             return torch.cat([x_cls, protected, dst], dim=1)
         else:
             return torch.cat([protected, dst], dim=1)
-    
-    
-
 
     if class_token:
         return merge, None 

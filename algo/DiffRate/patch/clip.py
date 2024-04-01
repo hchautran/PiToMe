@@ -96,7 +96,7 @@ class DiffRateTransformer(VisualTransformer):
         if self._diffrate_info["trace_source"]:
             self._diffrate_info["source"] = torch.eye(self.patch_embed.num_patches+1, device=x.device)[None, ...].expand(B, self.patch_embed.num_patches+1, self.patch_embed.num_patches+1)
 
-        self.total_flop = 0
+        self.transformer.total_flop = 0
         x = self.conv1(x)  # shape = [*, width, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
@@ -114,7 +114,7 @@ class DiffRateTransformer(VisualTransformer):
         x = self.ln_pre(x)
         x = x.permute(1, 0, 2)  # NLD -> LND
         for r in self.transformer.resblocks:
-            self.total_flop += self.calculate_block_flop(x.shape)
+            self.transformer.total_flop += self.calculate_block_flop(x.shape)
             x = r(x)
         x = x.permute(1, 0, 2)  # LND -> NLD
 
