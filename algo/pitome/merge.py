@@ -80,10 +80,11 @@ def pitome_vision(
     ratio:float=1.0,
     margin:torch.Tensor=0.5,
     class_token: bool = False,
+    prune:bool=False
     # dropout:nn.Module=None
 ):
 
-    if margin >= 0.45:
+    if margin >= 0.45 and not prune:
         return bipartite_soft_matching(metric, ratio=ratio, class_token=class_token)
 
     with torch.no_grad():
@@ -114,11 +115,6 @@ def pitome_vision(
 
         merge_idx = indices[..., :2*r]
         protected_idx = indices[..., 2*r:]
-        batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
-        a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:] 
-        scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
-        scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
-        _, dst_idx = scores.max(dim=-1) 
     
     
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
@@ -128,30 +124,26 @@ def pitome_vision(
         else:
             x_cls = None
         B, T, C = x.shape
+        batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
         protected = x[batch_idx, protected_idx, :]
-        src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
-        dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
-        if x_cls is not None:
-            return torch.cat([x_cls, protected, dst], dim=1)
+
+        if not prune:
+            a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:] 
+            scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
+            scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
+            _, dst_idx = scores.max(dim=-1) 
+            src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
+            dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
         else:
-            return torch.cat([protected, dst], dim=1)
-    
-    
-    def dct_merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
-        if class_token:
-            x_cls=x[:,0,:].unsqueeze(1)
-            x=x[:,1:,:]
-        else:
-            x_cls = None
-        B, T, C = x.shape
-        protected = x[batch_idx, protected_idx, :]
-        merged = x[batch_idx, merge_idx, :] 
-        dst = dc_transform(x=merged, k=r, class_token=False)
+            dst_idx = merge_idx[...,  1::2]
+            dst = x[batch_idx,  dst_idx, :]
 
         if x_cls is not None:
             return torch.cat([x_cls, protected, dst], dim=1)
         else:
             return torch.cat([protected, dst], dim=1)
+    
+    
 
 
     if class_token:
