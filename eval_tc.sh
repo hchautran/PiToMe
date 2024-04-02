@@ -2,7 +2,7 @@
 # Loop through each element in the array
 for dataset in 'rotten' 
 do
-    for algo in 'pitome' 'tome' 'dct' 'tofu' 'diffrate' 
+    for algo in 'diffrate' 'pitome' 'dct' 'tofu' 'diffrate' 
     # for algo in 'diffrate' 
     do
         for ratio in '0.525' '0.55' '0.6' '0.65' '0.7' '.75'

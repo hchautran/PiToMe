@@ -13,7 +13,7 @@ from .bert import apply_patch as bert
 from .blip import apply_patch as blip 
 from .blip2 import apply_patch as blip2
 from .clip import apply_patch as clip 
-
+from .clip_llava import apply_patch as clip_hf
 from .distilbert import apply_patch as distilbert 
 
-__all__ = ["deit", "swag", "mae", "aug", "bert", "distilbert", "blip", "blip2", "clip"]
+__all__ = ["deit", "swag", "mae", "aug", "bert", "distilbert", "blip", "blip2", "clip", "clip_hf"]

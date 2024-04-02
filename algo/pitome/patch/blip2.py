@@ -35,8 +35,6 @@ class PiToMeBlock(Block):
             #     x, self._tome_info["size"] = merge_wavg(merge, x, weight)
             # else:
             weight = self._tome_info["size"] 
-            # print(x.shape)
-            # print(weight.shape)
             x, self._tome_info["size"] = merge_wavg(merge, x, weight )
             # print(x.shape)
         return x, isolated_score
@@ -175,14 +173,14 @@ def apply_patch(
         "size": None,
         "source": None,
         "trace_source": trace_source,
-        "prop_attn": False,
+        "prop_attn": True,
         "class_token": True,
         "distill_token": False,
     }
     current_layer = 0
     margin = margin 
     num_layers = len(model.blocks)
-    margins = [0.75 - .25*(i/num_layers) for i in range(num_layers)]
+    margins = [0.75 - 0.4*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tome_info["distill_token"] = True

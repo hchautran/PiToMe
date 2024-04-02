@@ -182,13 +182,11 @@ def apply_patch(
     current_layer = 0
     margin = margin 
     num_layers = len(model.layer)
-    margins = [0.75 - 0.25*(i/num_layers) for i in range(num_layers)]
 
 
     for module in model.modules():
         if isinstance(module, BertLayer):
             module.__class__ = DCTBertLayer
-            module.init_margin(margins[current_layer])
             module._dct_info = model._dct_info
             current_layer +=1
 

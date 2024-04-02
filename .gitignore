@@ -5,6 +5,7 @@ build/
 test.py
 .env
 wandb/
+lmms-eval/
 log/
 */cnn_dm-bin/
 */cnn_dm/

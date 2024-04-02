@@ -41,7 +41,7 @@ class PiToMeBertLayer(BertLayer):
         ratio = self._tome_info["ratio"].pop()
         x = self_attention_outputs[0]
         key = self_attention_outputs[1]
-        attn = self_attention_outputs[2][:, :, 0, 1:]
+        attn = self_attention_outputs[2]
 
     
         if ratio < 1.0:

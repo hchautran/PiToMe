@@ -119,7 +119,7 @@ if __name__ == "__main__":
 
 
 
-    file_name = f'test_tc_train.csv' if not args.eval else 'test_tc.csv'
+    file_name = f'tc_{args.model}.csv' if not args.eval else f'eval_tc_{args.model}.csv'
     print(file_name)
     engine = Engine(
         task_name=task_name,

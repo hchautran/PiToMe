@@ -10,13 +10,14 @@ class PiToMeBlock(ResidualAttentionBlock):
         # self.margin = nn.Parameter(torch.tensor(margin)) 
         self.margin = margin
 
-    def compress_x(self, metric, x):
+    def compress_x(self, metric, x, attn):
         ratio = self._pitome_info["ratio"].pop()
         if ratio < 1.0:
             merge, isolated_score = pitome_vision(
                 ratio=ratio,
                 metric=metric,
                 margin=self.margin,
+                attn=attn if self.margin >= 0.45 else None,
                 class_token=self._pitome_info["class_token"]
             )
 
@@ -34,11 +35,18 @@ class PiToMeBlock(ResidualAttentionBlock):
 
     
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
-        x = x + self.attention(self.ln_1(x), attn_mask=attn_mask)
-        x = x + self.mlp(self.ln_2(x))
+        # x = x + self.attention(self.ln_1(x), attn_mask=attn_mask)
+        attn_x, attn = self.attention(self.ln_1(x), attn_mask=attn_mask)
+        x = x + attn_x 
         x.transpose_(1,0)
-        x = self.compress_x(x, x).transpose_(1,0)
+        x = self.compress_x(x, x, attn).transpose_(1,0)
+        x = x + self.mlp(self.ln_2(x))
         return x
+
+
+    def attention(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
+        x_attn, attn = self.attn(x, x, x, need_weights=True, attn_mask=attn_mask)
+        return x_attn, attn
 
 
 class PiToMeTransformer(Transformer):

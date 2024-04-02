@@ -54,7 +54,7 @@ def get_tome_model(model, args):
         tome.patch.blip2(model.visual_encoder,use_k=args.use_k)
         model.visual_encoder.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
-    elif 'blip' in args.model:
+    elif 'blip' or 'albef' in args.model:
         tome.patch.blip(model.visual_encoder,use_k=args.use_k)
         tome.patch.blip(model.visual_encoder_m,use_k=args.use_k)
         model.visual_encoder.ratio=float(args.ratio)
@@ -74,7 +74,7 @@ def get_pitome_model(model, args):
         pitome.patch.blip2(model.visual_encoder,use_k=args.use_k)
         model.visual_encoder.ratio=float(args.ratio)
         model.visual_encoder.r=int(args.reduced_token)
-    elif 'blip' in args.model:
+    elif 'blip' or 'albef' in args.model:
         pitome.patch.blip(model.visual_encoder,use_k=args.use_k)
         pitome.patch.blip(model.visual_encoder_m,use_k=args.use_k)
         model.visual_encoder.ratio=float(args.ratio)
@@ -82,7 +82,7 @@ def get_pitome_model(model, args):
         model.visual_encoder.r=int(args.reduced_token)
         model.visual_encoder_m.r=int(args.reduced_token)
     else:
-        raise ValueError("only support clip, blip and blip2 in this codebase")
+        raise ValueError("only support clip, blip, albef and blip2 in this codebase")
 
 def get_diffrate_model(model, args):
     if 'clip' in args.model:
@@ -97,7 +97,7 @@ def get_diffrate_model(model, args):
             model.visual_encoder.init_kept_num_using_r(args.reduced_token)
         else:
             model.visual_encoder.init_kept_num_using_ratio(args.ratio)
-    elif 'blip' in args.model:
+    elif 'blip' or 'albef' in args.model:
         DiffRate.patch.blip(model.visual_encoder, prune_granularity=args.granularity, merge_granularity=args.granularity)
         DiffRate.patch.blip(model.visual_encoder_m, prune_granularity=args.granularity, merge_granularity=args.granularity)
         if not args.use_k:
@@ -118,7 +118,7 @@ def get_tofu_model(model, args):
         tofu.patch.blip2(model.visual_encoder,use_k=args.use_k)
         model.visual_encoder.ratio=float(args.ratio)
         model.visual_encoder.r=int(args.reduced_token)
-    elif 'blip' in args.model:
+    elif 'blip' or 'albef' in args.model:
         tofu.patch.blip(model.visual_encoder,use_k=args.use_k)
         tofu.patch.blip(model.visual_encoder_m,use_k=args.use_k)
         model.visual_encoder.ratio=float(args.ratio)
@@ -137,7 +137,7 @@ def get_dct_model(model, args):
         dct.patch.blip2(model.visual_encoder,use_k=args.use_k)
         model.visual_encoder.ratio=float(args.ratio)
         model.visual_encoder.r=int(args.reduced_token)
-    elif 'blip' in args.model:
+    elif 'blip' or 'albef' in args.model:
         dct.patch.blip(model.visual_encoder,use_k=args.use_k)
         dct.patch.blip(model.visual_encoder_m,use_k=args.use_k)
         model.visual_encoder.ratio=float(args.ratio)
@@ -252,7 +252,8 @@ if __name__ == "__main__":
     model_dict = {
         'clip': 'CLIP',
         'blip': 'BLIP',
-        'blip2': 'BLIP2'
+        'blip2': 'BLIP2',
+        'albef': 'ALBEF'
     }
     abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
     metrics, args = main()
