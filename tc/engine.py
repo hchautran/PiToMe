@@ -67,7 +67,7 @@ model_imdb_dict = {
 }
 model_rotten_dict = {
     BERT_BASE: 'zebans/bert-base-cased-finetuned-rotten-tomatoes-epochs-2',
-    DISTILBERT_BASE: 'lvwerra/distilbert-imdb',
+    DISTILBERT_BASE: 'pig4431/rtm_DistilBERT_5E',
     BERT_LARGE:BERT_LARGE
 }
 model_dict  = {

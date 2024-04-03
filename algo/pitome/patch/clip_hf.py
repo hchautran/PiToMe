@@ -172,5 +172,5 @@ def apply_patch(
     margin = margin 
     num_layers = len(model.layers)
     # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
-    margins = [.75 - .75*(i/num_layers) for i in range(num_layers)]
+    margins = [.75 - .5*(i/num_layers) for i in range(num_layers)]
     model.init_margin(margins)

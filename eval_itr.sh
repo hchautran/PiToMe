@@ -4,11 +4,12 @@
 for dataset in 'flickr' 
 do
     # for model in  'blip' 'blip2' 'clip' 
-    for model in  'albef' 
+    # for model in  'clip' 
+    for model in  'blip' 
     # for model in 'blip2' 
     do
         # for algo in 'diffrate' 
-        for algo in  'dct' 
+        for algo in  'pitome' 
         do
             # for ratio in '0.925' 
             # for ratio in '0.875' '0.9' '0.925' '0.95' '0.975'
