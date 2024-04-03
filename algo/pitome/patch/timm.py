@@ -43,10 +43,8 @@ class PiToMeBlockUsingRatio(Block):
         if ratio < 1.0:
             merge, isolated_score = pitome_vision(
                 ratio=ratio,
-                attn=attn if self.margin >=0.45 else None,
                 metric=metric,
                 margin=self.margin,
-                prune=self.margin > 0.75,
                 class_token=self._tome_info["class_token"]
             )
 
