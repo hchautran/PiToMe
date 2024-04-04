@@ -16,6 +16,6 @@ export INPUT_SIZE=$3
 export RATIO=$4
 export ALGO=$5
 export BATCH_SIZE=64
-export EPOCH=100
+export EPOCH=30
 
-CUDA_VISIBLE_DEVICES=$6 python -m accelerate.commands.launch --main_process_port 2950$6 main_ic.py --batch-size $BATCH_SIZE --model ${ARCH}_${SIZE}_patch16_${INPUT_SIZE}  --algo ${ALGO} --use_k False --ratio ${RATIO} --input-size ${INPUT_SIZE} --epoch $EPOCH  --lr 0.0001
+CUDA_VISIBLE_DEVICES=$6 python -m accelerate.commands.launch --main_process_port 2950$6 main_ic.py --batch-size $BATCH_SIZE --model ${ARCH}_${SIZE}_patch16_${INPUT_SIZE}  --algo ${ALGO} --use_k False --ratio ${RATIO} --input-size ${INPUT_SIZE} --epoch $EPOCH  --lr 0.00001

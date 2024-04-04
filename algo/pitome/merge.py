@@ -224,15 +224,15 @@ def pitome_text(
         metric = F.normalize(metric, p=2, dim=-1) 
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
 
-        sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
-        isolation_score = sim.mean(dim=-1) + sim.sum(-1)
-        indices =  torch.argsort(isolation_score, descending=True)
+        # sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
+        # isolation_score = sim.mean(dim=-1) + sim.sum(-1)
+        # indices =  torch.argsort(isolation_score, descending=True)
 
-    # sim = metric@metric.transpose(-1,-2)
-    # sigma = 1 - margin 
-    # isolation_score = torch.exp(-((1 - sim)**2/sigma**2)).sum(-1)
-    # isolation_score = sim.sum(-1) + sim.mean(-1)
-    # indices =  torch.argsort(isolation_score, descending=True)
+        sim = metric@metric.transpose(-1,-2)
+        sigma = 1 - margin 
+        isolation_score = torch.exp(-((1 - sim)**2/sigma**2)).sum(-1)
+        isolation_score = sim.sum(-1) + sim.mean(-1)
+        indices =  torch.argsort(isolation_score, descending=True)
 
     with torch.no_grad():
         merge_idx = indices[..., :2*r]

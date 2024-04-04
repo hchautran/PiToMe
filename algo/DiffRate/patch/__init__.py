@@ -10,6 +10,7 @@ from .mae import apply_patch as mae
 from .aug import apply_patch as aug 
 from .blip import apply_patch as blip 
 from .clip import apply_patch as clip 
+from .clip_hf import apply_patch as clip_hf 
 from .blip2 import apply_patch as blip2
 
 __all__ = [
@@ -17,6 +18,7 @@ __all__ = [
     "mae",
     "aug", 
     "blip", 
-    "clip" 
+    "clip",
+    "clip_hf", 
     "blip2", 
 ]

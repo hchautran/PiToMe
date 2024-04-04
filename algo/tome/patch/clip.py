@@ -77,8 +77,6 @@ class ToMeTransformer(Transformer):
 
         
 
-
-
 def apply_patch(
    model: Transformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
     """
