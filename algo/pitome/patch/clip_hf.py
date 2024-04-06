@@ -114,11 +114,11 @@ class PiToMeCLIPEncoder(CLIPEncoder):
             hidden_states = layer_outputs[0]
             self.total_flops += self.calculate_block_flop(hidden_states.shape)
             hidden_states= self.compress_x(hidden_states, hidden_states, layer_outputs[1],idx)
-            print(hidden_states.shape)
+            # print(hidden_states.shape)
 
             if output_attentions:
                 all_attentions = all_attentions + (layer_outputs[1],)
-        print('current flop:', self.total_flops/1e9)
+        # print('current flop:', self.total_flops/1e9)
 
         if output_hidden_states:
             encoder_states = encoder_states + (hidden_states,)
@@ -172,5 +172,5 @@ def apply_patch(
     margin = margin 
     num_layers = len(model.layers)
     # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
-    margins = [.75 - .5*(i/num_layers) for i in range(num_layers)]
+    margins = [.9 - .9*(i/num_layers) for i in range(num_layers)]
     model.init_margin(margins)

@@ -156,8 +156,7 @@ def pitome_vision(
             # indices =  torch.argsort(isolation_score, descending=True)
             sim = metric@metric.transpose(-1,-2) 
             sigma =  1 - margin 
-            alpha = 1 
-            isolation_score = torch.exp(-((1 - sim)**2/sigma**2)).mean(-1) *2 - alpha 
+            isolation_score = (2*torch.exp(-(((1 - sim)/sigma)**2) ) -1).mean(-1) *  1/(sigma*torch.sqrt(torch.tensor(2*2*torch.pi))) 
             indices =  torch.argsort(isolation_score, descending=True)
             merge_idx = indices[..., :2*r]
             protected_idx = indices[..., 2*r:]

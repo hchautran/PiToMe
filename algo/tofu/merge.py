@@ -66,7 +66,6 @@ def bipartite_soft_matching(
             src = src.gather(dim=-2, index=src_idx.expand(n, r, c))
             dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce='mean')
         elif mode == 'tofu':
-            print(mode)
             dst_norm = torch.norm(dst, dim=-1) 
             src = src.gather(dim=-2, index=src_idx.expand(n, r, c))
             src_norm = torch.norm(src, dim=-1) 

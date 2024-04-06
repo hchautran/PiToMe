@@ -116,7 +116,7 @@ class ToFuCLIPEncoder(CLIPEncoder):
 
             if output_attentions:
                 all_attentions = all_attentions + (layer_outputs[1],)
-        print('current flop:', self.total_flops/1e9)
+        # print('current flop:', self.total_flops/1e9)
 
         if output_hidden_states:
             encoder_states = encoder_states + (hidden_states,)
