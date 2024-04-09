@@ -106,7 +106,7 @@ def apply_patch(
     margin = margin 
     num_layers = len(model.resblocks)
     # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
-    margins = [.9 - 0.9 *(i/num_layers) for i in range(num_layers)]
+    margins = [.95 - 0.95 *(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._pitome_info["distill_token"] = True

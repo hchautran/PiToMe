@@ -1,4 +1,5 @@
 import json
+import time
 from itertools import cycle
 import numpy as np
 import torch
@@ -17,7 +18,7 @@ from tc.lra_config import (
     get_cifar10_config, 
     get_text_classification_config
 )
-from tc.lra_datasets import (ListOpsDataset, Cifar10Dataset, ImdbDataset, RottenTomatoes)
+from tc.lra_datasets import (BBCDataset, SST2Dataset, ImdbDataset, RottenTomatoes)
 from argparse import ArgumentParser
 from accelerate import Accelerator
 from dotenv import load_dotenv
@@ -52,10 +53,16 @@ def accuracy_score(outp, target):
 
 
 TASKS = {
-    'listops': ConfigDict(dict(dataset_fn=ListOpsDataset, config_getter=get_listops_config)),
-    'cifar10': ConfigDict(dict(dataset_fn=Cifar10Dataset, config_getter=get_cifar10_config)),
     'imdb': ConfigDict(dict(dataset_fn=ImdbDataset, config_getter=get_text_classification_config)),
     'rotten': ConfigDict(dict(dataset_fn=RottenTomatoes, config_getter=get_text_classification_config)),
+    'sst2': ConfigDict(dict(dataset_fn=SST2Dataset, config_getter=get_text_classification_config)),
+    'bbc': ConfigDict(dict(dataset_fn=BBCDataset, config_getter=get_text_classification_config)),
+}
+batch_sizes = {
+    'imdb': 16, 
+    'bbc': 16, 
+    'rotten': 256,
+    'sst2': 256,
 }
 BERT_BASE = 'bert-base-uncased'
 DISTILBERT_BASE = 'distilbert-base-uncased'
@@ -70,6 +77,16 @@ model_rotten_dict = {
     DISTILBERT_BASE: 'pig4431/rtm_DistilBERT_5E',
     BERT_LARGE:BERT_LARGE
 }
+model_sst2_dict = {
+    BERT_BASE: 'gchhablani/bert-base-cased-finetuned-sst2',
+    DISTILBERT_BASE: 'distilbert/distilbert-base-uncased-finetuned-sst-2-english',
+    BERT_LARGE:'assemblyai/bert-large-uncased-sst2'
+}
+model_bbc_dict = {
+    BERT_LARGE:'AyoubChLin/BERT-Large_BBC_news',
+    BERT_BASE: 'AyoubChLin/ESG-bert-BBC_news',
+}
+
 model_dict  = {
     BERT_BASE: BERT_BASE,
     DISTILBERT_BASE: DISTILBERT_BASE,
@@ -85,7 +102,7 @@ class Engine:
         )
 
         task = TASKS[task_name]
-        self.batch_size = batch_size
+        self.batch_size = batch_sizes[task_name]
         self.ratio = ratio
         self.config, self.model_config = task.config_getter()    
         train_dataset = task.dataset_fn(self.config, split='train')
@@ -95,8 +112,16 @@ class Engine:
         self.algo = algo
         self.ori_model = None
         self.model_ckt = model_ckt
+        self.task_name = task_name
         if trained:
-            self.model_dict = model_imdb_dict if task_name == 'imdb' else model_rotten_dict
+            if task_name == 'imdb':
+                self.model_dict = model_imdb_dict 
+            elif task_name == 'rotten':
+                self.model_dict = model_rotten_dict
+            elif task_name == 'bbc':
+                self.model_dict = model_bbc_dict
+            else :
+                self.model_dict = model_sst2_dict 
         else:
             self.model_dict = model_dict 
         self.prepare_model(self.model_ckt, self.algo)
@@ -190,7 +215,7 @@ class Engine:
         if self.enable_log:
             wandb.init(
                 name=f'{self.algo}_{self.model_ckt}',
-                project='tc_train',
+                project=f'tc_train_{self.task_name}',
                 config={
                     'algo': self.algo, 
                     'model': self.model_ckt, 
@@ -203,14 +228,17 @@ class Engine:
 
         lr = self.config.learning_rate
         wd = self.config.weight_decay
-        optimizer = Adam(self.model.parameters(), lr=1e-5)
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-5, weight_decay=0.01)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1, min_lr=1e-8, mode='max')
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,  eta_min=1e-8, T_max=3)
         optimizer, scheduler= self.accelerator.prepare(optimizer, scheduler)
         best_acc = 0
+        start = time.time()
         for i in range(num_epochs):
             self.train_one_epoch(optimizer, scheduler)
             eval_stats = self.evaluate()
             scheduler.step(eval_stats['acc'])
+            # scheduler.step(i)
                 
             eval_stats['epoch'] = i + 1 
             print(eval_stats)
@@ -218,7 +246,9 @@ class Engine:
                 best_acc = eval_stats['acc']
                 print('best acc:', best_acc)
             self.log(eval_stats)
+        train_time = time.time() - start
         eval_stats['acc'] = best_acc
+        eval_stats['train time'] = train_time 
         return eval_stats
             
 
@@ -244,18 +274,20 @@ class Engine:
         self.model.eval()
         eval_running_loss = 0.
         eval_running_acc = 0.
+        gflops = 0.
         eval_pbar = tqdm(self.eval_loader, total=len(self.eval_loader))
         for j, (inputs, target) in enumerate(eval_pbar):
             outputs = self.model(**inputs, return_dict=False)
             loss = F.cross_entropy(outputs[0], target)
             eval_running_loss += loss.item()
             eval_running_acc += accuracy_score(outputs[0], target)
+            gflops += outputs[3]/1e9 
             eval_pbar.set_postfix_str(
                 f"eval loss: {100*eval_running_loss/(j+1):.2f} "
                 f"eval accuracy: {100*eval_running_acc/(j+1):.2f} "
-                f"gflops: {outputs[3]/1e9:.2f}"
+                f"gflops: {gflops/(j+1):.2f}"
             )
         if isinstance(self.model, BertForSequenceClassification):
-            return {'acc': 100*eval_running_acc/len(self.eval_loader), 'ratio':self.model.bert.encoder.ratio, 'gflops': outputs[3]/1e9}
+            return {'acc': 100*eval_running_acc/len(self.eval_loader), 'ratio':self.model.bert.encoder.ratio, 'gflops': gflops/len(self.eval_loader)}
         else:
-            return {'acc': 100*eval_running_acc/len(self.eval_loader), 'ratio':self.model.distilbert.transformer.ratio, 'gflops': outputs[3]/1e9}
+            return {'acc': 100*eval_running_acc/len(self.eval_loader), 'ratio':self.model.distilbert.transformer.ratio, 'gflops': gflops/len(self.eval_loader)}

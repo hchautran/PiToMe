@@ -1,17 +1,19 @@
 
+algo=$1
 # Loop through each element in the array
-for dataset in 'imdb' 
+for dataset in  'sst2' 'imdb'  
 do
-    for model in 'bert-base-uncased' 'distilbert-base-uncased' 'bert-large-uncased'
+    for model in 'bert-base-uncased' 'distilbert-base-uncased' 
     do 
-        for algo in 'tome' 'pitome' 'tofu' 'diffrate' 'dct'
-        do
-            for ratio in '0.70' '0.6' '0.55'
+        if [ "$algo" = "none" ];
+        then
+            sh train_scripts/train_tc.sh $model none 1.0 $dataset $2
+        else
+            for ratio in '0.8' '0.75' '0.70' 
             do
-            echo "running $model $size $algo $ratio."
-            sh train_scripts/train_tc.sh $model $algo $ratio
+                echo "running $model $size $algo $ratio."
+                sh train_scripts/train_tc.sh $model $algo $ratio $dataset  $2 
             done
-        done
+        fi
     done
-    # sh eval_scripts/eval_tc.sh none 1.0 $dataset
 done

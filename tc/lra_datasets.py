@@ -54,6 +54,33 @@ class RottenTomatoes:
     def __len__(self):
         return len(self.data)
 
+        
+class SST2Dataset: 
+    def __init__(self, config ,split='train'):
+        cache_dir = f'{DATA_PATH}/.cache' 
+        self.split = 'train' if split == 'train' else 'validation'
+        self.data = load_dataset('stanfordnlp/sst2', cache_dir=cache_dir)[self.split]
+        
+    def __getitem__(self, i):
+        sample = self.data[i]
+        return sample['sentence'], torch.LongTensor([sample['label']])
+    
+    def __len__(self):
+        return len(self.data)
+
+
+class BBCDataset: 
+    def __init__(self, config ,split='train'):
+        cache_dir = f'{DATA_PATH}/.cache' 
+        self.split = 'train' if split == 'train' else 'test'
+        self.data = load_dataset('SetFit/bbc-news', cache_dir=cache_dir)[self.split]
+        
+    def __getitem__(self, i):
+        sample = self.data[i]
+        return sample['text'], torch.LongTensor([sample['label']])
+    
+    def __len__(self):
+        return len(self.data)
 
 class ListOpsDataset:
     def __init__(self, config, split='train'):

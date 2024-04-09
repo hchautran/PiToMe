@@ -50,7 +50,8 @@ class PiToMeBertLayer(BertLayer):
                 metric=key,
                 attn=attn if self._tome_info["use_attn"] else None,
                 margin=self.margin,
-                class_token=self._tome_info["class_token"]
+                class_token=self._tome_info["class_token"],
+                training=self.training
             )
 
             weight = isolated_score

@@ -1,0 +1,11 @@
+dataset, model, algo, gflops, ratio ,acc
+sst2, distilbert-base-uncased, none, 2.309250816, 1.0, 90.5977764423077
+sst2, distilbert-base-uncased, pitome, 1.400967936, 0.8, 90.12920673076923
+sst2, distilbert-base-uncased, pitome, 1.203829248, 0.75, 88.28125
+sst2, distilbert-base-uncased, pitome, 1.0392683520000001, 0.7, 87.70282451923077
+sst2, distilbert-base-uncased, tome, 1.375867392, 0.8, 89.64092548076923
+sst2, distilbert-base-uncased, tofu, 1.375867392, 0.8, 89.92638221153845
+sst2, distilbert-base-uncased, tome, 1.178790144, 0.75, 88.56670673076923
+sst2, distilbert-base-uncased, tofu, 1.178790144, 0.75, 88.85216346153845
+sst2, distilbert-base-uncased, tome, 1.0142653440000002, 0.7, 88.46153846153845
+sst2, distilbert-base-uncased, tofu, 1.0142653440000002, 0.7, 88.76201923076923

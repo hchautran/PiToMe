@@ -62,16 +62,17 @@ OUTPUT_DIR = "output_dir/"
 deepspeed_json = "ds_config.json"
 
 TASKS = [
-    'listops',
-    'cifar10',
+    'sst2',
     'imdb',
-    'rotten'
+    'rotten',
+    'bbc',
 ]
 
 def eval(model, eval_dataset, tokenizer,batch_size=4):
     model.eval()
     eval_running_loss = 0.
     eval_running_acc = 0.
+    gflops = 0.
     eval_dataloader = DataLoader(
         eval_dataset, 
         batch_size=batch_size, 
@@ -87,10 +88,11 @@ def eval(model, eval_dataset, tokenizer,batch_size=4):
         loss = F.cross_entropy(outputs[0], target)
         eval_running_loss += loss.item()
         eval_running_acc += accuracy_score(outputs[0], target)
+        gflops += outputs[3]/1e9 
         eval_pbar.set_postfix_str(
             f"eval loss: {100*eval_running_loss/(j+1):.2f} "
             f"eval accuracy: {100*eval_running_acc/(j+1):.2f} "
-            f"gflops: {outputs[3]/1e9:.2f}"
+            f"gflops: {100 * gflops/(j+1):.2f}"
         )
     if isinstance(model, BertForSequenceClassification):
         return {'acc': 100*eval_running_acc/len(eval_dataloader), 'ratio':model.bert.encoder.ratio, 'gflops': outputs[3]/1e9}
@@ -119,14 +121,13 @@ if __name__ == "__main__":
 
 
 
-    file_name = f'tc_{args.model}.csv' if not args.eval else f'eval_tc_{args.model}.csv'
+    file_name = f'train_tc_{args.model}_{task_name}.csv' if not args.eval else f'eval_tc_{args.model}_{task_name}.csv'
     print(file_name)
     engine = Engine(
         task_name=task_name,
         model_ckt=args.model,
         ratio=float(args.ratio),
         algo=args.algo,
-        batch_size=32,
         enable_log=not args.eval,
         trained=args.eval
     )
@@ -139,7 +140,7 @@ if __name__ == "__main__":
     abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
     path = f'{abs_path}/{file_name}'
     if not pathlib.Path(path).is_file():
-        head = "dataset, model, algo, gflops, ratio ,acc\n"
+        head = "dataset, model, algo, gflops, ratio, acc\n"
         with open(file_name, "a") as myfile:
             myfile.write(head)
 

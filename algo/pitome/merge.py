@@ -156,7 +156,7 @@ def pitome_vision(
             # indices =  torch.argsort(isolation_score, descending=True)
             sim = metric@metric.transpose(-1,-2) 
             sigma =  1 - margin 
-            isolation_score = (2*torch.exp(-(((1 - sim)/sigma)**2) ) -1).mean(-1) *  1/(sigma*torch.sqrt(torch.tensor(2*2*torch.pi))) 
+            isolation_score = (2*torch.exp(-(((1 - sim)/sigma)**2) ) - 1).mean(-1) *  1/(sigma*torch.sqrt(torch.tensor(2*torch.pi))) 
             indices =  torch.argsort(isolation_score, descending=True)
             merge_idx = indices[..., :2*r]
             protected_idx = indices[..., 2*r:]
@@ -199,6 +199,7 @@ def pitome_text(
     attn:torch.Tensor = None,
     margin:torch.Tensor=0.5,
     class_token: bool = False,
+    training:bool=False
 ):
     if attn is not None and class_token:
         B,T,C = metric.shape
@@ -210,40 +211,38 @@ def pitome_text(
         _, idx = torch.sort(cls_attn, descending=True)
         cls_index = torch.zeros((B,1), device=idx.device).long()
         idx = torch.cat((cls_index, idx+1), dim=1)
-        return get_merge_func(metric, ratio=ratio, class_token=class_token, attn_idx=idx)
+        return get_merge_func(metric, ratio=ratio, class_token=class_token, attn_idx=idx), None
 
     with torch.no_grad():
+
         if class_token:
             metric=metric[:,1:,:]
+
         if len(metric.shape) == 2:
             metric = metric[None,...]
-        # B,H,T,C = metric.shape
         B,T,C = metric.shape
         r = math.floor(T- T*ratio)
         metric = F.normalize(metric, p=2, dim=-1) 
+
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
-
-        # sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
-        # isolation_score = sim.mean(dim=-1) + sim.sum(-1)
-        # indices =  torch.argsort(isolation_score, descending=True)
-
         sim = metric@metric.transpose(-1,-2)
         sigma = 1 - margin 
-        isolation_score = torch.exp(-((1 - sim)**2/sigma**2)).sum(-1)
-        isolation_score = sim.sum(-1) + sim.mean(-1)
+        isolation_score = (torch.exp(-(((1 - sim)/sigma)**2 * 0.5))).mean(-1) *  1/(sigma*torch.sqrt(torch.tensor(2*torch.pi))) 
         indices =  torch.argsort(isolation_score, descending=True)
 
     with torch.no_grad():
         merge_idx = indices[..., :2*r]
         protected_idx = indices[..., 2*r:]
-        a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:]
-        scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
-        scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
-        _, dst_idx = scores.max(dim=-1) 
-    
-    
-    def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
+        # a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:]
+        # scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
+        # scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
+        # _, dst_idx = scores.max(dim=-1) 
+        # if training: 
+            # b_idx = merge_idx[..., 1::2]
+        # else:
+        b_idx = merge_idx[..., r:]
 
+    def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
         if class_token:
             x_cls=x[:,0,:].unsqueeze(1)
             x=x[:,1:,:]
@@ -252,9 +251,9 @@ def pitome_text(
 
         B, T, C = x.shape
         protected = x[batch_idx, protected_idx, :]
-        src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
-
-        dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
+        # src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
+        # dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
+        dst = x[batch_idx,  b_idx, :]
 
         if x_cls is not None:
             return torch.cat([x_cls, protected, dst], dim=1)
