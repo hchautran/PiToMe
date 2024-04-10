@@ -2,11 +2,11 @@
 # Loop through each element in the array
 for dataset in 'sst2' 'imdb' 
 do
-    for model in  'distilbert-base-uncased'
+    for model in  'distilbert-base-uncased' 'bert-base-uncased'
     do 
-        for algo in 'dct' 
+        for algo in 'dct' 'pitome' 'tome' 'diffrate' 'tofu'
         do
-            for ratio in '0.525' '0.55' '0.6' '0.65' '0.7' '.75' '0.8' 
+            for ratio in '0.85' '0.9' '0.95'
             do
             echo "running $size $algo $ratio."
             sh eval_scripts/eval_tc.sh $algo $ratio $dataset $model
