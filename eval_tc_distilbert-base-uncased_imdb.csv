@@ -28,3 +28,10 @@ imdb, distilbert-base-uncased, diffrate, 8.176351203501103, 0.65, 89.19545745361
 imdb, distilbert-base-uncased, diffrate, 9.699316325220554, 0.7, 90.36308381317978
 imdb, distilbert-base-uncased, diffrate, 11.377382331209025, 0.75, 91.22680742162508
 imdb, distilbert-base-uncased, diffrate, 13.337291902771831, 0.8, 91.92258477287268
+imdb, distilbert-base-uncased, dct, 8.632521084314565, 0.525, 75.9796865003199
+imdb, distilbert-base-uncased, dct, 9.065972688829468, 0.55, 76.42354446577096
+imdb, distilbert-base-uncased, dct, 10.045461836161415, 0.6, 77.72712731925783
+imdb, distilbert-base-uncased, dct, 11.189482411485885, 0.65, 79.75847728726808
+imdb, distilbert-base-uncased, dct, 12.367927341205569, 0.7, 81.90179142674344
+imdb, distilbert-base-uncased, dct, 13.770170971393197, 0.75, 83.72120921305182
+imdb, distilbert-base-uncased, dct, 15.452780831938805, 0.8, 85.25271912987844

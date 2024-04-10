@@ -81,8 +81,6 @@ def idct(X, norm=None):
 
 
 def dc_transform(x, ratio:float=None, k:int=None, class_token:bool=True ):
-    # cufft doesn't accept fp16
-    # dct along T dimension
     if class_token:
         x_cls = x[:,0,:].unsqueeze_(1)
         x = x[:,1:,:]

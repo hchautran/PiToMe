@@ -9,3 +9,9 @@ sst2, distilbert-base-uncased, tome, 1.178790144, 0.75, 88.56670673076923
 sst2, distilbert-base-uncased, tofu, 1.178790144, 0.75, 88.85216346153845
 sst2, distilbert-base-uncased, tome, 1.0142653440000002, 0.7, 88.46153846153845
 sst2, distilbert-base-uncased, tofu, 1.0142653440000002, 0.7, 88.76201923076923
+sst2, distilbert-base-uncased, diffrate, 1.375867392, 0.8, 89.6484375
+sst2, distilbert-base-uncased, diffrate, 1.178790144, 0.75, 89.05498798076923
+sst2, distilbert-base-uncased, diffrate, 1.0142653440000002, 0.7, 87.78545673076923
+sst2, distilbert-base-uncased, dct, 1.5775004160000001, 0.8, 89.58834134615384
+sst2, distilbert-base-uncased, dct, 1.416162048, 0.75, 88.0859375
+sst2, distilbert-base-uncased, dct, 1.281971328, 0.7, 87.6953125

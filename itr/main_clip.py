@@ -5,8 +5,8 @@ from transformers import (
 from lavis.datasets.builders import load_dataset
 from itr.model.compressedModel import CompressedHFWithQueue
 from transformers import CLIPProcessor, BlipProcessor
-from itr.trainer_queue import MyTrainer 
 from itr.utils.data_utils import get_loaders 
+from itr.trainer_queue import MyTrainer 
 
 
 if __name__ == "__main__":

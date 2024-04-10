@@ -9,3 +9,9 @@ imdb, bert-base-uncased, tofu, 21.04738466542843, 0.75, 93.02223288547674
 imdb, bert-base-uncased, pitome, 17.58327830602701, 0.7, 92.6463531669866
 imdb, bert-base-uncased, tome, 17.58134911950877, 0.7, 92.33645233525279
 imdb, bert-base-uncased, tofu, 17.57701332612682, 0.7, 92.3484484964811
+imdb, bert-base-uncased, diffrate, 25.0229041775054, 0.8, 92.96225207933462
+imdb, bert-base-uncased, diffrate, 20.84677016912172, 0.75, 92.53438899552144
+imdb, bert-base-uncased, diffrate, 17.39699555943246, 0.7, 92.10252719129879
+imdb, bert-base-uncased, dct, 25.06795085537013, 0.8, 92.39443378119002
+imdb, bert-base-uncased, dct, 20.942222930549743, 0.75, 92.22648752399232
+imdb, bert-base-uncased, dct, 17.455029264706965, 0.7, 91.3147792706334

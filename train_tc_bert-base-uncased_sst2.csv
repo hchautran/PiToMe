@@ -9,3 +9,9 @@ sst2, bert-base-uncased, tome, 2.181864192, 0.75, 90.12920673076923
 sst2, bert-base-uncased, tofu, 2.181864192, 0.75, 89.68599759615384
 sst2, bert-base-uncased, tome, 1.8351782399999998, 0.7, 88.0859375
 sst2, bert-base-uncased, tofu, 1.8351782399999998, 0.7, 88.22866586538461
+sst2, bert-base-uncased, diffrate, 2.59367424, 0.8, 89.78365384615384
+sst2, bert-base-uncased, diffrate, 2.181864192, 0.75, 88.96484375
+sst2, bert-base-uncased, diffrate, 1.8351782399999998, 0.7, 87.64272836538461
+sst2, bert-base-uncased, dct, 2.6510238719999997, 0.8, 88.66436298076923
+sst2, bert-base-uncased, dct, 2.239083264, 0.75, 90.31700721153845
+sst2, bert-base-uncased, dct, 1.8923013119999998, 0.7, 88.76201923076923

@@ -28,3 +28,10 @@ sst2, distilbert-base-uncased, diffrate, 0.8606868480000001, 0.65, 83.2857572115
 sst2, distilbert-base-uncased, diffrate, 1.0142653440000002, 0.7, 86.82391826923077
 sst2, distilbert-base-uncased, diffrate, 1.178790144, 0.75, 87.45492788461539
 sst2, distilbert-base-uncased, diffrate, 1.375867392, 0.8, 90.5048076923077
+sst2, distilbert-base-uncased, dct, 0.905445888, 0.525, 73.05438701923077
+sst2, distilbert-base-uncased, dct, 0.9499764479999999, 0.55, 75.52584134615384
+sst2, distilbert-base-uncased, dct, 1.048042752, 0.6, 79.6649639423077
+sst2, distilbert-base-uncased, dct, 1.1586808320000002, 0.65, 81.93359375
+sst2, distilbert-base-uncased, dct, 1.281971328, 0.7, 83.3984375
+sst2, distilbert-base-uncased, dct, 1.416162048, 0.75, 84.66796875
+sst2, distilbert-base-uncased, dct, 1.5775004160000001, 0.8, 84.14212740384616

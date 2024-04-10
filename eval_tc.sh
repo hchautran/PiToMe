@@ -1,10 +1,10 @@
 
 # Loop through each element in the array
-for dataset in  'bbc' 
+for dataset in 'sst2' 'imdb' 
 do
-    for model in  'bert-large-uncased'
+    for model in  'distilbert-base-uncased'
     do 
-        for algo in 'pitome' 'tofu' 'tome' 'diffrate' 
+        for algo in 'dct' 
         do
             for ratio in '0.525' '0.55' '0.6' '0.65' '0.7' '.75' '0.8' 
             do

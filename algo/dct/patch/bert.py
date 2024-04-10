@@ -1,23 +1,9 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-# --------------------------------------------------------
-# References:
-# timm: https://github.com/rwightman/pytorch-image-models/tree/master/timm
-# --------------------------------------------------------
-
-
-from typing import Tuple
-
 import torch
-import torch.nn as nn
+from typing import Tuple
 from transformers.models.bert.modeling_bert import BertLayer, BertEncoder, apply_chunking_to_forward
-from ..merge import dc_transform 
-from typing import Optional, Union 
-import math
 from transformers.modeling_utils import ModuleUtilsMixin 
+from ..merge import dc_transform 
+from typing import Optional
 
 
 class DCTBertLayer(BertLayer):
@@ -42,9 +28,6 @@ class DCTBertLayer(BertLayer):
         ratio = self._dct_info["ratio"].pop()
         x = self_attention_outputs[0]
 
-    
-
-
         x = apply_chunking_to_forward(
             self.feed_forward_chunk, self.chunk_size_feed_forward, self.seq_len_dim, x
         )
@@ -56,15 +39,11 @@ class DCTBertLayer(BertLayer):
                 ratio=ratio,
                 class_token=self._dct_info["class_token"],
             )
-            attention_mask = torch.ones((x.shape[0], x.shape[1])).to(x.device) 
-        else:
-            attention_mask.squeeze_()
 
 
         # print(x.isnan()._is_any_true())
 
-        outputs = self_attention_outputs[1:]  # add self attentions if we output attention weights
-        outputs = (x, attention_mask, )  + outputs
+        outputs = (x,)+self_attention_outputs[1:] 
         return outputs
 
 
@@ -117,10 +96,7 @@ def make_dct_class(transformer_class):
                 )
                 hidden_states = layer_outputs[0]
                 B, T, _ = hidden_states.shape
-                attention_mask =   self.get_extended_attention_mask(
-                    layer_outputs[1],
-                    (B,T)
-                )
+                attention_mask = None 
                 flops += self.calculate_block_flop(hidden_states.shape)
 
                 if output_attentions:
@@ -181,7 +157,6 @@ def apply_patch(
     }
     current_layer = 0
     margin = margin 
-    num_layers = len(model.layer)
 
 
     for module in model.modules():

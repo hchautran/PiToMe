@@ -4,11 +4,11 @@ from typing import Optional
 from transformers import (
     BlipConfig, 
 )
-from transformers import BertForSequenceClassification
 from transformers.modeling_outputs import SequenceClassifierOutput
+from transformers import BertForSequenceClassification
+from transformers import BertLayer, BertConfig 
 from .pitome import CompressedModel
 from typing import Union, Tuple
-from transformers import BertLayer, BertConfig 
 import torch.nn.functional as F
 
 
@@ -61,10 +61,8 @@ class CompressedBERT(CompressedModel):
         else:
             use_cache = False
 
-
         _, seq_length = input_ids.shape 
         ori_size = seq_length
-
         head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
 
         hidden_states = self.model.embeddings(
