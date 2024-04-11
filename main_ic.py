@@ -333,8 +333,8 @@ def main(args):
     np.random.seed(seed)
     cudnn.benchmark = True
     args.data_path = DATA_PATH + '/.cache/'
-    args.data_set  = 'CIFAR'
-    # args.data_set  = 'IMNET'
+    # args.data_set  = 'CIFAR'
+    args.data_set  = 'IMNET'
     dataset_train, args.nb_classes = utils.build_dataset(is_train=True, args=args)
     dataset_val, _ = utils.build_dataset(is_train=False, args=args)
 
@@ -458,6 +458,7 @@ def main(args):
     if args.eval:
         test_stats = evaluate(data_loader_val, model, accelerator)
         accelerator.print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc1']:.1f}%")
+        test_stats['best acc'] = test_stats['acc1']
         return test_stats
     else:
         # pass
@@ -559,7 +560,7 @@ if __name__ == '__main__':
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
-    file_name = f'test_ic_{args.model}{"_eval" if args.eval else ""}.csv'
+    file_name = f'{"eval" if args.eval else "train"}_ic_{args.model}.csv'
     path = f'{abs_path}/{file_name}'
     if not pathlib.Path(path).is_file():
         head = "model, algo, gflops, ratio ,acc_1\n"

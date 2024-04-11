@@ -137,7 +137,7 @@ def pitome_vision(
         idx = torch.cat((cls_index, idx+1), dim=1)
         merge = get_merge_func(metric, ratio=ratio, class_token=class_token, attn_idx=idx)
         return merge, None
-    elif margin >=0.45:
+    elif margin >=0.45 and not prune:
         return bipartite_soft_matching(metric, ratio=ratio, class_token=class_token)
     else:
         with torch.no_grad():
@@ -154,10 +154,15 @@ def pitome_vision(
             # sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
             # isolation_score = sim.mean(dim=-1) + sim.sum(-1)
             # indices =  torch.argsort(isolation_score, descending=True)
+            # sigma =  1 - margin 
             sim = metric@metric.transpose(-1,-2) 
-            sigma =  1 - margin 
-            isolation_score = (2*torch.exp(-(((1 - sim)/sigma)**2) ) - 1).mean(-1) *  1/(sigma*torch.sqrt(torch.tensor(2*torch.pi))) 
-            indices =  torch.argsort(isolation_score, descending=True)
+            sigma =.5
+            # isolation_score = F.softmin((torch.exp(-(((1 - sim)/sigma)**2))).mean(-1) *  1/(sigma*torch.sqrt(torch.tensor(2*torch.pi))), dim=-1 )
+            isolation_score = (2*torch.exp(-(((1 - sim)/sigma)**2))-1).mean(-1) 
+
+            # print(isolation_score.shape)
+            indices =  torch.argsort(isolation_score , descending=True)
+
             merge_idx = indices[..., :2*r]
             protected_idx = indices[..., 2*r:]
         
@@ -180,7 +185,7 @@ def pitome_vision(
                 src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
                 dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
             else:
-                dst_idx = merge_idx[...,  1::2]
+                dst_idx = merge_idx[...,  r:]
                 dst = x[batch_idx,  dst_idx, :]
 
             if x_cls is not None:

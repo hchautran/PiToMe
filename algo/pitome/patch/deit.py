@@ -49,8 +49,8 @@ def make_pitome_class(transformer_class):
             if self.grad_checkpointing and not torch.jit.is_scripting():
                 x = checkpoint_seq(self.blocks, x)
             else:
-                self.total_flop += self.calculate_block_flop(x.shape) 
                 for block in self.blocks:
+                    self.total_flop += self.calculate_block_flop(x.shape) 
                     x = block(x)
 
             x = self.norm(x)

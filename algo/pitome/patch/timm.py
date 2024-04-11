@@ -45,6 +45,7 @@ class PiToMeBlockUsingRatio(Block):
                 ratio=ratio,
                 metric=metric,
                 margin=self.margin,
+                prune=self.margin >=0.75,
                 class_token=self._tome_info["class_token"]
             )
 
