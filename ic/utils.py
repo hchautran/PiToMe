@@ -586,7 +586,10 @@ def build_dataset(is_train, args):
             print(f'num sample of {"train" if is_train else "eval"} set:', len(dataset))
         nb_classes = 100
     elif args.data_set == 'IMNET':
-        dataset = ImageNetKaggle(root=args.data_path, split='train' if is_train else 'val', transform=transform)
+        from datasets import load_dataset
+        # dataset = ImageNetKaggle(root=args.data_path, split='train' if is_train else 'val', transform=transform)
+        dataset = load_dataset('imagenet-1k', cache_dir='/media/caduser/MyBook/chau/.cache')
+        dataset = dataset['train' if is_train else 'validation']
         nb_classes = 1000
   
 

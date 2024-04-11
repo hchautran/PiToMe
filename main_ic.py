@@ -21,7 +21,7 @@ import ic.utils as utils
 import shutil
 import warnings
 from timm.scheduler.cosine_lr import CosineLRScheduler 
-from torch.optim.lr_scheduler import ReduceLROnPlateau 
+from ic.utils import build_transform
 import torch
 from algo import (
     PITOME,
@@ -42,6 +42,8 @@ import os
 from accelerate import Accelerator
 from torch.utils.data import DataLoader
 import wandb
+from torchvision import transforms
+from skimage import color
 
 
 torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
@@ -56,7 +58,31 @@ def process_image(example, transform):
     # labels_tensor = torch.tensor([item['label'] for item in batch])
     return example
 
-    
+gray_transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+])
+
+
+def process_grayscale(example):
+    image = example['image']
+    img_tensor = gray_transform(image)
+    # Check if the image has only one channel (grayscale)
+    if img_tensor.shape[0] == 2:
+        example['image'] = color.gray2rgb(image)
+    return example
+
+def filter_out_grayscale(example):
+    img_tensor = gray_transform(example['image'])
+    # Check if the image has only one channel (grayscale)
+    if img_tensor.shape[0] == 3:
+        return True
+    return False
+ 
+def process_image(batch, transform):
+    images_tensor = torch.stack([transform(item['image']) for item in batch])
+    labels_tensor = torch.tensor([item['label'] for item in batch])
+    return images_tensor, labels_tensor
 
 model_dict = {
     'deit_tiny_patch16_224': 'DEIT-T-16-224',
@@ -115,7 +141,7 @@ def get_args_parser():
     # Learning rate schedule parameters
     parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
                         help='LR scheduler (default: "cosine"')
-    parser.add_argument('--lr', type=float, default=5e-4, metavar='LR',
+    parser.add_argument('--lr', type=float, default=1e-5, metavar='LR',
                         help='learning rate (default: 5e-4)')
     parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct',
                         help='learning rate noise on/off epoch percentages')
@@ -334,9 +360,10 @@ def main(args):
     cudnn.benchmark = True
     args.data_path = DATA_PATH + '/.cache/'
     # args.data_set  = 'CIFAR'
-    args.data_set  = 'IMNET'
     dataset_train, args.nb_classes = utils.build_dataset(is_train=True, args=args)
     dataset_val, _ = utils.build_dataset(is_train=False, args=args)
+    dataset_train = dataset_train.filter(filter_out_grayscale, num_proc=10)
+    dataset_val = dataset_val.filter(filter_out_grayscale, num_proc=10)
 
     num_tasks = utils.get_world_size()
     global_rank = utils.get_rank()
@@ -358,12 +385,15 @@ def main(args):
     else:
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
+    train_transform =  build_transform(is_train=True, args=args) 
+    eval_transform =  build_transform(is_train=False, args=args) 
     data_loader_train = DataLoader(
         dataset_train, sampler=sampler_train,
         batch_size=args.batch_size,
         num_workers=10,
         pin_memory=True,
         drop_last=True,
+        collate_fn=lambda batch: process_image(batch, train_transform),
     )
 
     data_loader_val = DataLoader(
@@ -371,7 +401,8 @@ def main(args):
         batch_size=int(1 * args.batch_size),
         num_workers=10,
         pin_memory=True,
-        drop_last=False
+        drop_last=False,
+        collate_fn=lambda batch: process_image(batch, train_transform),
     )
 
     mixup_fn = None
