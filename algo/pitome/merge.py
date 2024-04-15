@@ -154,11 +154,10 @@ def pitome_vision(
             # sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
             # isolation_score = sim.mean(dim=-1) + sim.sum(-1)
             # indices =  torch.argsort(isolation_score, descending=True)
-            # sigma =  1 - margin 
+            sigma =  1 - margin 
             sim = metric@metric.transpose(-1,-2) 
-            sigma =.5
-            # isolation_score = F.softmin((torch.exp(-(((1 - sim)/sigma)**2))).mean(-1) *  1/(sigma*torch.sqrt(torch.tensor(2*torch.pi))), dim=-1 )
-            isolation_score = (2*torch.exp(-(((1 - sim)/sigma)**2))-1).mean(-1) 
+            isolation_score = (2*(torch.exp(-(((1 - sim)/sigma)**2))) - 1).mean(-1) *  1/(sigma*torch.sqrt(torch.tensor(2*torch.pi)))
+            # isolation_score = (2*torch.exp(-(((1 - sim)/sigma)**2))-1).mean(-1) 
 
             # print(isolation_score.shape)
             indices =  torch.argsort(isolation_score , descending=True)

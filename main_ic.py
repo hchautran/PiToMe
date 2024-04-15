@@ -402,7 +402,7 @@ def main(args):
         num_workers=10,
         pin_memory=True,
         drop_last=False,
-        collate_fn=lambda batch: process_image(batch, train_transform),
+        collate_fn=lambda batch: process_image(batch, eval_transform),
     )
 
     mixup_fn = None

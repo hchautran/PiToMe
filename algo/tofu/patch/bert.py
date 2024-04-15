@@ -285,7 +285,7 @@ def apply_patch(
     for module in model.modules():
         if isinstance(module, BertLayer):
             module.__class__ = ToFuBertLayer
-            module.init_strategy('tofu')
+            module.init_strategy('prune')
             module._tofu_info = model._tofu_info
             current_layer +=1
         if isinstance(module, BertAttention):

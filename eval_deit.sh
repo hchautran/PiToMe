@@ -4,7 +4,7 @@ for size in  'small'
 do
     # for algo in 'diffrate' 
     # for algo in 'tome' 'pitome' 'dct' 'tofu' 
-    for algo in 'pitome' 
+    for algo in 'diffrate' 
     do
         for ratio in '0.925'  
         do

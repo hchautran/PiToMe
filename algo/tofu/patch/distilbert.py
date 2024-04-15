@@ -254,7 +254,7 @@ def apply_patch(
         if isinstance(module, TransformerBlock):
             module.__class__ = ToFuDistilBertBlock 
             module._tofu_info = model._tofu_info
-            module.init_strategy('tofu')
+            module.init_strategy('prune')
             current_layer +=1
         if isinstance(module, MultiHeadSelfAttention):
             module.__class__ = ToFuDistilBertAttention 

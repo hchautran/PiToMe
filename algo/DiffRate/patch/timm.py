@@ -29,6 +29,12 @@ class DiffRateBlock(Block):
         self.prune_ddp = DiffRate(patch_number,prune_granularity)
         self.merge_ddp = DiffRate(patch_number,merge_granularity)
         
+    def _drop_path1(self, x):
+        return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
+
+    def _drop_path2(self, x):
+        return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
+
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, N, C = x.shape
@@ -36,7 +42,7 @@ class DiffRateBlock(Block):
         size = self._diffrate_info["size"]
         mask = self._diffrate_info["mask"]
         x_attn, attn = self.attn(self.norm1(x), size, mask=self._diffrate_info["mask"])
-        x = x + self.drop_path(x_attn)
+        x = x + self._drop_path1(x_attn)
 
         # importance metric
         cls_attn = attn[:, :, 0, 1:]
@@ -81,7 +87,7 @@ class DiffRateBlock(Block):
                 mask = mask * merge_mask
 
             self._diffrate_info["mask"] = mask
-            x = x + self.drop_path(self.mlp(self.norm2(x)))
+            x = x + self._drop_path2(self.mlp(self.norm2(x)))
             
         else:
             # pruning
@@ -103,7 +109,7 @@ class DiffRateBlock(Block):
                 if self._diffrate_info["trace_source"]:
                     self._diffrate_info["source"] = merge(self._diffrate_info["source"], mode="amax")
 
-            x = x + self.drop_path(self.mlp(self.norm2(x)))
+            x = x + self._drop_path2(self.mlp(self.norm2(x)))
         return x
                 
 

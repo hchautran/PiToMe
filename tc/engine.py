@@ -59,7 +59,7 @@ TASKS = {
     'bbc': ConfigDict(dict(dataset_fn=BBCDataset, config_getter=get_text_classification_config)),
 }
 batch_sizes = {
-    'imdb': 16, 
+    'imdb': 24, 
     'bbc': 16, 
     'rotten': 256,
     'sst2': 256,
@@ -102,7 +102,8 @@ class Engine:
         )
 
         task = TASKS[task_name]
-        self.batch_size = batch_sizes[task_name]
+        if task_name == 'imdb' and algo==NONE: self.batch_size = 12
+        else: self.batch_size = batch_sizes[task_name]
         self.ratio = ratio
         self.config, self.model_config = task.config_getter()    
         train_dataset = task.dataset_fn(self.config, split='train')
@@ -272,6 +273,7 @@ class Engine:
 
     def evaluate(self):
         self.model.eval()
+        start = time.time()
         eval_running_loss = 0.
         eval_running_acc = 0.
         gflops = 0.
@@ -287,7 +289,9 @@ class Engine:
                 f"eval accuracy: {100*eval_running_acc/(j+1):.2f} "
                 f"gflops: {gflops/(j+1):.2f}"
             )
+        eval_time = time.time() - start
         if isinstance(self.model, BertForSequenceClassification):
-            return {'acc': 100*eval_running_acc/len(self.eval_loader), 'ratio':self.model.bert.encoder.ratio, 'gflops': gflops/len(self.eval_loader)}
+
+            return {'acc': 100*eval_running_acc/len(self.eval_loader), 'ratio':self.model.bert.encoder.ratio, 'gflops': gflops/len(self.eval_loader), 'eval time': eval_time, 'train time': 0}
         else:
-            return {'acc': 100*eval_running_acc/len(self.eval_loader), 'ratio':self.model.distilbert.transformer.ratio, 'gflops': gflops/len(self.eval_loader)}
+            return {'acc': 100*eval_running_acc/len(self.eval_loader), 'ratio':self.model.distilbert.transformer.ratio, 'gflops': gflops/len(self.eval_loader), 'eval time':eval_time, 'train time': 0}

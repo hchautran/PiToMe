@@ -9,7 +9,7 @@ do
         then
             sh train_scripts/train_tc.sh $model none 1.0 $dataset $2
         else
-            for ratio in '0.8' '0.75' '0.70' 
+            for ratio in '0.8' '0.70' 
             do
                 echo "running $model $size $algo $ratio."
                 sh train_scripts/train_tc.sh $model $algo $ratio $dataset  $2 
