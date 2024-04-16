@@ -6,7 +6,7 @@ sst2, bert-base-uncased, pitome, 1.382202624, 0.6, 81.49879807692308
 sst2, bert-base-uncased, pitome, 1.699592448, 0.65, 85.33743990384616
 sst2, bert-base-uncased, pitome, 1.9924600319999999, 0.7, 89.17608173076923
 sst2, bert-base-uncased, pitome, 2.384187264, 0.75, 90.56670673076923
-sst2, bert-base-uncased, pitome, 2.612556544, 0.8, 91.04567307692308
+sst2, bert-base-uncased, pitome, 2.612556544, 0.8, 90.55567307692308
 sst2, bert-base-uncased, tofu-m, 0.994109184, 0.525, 70.77163461538461
 sst2, bert-base-uncased, tofu-m, 1.0848510720000002, 0.55, 72.38671875
 sst2, bert-base-uncased, tofu-m, 1.321644288, 0.6, 79.11748798076923
