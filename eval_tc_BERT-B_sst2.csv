@@ -1,8 +1,6 @@
 dataset,model,algo,gflops,ratio,acc,eval time,train time
 sst2, bert-base-uncased, pitome, 1.094154130285714, 0.55, 78.70535714285714, 1.3256795406341553, 0
-dataset,model,algo,gflops,ratio,acc,eval time,train time
 sst2, bert-base-uncased, pitome, 1.3052644937142859, 0.6, 79.64285714285714, 1.3148095607757568, 0
-dataset,model,algo,gflops,ratio,acc,eval time,train time
 sst2, bert-base-uncased, pitome, 1.8974179474285713, 0.7, 88.34821428571429, 1.3712573051452637, 0
 sst2, bert-base-uncased, pitome, 1.094154130285714, 0.55, 78.70535714285714, 1.3360683917999268, 0
 sst2, bert-base-uncased, pitome, 1.3052644937142859, 0.6, 79.64285714285714, 1.277822494506836, 0
