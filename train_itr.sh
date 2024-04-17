@@ -3,14 +3,14 @@
 # for dataset in 'coco' 
 for dataset in 'flickr' 
 do
-    for model in  'clip' 'blip' 'blip2'
+    # for model in  'clip' 'blip' 'albef' 'blip2'
+    for model in  'blip' 'albef' 'blip2' 
     # for model in 'blip2' 
     do
-        # for algo in 'tome' 'pitome' 'tofu' 'dct' 'diffrate'
-        for algo in 'tome' 'pitome' 'tofu' 'dct' 'diffrate'
+        for algo in 'pitome' 'tome' 'tofu' 'dct' 'diffrate'
         do
             # for ratio in '0.925' 
-            for ratio in '0.925' '0.95' '0.975'
+            for ratio in '0.925' '0.95' 
             # for ratio in '0.925' 
             do
             echo "running $model $size $algo $ratio."

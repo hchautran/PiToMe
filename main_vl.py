@@ -4,16 +4,14 @@
  SPDX-License-Identifier: BSD-3-Clause
  For full license text, see the LICENSE file in the repo root or https://opensource.org/licenses/BSD-3-Clause
 """
-
+import numpy as np
 import argparse
 import random
-import pandas as pd
-
-import numpy as np
 import torch
-import torch.backends.cudnn as cudnn
+import time
 
 import lavis.tasks as tasks
+import torch.backends.cudnn as cudnn
 from lavis.common.config import Config
 from lavis.common.dist_utils import get_rank, init_distributed_mode
 from lavis.common.logger import setup_logger
@@ -22,8 +20,6 @@ from lavis.common.optims import (
     LinearWarmupStepLRScheduler,
 )
 from lavis.common.utils import now
-
-# imports modules for registration
 from lavis.datasets.builders import *
 from lavis.models import *
 from lavis.processors import *
@@ -184,7 +180,11 @@ def setup_seeds(config):
 def get_gflops(args, model):
     if 'clip' in args.model:
         return model.visual.transformer.total_flop/1e9
+    elif 'blip2' in args.model:
+        print(model.text_encoder)
+        return model.visual_encoder.total_flop/1e9
     else:
+        print(model.text_encoder)
         return model.visual_encoder.total_flop/1e9
     
 
@@ -233,22 +233,30 @@ def main():
         cfg=cfg, job_id=job_id, task=task, model=model, datasets=datasets
     )
     # metrics = runner.evaluate(skip_reload=True)['test']
+    train_time = 0
+    eval_time = 0
     if args.eval:
+        start = time.time()
         metrics = runner.evaluate(skip_reload=True)['test']
+        eval_time = time.time() - start
         if metrics is not None:
             print('r_sum', metrics['txt_r10'] + metrics['txt_r5'] + metrics['txt_r1'] + metrics['img_r10'] + metrics['img_r5'] + metrics['img_r1'])
     else:
+        start = time.time()
         runner.train()
+        train_time = time.time() - start
+        start = time.time()
         metrics = runner.evaluate(skip_reload=False)['test']
+        eval_time = time.time() - start
     gflops = get_gflops(args, model)
     if metrics is not None:
         metrics['gflops'] = gflops
-    return metrics, args
+    return metrics, args, train_time, eval_time 
 
 
 if __name__ == "__main__":
-    import os
     import pathlib
+    import time
     model_dict = {
         'clip': 'CLIP',
         'blip': 'BLIP',
@@ -256,25 +264,16 @@ if __name__ == "__main__":
         'albef': 'ALBEF'
     }
     abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
-    metrics, args = main()
+    metrics, args, train_time, eval_time = main()
     file_name = f'{"eval" if args.eval else "train"}_itr_{model_dict[args.model]}.csv'
     path = f'{abs_path}/{file_name}'
     if not pathlib.Path(path).is_file():
-        head = "dataset, model, algo, gflops, ratio ,txt_r1, txt_r5, txt_r10, img_r1, img_r5, img_r10, r_sum\n"
+        head = "dataset,model,algo,gflops,ratio,txt_r1,txt_r5,txt_r10,img_r1,img_r5,img_r10,r_sum,eval time,train time\n"
         with open(file_name, "a") as myfile:
             myfile.write(head)
+
     if metrics is not None:
         sum = metrics["txt_r1"] + metrics["txt_r5"] + metrics["txt_r10"] + metrics["img_r1"] + metrics["img_r5"] + metrics["img_r10"]
-        row = f'{args.dataset}, {model_dict[args.model]}, {args.algo}, {metrics["gflops"]}, {args.ratio}, {metrics["txt_r1"]}, {metrics["txt_r5"]}, {metrics["txt_r10"]}, {metrics["img_r1"]}, {metrics["img_r5"]}, {metrics["img_r10"]}, {sum}\n'
+        row = f'{args.dataset},{model_dict[args.model]},{args.algo},{metrics["gflops"]},{args.ratio},{metrics["txt_r1"]},{metrics["txt_r5"]},{metrics["txt_r10"]},{metrics["img_r1"]},{metrics["img_r5"]},{metrics["img_r10"]},{sum},{train_time},{eval_time}\n'
         with open(file_name, "a") as myfile:
             myfile.write(row)
-
-    
-
-
-    # df = pd.DataFrame()
-    # print(metrics)
-    # df.to_csv(args.model)
-    
-    
-    

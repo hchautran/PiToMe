@@ -172,7 +172,7 @@ def apply_patch(
     # model.compress_method = 'tome' 
     model._tome_info = {
         "ratio": model.ratio,
-        "margin":  [],
+        "margin": [],
         "size": None,
         "source": None,
         "trace_source": trace_source,
@@ -181,7 +181,6 @@ def apply_patch(
         "distill_token": False,
     }
     current_layer = 0
-    margin = margin 
     num_layers = len(model.blocks)
     # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
     margins = [.9 - .9*(i/num_layers) for i in range(num_layers)]

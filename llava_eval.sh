@@ -6,8 +6,7 @@ for task in 'vqav2' 'flickr30k' 'coco_cap'
 do 
     for ratio in '0.95' '0.925' '0.9'
     do 
-
-        for algo in 'tome' 'pitome' 'tofu' 'diffrate'
+        for algo in 'tome' 'pitome' 'tofu' 'diffrate' 'dct'
         do 
             accelerate launch  --main_process_port 29501 --num_processes=5 -m lmms_eval \
                 --model llava   \

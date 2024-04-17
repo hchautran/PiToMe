@@ -51,7 +51,6 @@ if __name__ == "__main__":
     algo = args.algo
 
     file_name = f'train_tc_{model_dict[args.model]}_{task_name}.csv' if not args.eval else f'eval_tc_{model_dict[args.model]}_{task_name}.csv'
-    print(file_name)
     engine = Engine(
         task_name=task_name,
         model_ckt=args.model,
