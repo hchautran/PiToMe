@@ -92,6 +92,7 @@ def make_tome_class(transformer_class):
             self._tome_info["size"] = None
             self._tome_info["source"] = None
             self.total_flop = 0
+            self.final_shape = None
             B = x.shape[0]
             x = self.patch_embed(x)
 
@@ -107,6 +108,7 @@ def make_tome_class(transformer_class):
                 self.total_flop += self.calculate_block_flop(x.shape)
                 x = blk(x, register_blk == i)
             x = self.norm(x)
+            self.final_shape = x.shape 
             return x
 
 

@@ -177,15 +177,57 @@ def setup_seeds(config):
     cudnn.benchmark = False
     cudnn.deterministic = True
 
+def calculate_cross_flops(dataset, model, final_shape):
+    average_sentence_length = {
+       'flickr': 13.4, 
+       'coco': 10.5, 
+    }
+    num_layer = { 
+        'albef': 12, 
+        'blip': 12, 
+        'blip2': 48, 
+    }
+    _, N_i, C = final_shape 
+    print(final_shape)
+    N_t = average_sentence_length[dataset]
+    num_layers = num_layer[model]
+    if model != 'blip2':
+        flops = 0
+        mhsa_flops = 4*N_t*C*C + 2*N_t*N_t*C
+        flops += num_layers*mhsa_flops
+        ffn_flops = 8*N_t*C*C
+        flops += num_layers*ffn_flops
+
+        mhsa_flops = 2*N_i*C*C + 2*N_t*C*C + 2*N_i*N_t*C
+        flops += num_layers*mhsa_flops
+        ffn_flops = 8*N_t*C*C
+        flops += num_layers*ffn_flops 
+        return flops
+    else:
+        N_t=N_t + 32
+        flops = 0
+        mhsa_flops = 4*N_t*C*C + 2*N_t*N_t*C
+        ffn_flops = 8*N_t*C*C
+        flops += num_layers*mhsa_flops
+        flops += num_layers*ffn_flops
+
+        mhsa_flops = 2*N_i*C*C + 2*N_t*C*C + 2*N_i*N_t*C
+        ffn_flops = 8*N_t*C*C
+        flops += num_layers*mhsa_flops
+        flops += num_layers*ffn_flops 
+        return flops
+    
+    
+
 def get_gflops(args, model):
     if 'clip' in args.model:
         return model.visual.transformer.total_flop/1e9
     elif 'blip2' in args.model:
-        print(model.text_encoder)
-        return model.visual_encoder.total_flop/1e9
+        flops = model.visual_encoder.total_flop  + calculate_cross_flops(args.dataset, args.model, model.visual_encoder.final_shape)
+        return flops/1e9
     else:
-        print(model.text_encoder)
-        return model.visual_encoder.total_flop/1e9
+        flops = model.visual_encoder.total_flop  + calculate_cross_flops(args.dataset, args.model, model.visual_encoder.final_shape)
+        return flops/1e9
     
 
 def main():
@@ -268,7 +310,7 @@ if __name__ == "__main__":
     file_name = f'{"eval" if args.eval else "train"}_itr_{model_dict[args.model]}.csv'
     path = f'{abs_path}/{file_name}'
     if not pathlib.Path(path).is_file():
-        head = "dataset,model,algo,gflops,ratio,txt_r1,txt_r5,txt_r10,img_r1,img_r5,img_r10,r_sum,eval time,train time\n"
+        head = "dataset,model,algo,gflops,ratio,txt_r1,txt_r5,txt_r10,img_r1,img_r5,img_r10,r_sum,train time,eval time\n"
         with open(file_name, "a") as myfile:
             myfile.write(head)
 

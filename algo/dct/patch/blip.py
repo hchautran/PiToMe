@@ -49,6 +49,7 @@ def make_dct_class(transformer_class):
             self._dct_info["size"] = None
             self._dct_info["source"] = None
             self.total_flop = 0
+            self.final_shape = 0
             B = x.shape[0]
             x = self.patch_embed(x)
 
@@ -64,6 +65,7 @@ def make_dct_class(transformer_class):
                 self.total_flop += self.calculate_block_flop(x.shape)
                 x = blk(x, register_blk == i)
             x = self.norm(x)
+            self.final_flop=x.shape
             return x
 
 
@@ -90,6 +92,7 @@ def make_dct_class(transformer_class):
                 self.total_flop += self.calculate_block_flop(x.shape)
                 x = blk(x, register_blk == i)
             x = self.norm(x)
+            self.final_shape = x.shape
             return x
 
 

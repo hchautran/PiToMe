@@ -106,6 +106,7 @@ def make_tofu_class(transformer_class):
                 self.total_flop += self.calculate_block_flop(x.shape)
                 x = blk(x, register_blk == i)
             x = self.norm(x)
+            self.final_shape = x.shape
             return x
 
         def forward_features(self, x, register_blk=-1) -> torch.Tensor:
@@ -131,6 +132,7 @@ def make_tofu_class(transformer_class):
                 self.total_flop += self.calculate_block_flop(x.shape)
                 x = blk(x, register_blk == i)
             x = self.norm(x)
+            self.final_shape = x.shape
             return x
 
 

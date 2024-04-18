@@ -51,6 +51,7 @@ def make_dct_class(transformer_class):
             self._dct_info["size"] = None
             self._dct_info["source"] = None
             self.total_flop = 0
+            self.final_shape = None
 
             x = super().forward(x)
             return x
@@ -72,6 +73,7 @@ def make_dct_class(transformer_class):
                 else:
                     x = blk(x, rel_pos_bias)
                 self.total_flop+= self.calculate_block_flop(x.shape)
+            self.final_shape = x.shape
             return x
  
         def calculate_block_flop(self, shape):

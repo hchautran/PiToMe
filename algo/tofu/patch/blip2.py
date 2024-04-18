@@ -123,6 +123,7 @@ def make_pitofu_class(transformer_class):
                 else:
                     x = blk(x, rel_pos_bias)
                 self.total_flop+= self.calculate_block_flop(x.shape)
+            self.final_shape = x.shape
             return x
  
         def calculate_block_flop(self, shape):

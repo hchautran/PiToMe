@@ -41,7 +41,7 @@ run:
   # dataloading
   num_workers: 4
   batch_size_train: 32
-  batch_size_eval: 128
+  batch_size_eval: 64 
 
   train_splits: ["train"]
   valid_splits: ["val", "test"]
@@ -55,7 +55,7 @@ run:
   use_dist_eval_sampler: False
 
   # model specific
-  k_test: 256
+  k_test: 20 
 
   # misc
   seed: 42

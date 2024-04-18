@@ -179,6 +179,7 @@ def make_diffrate_class(transformer_class):
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
                 x = blk(x, register_blk == i)
+            self.final_shape = x.shape
             x = self.norm(x)
             return x
 
@@ -207,6 +208,7 @@ def make_diffrate_class(transformer_class):
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
                 x = blk(x, register_blk == i)
+            self.final_shape = x.shape
             x = self.norm(x)
             return x
 
