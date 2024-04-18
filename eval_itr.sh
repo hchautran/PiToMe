@@ -1,10 +1,10 @@
 
 # Loop through each element in the array
 # for dataset in 'coco' 
-for dataset in 'flickr'
+for dataset in 'flickr' 'coco'
 do
     # for model in  'blip' 'blip2' 'albef'
-    for model in  'clip' 
+    for model in  'blip2' 
     do
         # for algo in 'diffrate' 
         sh eval_scripts/eval_itr_$model.sh $dataset none 1.0 
