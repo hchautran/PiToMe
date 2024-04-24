@@ -7,7 +7,7 @@ model:
   arch: blip_retrieval
 
   model_type: flickr
-  load_finetuned: True
+  load_finetuned: False
 
   queue_size: 57600
 

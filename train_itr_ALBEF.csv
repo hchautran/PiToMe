@@ -1,0 +1,2 @@
+dataset,model,algo,gflops,ratio,txt_r1,txt_r5,txt_r10,img_r1,img_r5,img_r10,r_sum,train time,eval time
+flickr,ALBEF,none,65.54411016192,1.0,95.7,99.6,99.9,84.34,96.92,98.24,574.7,2182.5340328216553,66.38328313827515

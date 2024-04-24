@@ -8,7 +8,7 @@ model:
   model_type: flickr
   load_finetuned: False
 
-  queue_size: 64000 
+  queue_size: 57600 
 
 datasets:
   flickr30k: # name of the dataset builder
@@ -36,8 +36,8 @@ run:
 
   # dataloading
   num_workers: 4
-  batch_size_train: 8 
-  batch_size_eval: 64
+  batch_size_train: 16 
+  batch_size_eval: 32
 
   train_splits: ["train"]
   valid_splits: ["val", "test"]

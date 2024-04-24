@@ -4,7 +4,7 @@
 for dataset in 'flickr' 'coco'
 do
     # for model in  'clip' 'blip' 'albef' 'blip2'
-    for model in  'clip' 
+    for model in  'blip2' 
     # for model in 'blip2' 
     do
         sh train_scripts/train_itr_$model.sh $dataset none 1.0 
