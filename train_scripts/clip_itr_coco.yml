@@ -34,7 +34,7 @@ run:
 
   # dataloading
   num_workers: 4
-  batch_size_train: 32
+  batch_size_train: 8 
   batch_size_eval: 128
 
 

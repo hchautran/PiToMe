@@ -5,14 +5,14 @@ build/
 test.py
 .env
 wandb/
-lmms-eval/
+# lmms-eval/
 log/
 logs_*/
 logs/
 */cnn_dm-bin/
 */cnn_dm/
 */checkpoints/
-LLaVA/
+# LLaVA/
 # Byte-compiled / optimized / DLL files
 */__pycache__/
 */*.py[cod]
