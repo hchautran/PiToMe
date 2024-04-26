@@ -20,7 +20,6 @@ from accelerate.utils import InitProcessGroupKwargs
 from pathlib import Path
 from typing import Union
 import hashlib
-
 from lmms_eval import evaluator, utils
 from lmms_eval.tasks import initialize_tasks, include_path, get_task_dict
 from lmms_eval.api.registry import ALL_TASKS
@@ -152,6 +151,18 @@ def parse_eval_args() -> argparse.Namespace:
         default=1.0,
         type=float,
         help="compress ratio",
+    )
+    parser.add_argument(
+        "--compress_vit",
+        default=False,
+        action="store_true",
+        help="use compression on vit",
+    )
+    parser.add_argument(
+        "--compress_llm",
+        default=False,
+        action="store_true",
+        help="use compression on llm",
     )
     args = parser.parse_args()
     return args

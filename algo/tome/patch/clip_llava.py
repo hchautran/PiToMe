@@ -68,8 +68,11 @@ class ToMeCLIPEncoder(CLIPEncoder):
             return_dict (`bool`, *optional*):
                 Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
         """
+        len_layers = len(self.layers)
         self._tome_info["r"] = [self.r]* len(self.layers) 
-        self._tome_info["ratio"] = [self.ratio] * len(self.layers) 
+        # self._tome_info["ratio"] = [self.ratio] * len(self.layers) 
+        # self._tome_info["ratio"] = [self.ratio] * len(self.layers) 
+        self._tome_info["ratio"] = [self.ratio if i%2==0  else 1.0 for i in range(len_layers) ]
         self._tome_info["size"] = None
         self._tome_info["source"] = None
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions

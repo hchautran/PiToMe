@@ -3,7 +3,7 @@ from transformers.modeling_outputs import BaseModelOutput
 from typing import Optional, Tuple,Union
 import torch.nn as nn
 import torch
-from ..merge import merge_source, pitome_vision, merge_mean 
+from ..merge import dc_transform 
 
 
 
@@ -18,26 +18,16 @@ class PiToMeCLIPEncoder(CLIPEncoder):
     def init_margin(self, margins):
         # self.margin = nn.Parameter(torch.tensor(margin)) 
         self.margins = margins 
-
-    def compress_x(self, metric, x, attn, idx):
-        ratio = self._pitome_info["ratio"].pop()
+    
+    def compress_x(self, x):
+        ratio = self._dct_info["ratio"].pop(0)
         if ratio < 1.0:
-            merge, isolated_score = pitome_vision(
+            x = dc_transform(
+                x=x,
                 ratio=ratio,
-                metric=metric,
-                margin=self.margins[idx],
-                # prune=self.margins[idx] < 0.45,
-                # attn=attn if self.margins[idx] >= 0.45 else None,
-                class_token=self._pitome_info["class_token"]
+                class_token=self._dct_info["class_token"]
             )
-
-            if self._pitome_info["trace_source"]:
-                self._pitome_info["source"] = merge_source(
-                    merge, x, self._pitome_info["source"]
-                )
-            x = merge_mean(merge, x)
         return x
-
 
 
     def forward(
@@ -78,11 +68,11 @@ class PiToMeCLIPEncoder(CLIPEncoder):
             return_dict (`bool`, *optional*):
                 Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
         """
-        len_layers = len(self.layers)
-        self._pitome_info["ratio"] = [self.ratio if i%2==0 else 1.0 for i in range(len_layers) ]
-        # self._pitome_info["ratio"] = [self.ratio] * len(self.layers) 
-        self._pitome_info["size"] = None
-        self._pitome_info["source"] = None
+        self._dct_info["r"] = [self.r]* len(self.layers) 
+        self._dct_info["ratio"] = [self.ratio] * len(self.layers) 
+        self._dct_info["ratio"] = [self.ratio if i%2==0  else 1.0 for i in range(len(self.layers)) ]
+        self._dct_info["size"] = None
+        self._dct_info["source"] = None
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -148,19 +138,19 @@ def apply_patch(
     Applies ToMe to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._pitome_info["source"] afterward.
+    The sources will be available at model._dct_info["source"] afterward.
 
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    print('using', 'pitome')
+    print('using', 'dct')
 
     model.__class__ =  PiToMeCLIPEncoder 
     model.ratio = 1.0 
     model.r=0.0
     
-    # model.compress_method = 'pitome' 
-    model._pitome_info = {
+    # model.compress_method = 'dct' 
+    model._dct_info = {
         "ratio": model.ratio,
         "margin":  [],
         "size": None,

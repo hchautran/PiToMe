@@ -7,7 +7,7 @@ model:
   arch: blip2
   model_type: coco
   load_pretrained: True
-  load_finetuned: False 
+  load_finetuned: True 
   freeze_vit: True
   
   # # finetune blip2 with clip-vit-large

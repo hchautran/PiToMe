@@ -288,7 +288,9 @@ def main():
         runner.train()
         train_time = time.time() - start
         start = time.time()
-        metrics = runner.evaluate(skip_reload=False)['test']
+        metrics = runner.evaluate(skip_reload=False)
+        if metrics is not None: 
+            metrics = metrics['test']
         eval_time = time.time() - start
     gflops = get_gflops(args, model)
     if metrics is not None:

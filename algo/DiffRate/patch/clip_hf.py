@@ -184,10 +184,11 @@ class DiffRateCLIPEncoder(CLIPEncoder):
         import math
         N = 577 
         for idx, _ in enumerate(self.layers):
-            r = math.floor(N - N*ratio)
-            self.prune_ddp[idx].kept_token_number = N - 0 
-            self.merge_ddp[idx].kept_token_number = N - r
-            N -= r
+            if idx % 2 == 0:
+                r = math.floor(N - N*ratio)
+                self.prune_ddp[idx].kept_token_number = N - 0 
+                self.merge_ddp[idx].kept_token_number = N - r
+                N -= r
         
     def init_kept_num_using_r(self, r):
         N = 577 

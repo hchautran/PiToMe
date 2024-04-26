@@ -60,6 +60,8 @@ class Llava(lmms):
         conv_template="vicuna_v1",
         use_cache=True,
         truncate_context=False,  # whether to truncate the context in generation, set it False for LLaVA-1.6
+        compress_llm=False,
+        compress_vit=False,
         algo:str=None,  # whether to truncate the context in generation, set it False for LLaVA-1.6
         ratio=None,  # whether to truncate the context in generation, set it False for LLaVA-1.6
         **kwargs,
@@ -120,12 +122,21 @@ class Llava(lmms):
             self.model.to(self._device)
             self._rank = 0
             self._world_size = 1
-        # self.prepare_model('pitome', self.model.model.vision_tower, 0.95)
-        # self.prepare_model('tome', self.model.model.vision_tower, 0.95)
-        # self.prepare_model('tofu', self.model.model.vision_tower, 0.95)
-        # self.prepare_model('diffrate', self.model.model.vision_tower, 0.95)
-        # print(self.model.model.vision_tower)
-        if algo is not None:
+        if compress_llm:
+            if algo == PITOME:
+                pitome.patch.clip_hf(self.model.model.vision_tower.vision_tower.vision_model.encoder)
+                self.model.model.vision_tower.vision_tower.vision_model.encoder.ratio=ratio
+            elif algo == TOME:
+                tome.patch.clip_hf(self.model.model.vision_tower.vision_tower.vision_model.encoder)
+                self.model.model.vision_tower.vision_tower.vision_model.encoder.ratio=ratio
+            elif algo == TOFU:
+                tofu.patch.clip_hf(self.model.model.vision_tower.vision_tower.vision_model.encoder)
+                self.model.model.vision_tower.vision_tower.vision_model.encoder.ratio=ratio
+            elif algo == DIFFRATE:
+                DiffRate.patch.clip_hf(self.model.model.vision_tower.vision_tower.vision_model.encoder)
+                self.model.model.vision_tower.vision_tower.vision_model.encoder.init_kept_num_using_ratio(ratio)
+            # elif algo == DCT:
+        if compress_vit:
             if algo == PITOME:
                 pitome.patch.clip_hf(self.model.model.vision_tower.vision_tower.vision_model.encoder)
                 self.model.model.vision_tower.vision_tower.vision_model.encoder.ratio=ratio

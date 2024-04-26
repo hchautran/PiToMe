@@ -112,6 +112,8 @@ def simple_evaluate(
             "device": device,
             "ratio": float(cli_args.ratio),
             "algo": cli_args.algo,
+            "compress_vit": cli_args.compress_vit,
+            "compress_llm": cli_args.compress_llm,
         },
     )
 
