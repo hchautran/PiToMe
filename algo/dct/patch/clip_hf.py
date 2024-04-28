@@ -1,11 +1,13 @@
-from transformers.models.clip.modeling_clip import CLIPEncoder
+from transformers.models.clip.modeling_clip import CLIPEncoder, CLIPEncoderLayer 
 from transformers.modeling_outputs import BaseModelOutput
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple,Union
+import torch.nn as nn
 import torch
-from ..merge import merge_source,  bipartite_soft_matching 
+from ..merge import dc_transform 
 
 
-class ToFuCLIPEncoder(CLIPEncoder):
+
+class PiToMeCLIPEncoder(CLIPEncoder):
     """
     Transformer encoder consisting of `config.num_hidden_layers` self attention layers. Each layer is a
     [`CLIPEncoderLayer`].
@@ -13,29 +15,19 @@ class ToFuCLIPEncoder(CLIPEncoder):
     Args:
         config: CLIPConfig
     """
-
-    def init_strategy(self, strategies):
+    def init_margin(self, margins):
         # self.margin = nn.Parameter(torch.tensor(margin)) 
-        self.strategies = strategies 
-
-
-
-    def compress_x(self, metric, x, attn, idx):
-        ratio = self._tofu_info["ratio"].pop()
+        self.margins = margins 
+    
+    def compress_x(self, x):
+        ratio = self._dct_info["ratio"].pop(0)
         if ratio < 1.0:
-            merge, _ = bipartite_soft_matching(
+            x = dc_transform(
+                x=x,
                 ratio=ratio,
-                metric=metric,
-                class_token=self._tofu_info["class_token"]
+                class_token=self._dct_info["class_token"]
             )
-
-            if self._tofu_info["trace_source"]:
-                self._tofu_info["source"] = merge_source(
-                    merge, x, self._tofu_info["source"]
-                )
-            x = merge(x, mode=self.strategies[idx])
         return x
-
 
 
     def forward(
@@ -76,12 +68,11 @@ class ToFuCLIPEncoder(CLIPEncoder):
             return_dict (`bool`, *optional*):
                 Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
         """
-    
-        self._tofu_info["r"] = [self.r]* len(self.layers) 
-        # self._tofu_info["ratio"] = [self.ratio] * len(self.layers) 
-        self._tofu_info["ratio"] = [self.ratio if i%2==0  else 1.0 for i in range(len(self.layers)) ]
-        self._tofu_info["size"] = None
-        self._tofu_info["source"] = None
+        self._dct_info["r"] = [self.r]* len(self.layers) 
+        self._dct_info["ratio"] = [self.ratio] * len(self.layers) 
+        self._dct_info["ratio"] = [self.ratio if i%2==0  else 1.0 for i in range(len(self.layers)) ]
+        self._dct_info["size"] = None
+        self._dct_info["source"] = None
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -114,7 +105,8 @@ class ToFuCLIPEncoder(CLIPEncoder):
 
             hidden_states = layer_outputs[0]
             self.total_flops += self.calculate_block_flop(hidden_states.shape)
-            hidden_states = self.compress_x(hidden_states, hidden_states, layer_outputs[1], idx)
+            hidden_states= self.compress_x(hidden_states)
+            # print(hidden_states.shape)
 
             if output_attentions:
                 all_attentions = all_attentions + (layer_outputs[1],)
@@ -143,25 +135,22 @@ class ToFuCLIPEncoder(CLIPEncoder):
 def apply_patch(
    model: CLIPEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
     """
-    Applies ToFu to this transformer. Afterward, set r using model.r.
+    Applies ToMe to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tofu_info["source"] afterward.
+    The sources will be available at model._dct_info["source"] afterward.
 
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    print('using', 'tofu')
+    print('using', 'dct')
 
-    model.__class__ =  ToFuCLIPEncoder 
+    model.__class__ =  PiToMeCLIPEncoder 
     model.ratio = 1.0 
     model.r=0.0
-    num_layers = len(model.layers)
     
-    strategies = ['tofu' if i > num_layers//2 else 'prune' for i in range(num_layers)]
-    model.init_strategy(strategies)
-    # model.compress_method = 'tofu' 
-    model._tofu_info = {
+    # model.compress_method = 'dct' 
+    model._dct_info = {
         "ratio": model.ratio,
         "margin":  [],
         "size": None,
@@ -173,3 +162,7 @@ def apply_patch(
     }
     current_layer = 0
     margin = margin 
+    num_layers = len(model.layers)
+    # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
+    margins = [.9 - .9*(i/num_layers) for i in range(num_layers)]
+    model.init_margin(margins)

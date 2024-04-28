@@ -1,9 +1,9 @@
 from transformers.models.clip.modeling_clip import CLIPEncoder, CLIPEncoderLayer 
+from ..merge import merge_source, pitome_vision, merge_mean 
 from transformers.modeling_outputs import BaseModelOutput
-from typing import Optional, Tuple,Union
+from typing import Optional, Tuple, Union
 import torch.nn as nn
 import torch
-from ..merge import merge_source, pitome_vision, merge_mean 
 
 
 
@@ -26,6 +26,7 @@ class PiToMeCLIPEncoder(CLIPEncoder):
                 ratio=ratio,
                 metric=metric,
                 margin=self.margins[idx],
+                # prune=self.margins[idx] < 0.45,
                 # attn=attn if self.margins[idx] >= 0.45 else None,
                 class_token=self._pitome_info["class_token"]
             )
@@ -77,8 +78,9 @@ class PiToMeCLIPEncoder(CLIPEncoder):
             return_dict (`bool`, *optional*):
                 Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
         """
-        self._pitome_info["r"] = [self.r]* len(self.layers) 
-        self._pitome_info["ratio"] = [self.ratio] * len(self.layers) 
+        len_layers = len(self.layers)
+        self._pitome_info["ratio"] = [self.ratio if i%2==0 else 1.0 for i in range(len_layers)]
+        # self._pitome_info["ratio"] = [self.ratio] * len(self.layers) 
         self._pitome_info["size"] = None
         self._pitome_info["source"] = None
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
@@ -114,11 +116,9 @@ class PiToMeCLIPEncoder(CLIPEncoder):
             hidden_states = layer_outputs[0]
             self.total_flops += self.calculate_block_flop(hidden_states.shape)
             hidden_states= self.compress_x(hidden_states, hidden_states, layer_outputs[1],idx)
-            # print(hidden_states.shape)
 
             if output_attentions:
                 all_attentions = all_attentions + (layer_outputs[1],)
-        # print('current flop:', self.total_flops/1e9)
 
         if output_hidden_states:
             encoder_states = encoder_states + (hidden_states,)
