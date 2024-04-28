@@ -302,6 +302,9 @@ def cli_evaluate_single(args: Union[argparse.Namespace, None] = None) -> None:
     elif args.log_samples and not args.output_path:
         assert args.output_path, "Specify --output_path"
 
+    import time
+    start = time.time()
+    model_name = args.model_args.split('=')[-1].split('/')[-1]
     results = evaluator.simple_evaluate(
         model=args.model,
         model_args=args.model_args,
@@ -316,6 +319,7 @@ def cli_evaluate_single(args: Union[argparse.Namespace, None] = None) -> None:
         gen_kwargs=args.gen_kwargs,
         cli_args=args,
     )
+    total_time = time.time() - start
 
     if results is not None:
         if args.log_samples:
@@ -341,12 +345,29 @@ def cli_evaluate_single(args: Union[argparse.Namespace, None] = None) -> None:
                     samples_dumped = json.dumps(data_to_dump, indent=4, default=_handle_non_serializable)
                     filename.open("w").write(samples_dumped)
                     eval_logger.info(f"Saved samples to {filename}")
+        abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
+        file_name = f'{abs_path}/{args.model}.csv'
+        if not Path(file_name).is_file():
+            head = "model,dataset,algo,acc,eval time\n"
+            with open(file_name, "a") as myfile:
+                myfile.write(head)
+        task_metrics = {
+            'vizwiz_vqa_val': 'exact_match',
+            'mme': 'mme_percetion_score',
+            'mmbench': 'submission',
+        }
+        row = f'{model_name},{args.tasks},{args.algo},{results["results"][args.tasks][f"{task_metrics[args.tasks]},none"]},{total_time}\n'
+        with open(file_name, "a") as myfile:
+            myfile.write(row)
+        # print('exact match', results['results'][args.tasks][['exact_match,none']])
+        # print('time', total_time)
 
         return results, samples
     return None, None
 
 
 def print_results(args, results):
+    print(results)
     print(f"{args.model} ({args.model_args}),\ngen_kwargs: ({args.gen_kwargs}),\nlimit: {args.limit},\nnum_fewshot: {args.num_fewshot},\nbatch_size: {args.batch_size}")
     print(evaluator.make_table(results))
     if "groups" in results:

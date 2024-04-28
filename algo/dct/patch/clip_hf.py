@@ -105,7 +105,7 @@ class PiToMeCLIPEncoder(CLIPEncoder):
 
             hidden_states = layer_outputs[0]
             self.total_flops += self.calculate_block_flop(hidden_states.shape)
-            hidden_states= self.compress_x(hidden_states, hidden_states, layer_outputs[1],idx)
+            hidden_states= self.compress_x(hidden_states)
             # print(hidden_states.shape)
 
             if output_attentions:

@@ -1,28 +1,26 @@
-import torch
 
-torch.backends.cuda.matmul.allow_tf32 = True
 
-import logging
 import copy
+import torch
+import logging
 from tqdm import tqdm
-from datetime import timedelta
-
 from lmms_eval import utils
-from lmms_eval.api.instance import Instance
+from datetime import timedelta
 from lmms_eval.api.model import lmms
+from lmms_eval.api.instance import Instance
+from accelerate.state import AcceleratorState
 from lmms_eval.api.registry import register_model
 from lmms_eval.utils import stop_sequences_criteria
-
 from accelerate import Accelerator, DistributedType, InitProcessGroupKwargs
-from accelerate.state import AcceleratorState
 from typing import List, Optional, Union, Tuple
+torch.backends.cuda.matmul.allow_tf32 = True
 import warnings
 from algo import (
-    pitome, tome, tofu, DiffRate, PITOME, TOME, TOFU, DIFFRATE
+    pitome, tome, tofu, DiffRate, dct,
+    PITOME, TOME, TOFU, DIFFRATE, DCT 
 ) 
 
 warnings.filterwarnings("ignore")
-
 eval_logger = logging.getLogger("lmms-eval")
 
 try:
@@ -122,20 +120,12 @@ class Llava(lmms):
             self.model.to(self._device)
             self._rank = 0
             self._world_size = 1
-        if compress_llm:
-            if algo == PITOME:
-                pitome.patch.clip_hf(self.model.model.vision_tower.vision_tower.vision_model.encoder)
-                self.model.model.vision_tower.vision_tower.vision_model.encoder.ratio=ratio
-            elif algo == TOME:
-                tome.patch.clip_hf(self.model.model.vision_tower.vision_tower.vision_model.encoder)
-                self.model.model.vision_tower.vision_tower.vision_model.encoder.ratio=ratio
-            elif algo == TOFU:
-                tofu.patch.clip_hf(self.model.model.vision_tower.vision_tower.vision_model.encoder)
-                self.model.model.vision_tower.vision_tower.vision_model.encoder.ratio=ratio
-            elif algo == DIFFRATE:
-                DiffRate.patch.clip_hf(self.model.model.vision_tower.vision_tower.vision_model.encoder)
-                self.model.model.vision_tower.vision_tower.vision_model.encoder.init_kept_num_using_ratio(ratio)
-            # elif algo == DCT:
+        # if compress_llm:
+        #     # print(self.model)
+        #     if algo == PITOME:
+        #         pitome.patch.llama(self.model.model)
+        #         self.model.model.vision_tower.vision_tower.vision_model.encoder.ratio=ratio
+
         if compress_vit:
             if algo == PITOME:
                 pitome.patch.clip_hf(self.model.model.vision_tower.vision_tower.vision_model.encoder)
@@ -149,6 +139,9 @@ class Llava(lmms):
             elif algo == DIFFRATE:
                 DiffRate.patch.clip_hf(self.model.model.vision_tower.vision_tower.vision_model.encoder)
                 self.model.model.vision_tower.vision_tower.vision_model.encoder.init_kept_num_using_ratio(ratio)
+            elif algo == DCT:
+                dct.patch.clip_hf(self.model.model.vision_tower.vision_tower.vision_model.encoder)
+                self.model.model.vision_tower.vision_tower.vision_model.encoder.ratio=ratio
 
 
     @property
