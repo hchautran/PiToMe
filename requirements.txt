@@ -1,4 +1,4 @@
 salesforce-lavis
 datasets
 accelerate
-timm=0.4
+timm==0.4.12 
