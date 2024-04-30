@@ -19,18 +19,35 @@ except ImportError:
     pass  # Don't fail if scipy is not installed. It's only necessary for this one file.
 
 
-def generate_colormap(N: int, seed: int = 0) -> List[Tuple[float, float, float]]:
-    """Generates a equidistant colormap with N elements."""
-    random.seed(seed)
+def generate_colormap(N: int, attention_score: torch.Tensor, seed: int = 0) -> List[Tuple[float, float, float]]:
+  """
+  Generates a colormap with N elements, with a bolder blue base and lightness adjusted based on attention scores.
 
-    def generate_color():
-        return (random.random(), random.random(), random.random())
+  Args:
+      N: Number of colors to generate.
+      attention_score: A torch.Tensor representing the attention scores.
+          This will be used to modulate the lightness of the blue color.
+      seed: An optional integer seed for reproducibility.
 
-    return [generate_color() for _ in range(N)]
+  Returns:
+      A list of tuples representing RGB color values (0.0 to 1.0).
+  """
+
+
+  def adjust_lightness(attention_value):
+    normalized_attention = (attention_value - attention_score.min()) / (attention_score.max() - attention_score.min())
+    lightness_adjustment = 0.3 * normalized_attention  # Adjust factor for lightness range
+    base = (0.2, 0.4, 0.8)
+    adjusted_color = [base[0] + lightness_adjustment, base[1], base[2] + lightness_adjustment]
+    return tuple(max(0.0, min(1.0, val)) for val in adjusted_color)
+
+  colormap = [adjust_lightness(attention_value) for attention_value in attention_score.flatten().tolist()]
+
+  return colormap
 
 
 def make_visualization(
-    img: Image, source: torch.Tensor, patch_size: int = 16, class_token: bool = True
+    img: Image, source: torch.Tensor, attention_score:torch.Tensor, patch_size: int = 16, class_token: bool = True
 ) -> Image:
     """
     Create a visualization like in the paper.
@@ -55,7 +72,7 @@ def make_visualization(
     num_groups = vis.max().item() + 1
     print('num_group',num_groups)
 
-    cmap = generate_colormap(num_groups)
+    cmap = generate_colormap(num_groups, attention_score)
     vis_img = 0
 
     for i in range(num_groups):

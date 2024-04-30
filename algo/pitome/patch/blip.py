@@ -41,9 +41,9 @@ class PiToMeBlock(Block):
         # x = self.compress_x(metric, x) 
         # x = x + self.drop_path(self.mlp(self.norm2(x)))
         # return x
+        x = self.compress_x(x, x) 
         x = x + self.drop_path(self.attn(self.norm1(x), register_hook=register_hook))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
-        x = self.compress_x(x, x) 
         return x
 
 
@@ -92,9 +92,10 @@ def make_pitome_class(transformer_class):
 
         def forward(self,x, register_blk=-1):
             self._tome_info["r"] = [self.r]* len(self.blocks) 
-            self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._tome_info["ratio"] =[1.0] + [self.ratio] * (len(self.blocks)-1)
             self._tome_info["size"] = None
             self._tome_info["source"] = None
+            self._tome_info["attn"] = None
             self.total_flop = 0
             self.final_shape = 0
             B = x.shape[0]
@@ -110,7 +111,7 @@ def make_pitome_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, register_blk == i)
+                x = blk(x, self._tome_info["output_attn"])
             x = self.norm(x)
             self.final_shape = x.shape
             return x
@@ -137,7 +138,7 @@ def make_pitome_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, register_blk == i)
+                x = blk(x, self._tome_info["output_attn"] )
             x = self.norm(x)
             self.final_shape = x.shape
 
@@ -157,7 +158,7 @@ def make_pitome_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False, output_attn=False):
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.
 
@@ -180,6 +181,7 @@ def apply_patch(
         "margin": [],
         "size": None,
         "source": None,
+        "output_attn": output_attn,
         "trace_source": trace_source,
         "prop_attn": prop_attn,
         "class_token": True,
