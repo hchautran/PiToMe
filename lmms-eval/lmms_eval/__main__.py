@@ -355,6 +355,7 @@ def cli_evaluate_single(args: Union[argparse.Namespace, None] = None) -> None:
             'vizwiz_vqa_val': 'exact_match',
             'mme': 'mme_percetion_score',
             'mmbench': 'submission',
+            'vqav2': 'exact_match',
         }
         row = f'{model_name},{args.tasks},{args.algo},{results["results"][args.tasks][f"{task_metrics[args.tasks]},none"]},{total_time}\n'
         with open(file_name, "a") as myfile:
