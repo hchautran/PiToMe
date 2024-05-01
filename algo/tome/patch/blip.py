@@ -11,23 +11,23 @@ class ToMeBlock(Block):
     
     def compress_x(self, metric, x):
         ratio = self._tome_info["ratio"].pop()
-        if ratio < 1.0:
-            merge, isolated_score = bipartite_soft_matching(
-                ratio=ratio,
-                metric=metric,
-                class_token=self._tome_info["class_token"]
-            )
+        # if ratio < 1.0:
+        merge, isolated_score = bipartite_soft_matching(
+            ratio=ratio,
+            metric=metric,
+            class_token=self._tome_info["class_token"]
+        )
 
-            if self._tome_info["trace_source"]:
-                self._tome_info["source"] = merge_source(
-                    merge, x, self._tome_info["source"]
-                )
-            if isolated_score is not None and self._tome_info["size"] is not None:
-                weight = self._tome_info["size"] + isolated_score
-                x, self._tome_info["size"] = merge_wavg(merge, x, weight)
-            else:
-                weight = self._tome_info["size"] 
-                x, self._tome_info["size"] = merge_wavg(merge, x, weight)
+        if self._tome_info["trace_source"]:
+            self._tome_info["source"] = merge_source(
+                merge, x, self._tome_info["source"]
+            )
+        if isolated_score is not None and self._tome_info["size"] is not None:
+            weight = self._tome_info["size"] + isolated_score
+            x, self._tome_info["size"] = merge_wavg(merge, x, weight)
+        else:
+            weight = self._tome_info["size"] 
+            x, self._tome_info["size"] = merge_wavg(merge, x, weight)
         return x
 
     def forward(self, x, register_hook=False):
@@ -37,10 +37,9 @@ class ToMeBlock(Block):
         # x = self.compress_x(metric, x) 
         # x = x + self.drop_path(self.mlp(self.norm2(x)))
         # return x
+        x = self.compress_x(x, x) 
         x = x + self.drop_path(self.attn(self.norm1(x), register_hook=register_hook))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
-        x = self.compress_x(x, x) 
-        # print(x.shape)
         return x
 
 
@@ -88,7 +87,7 @@ def make_tome_class(transformer_class):
         """
         def forward(self,x, register_blk=-1):
             self._tome_info["r"] = [self.r]* len(self.blocks) 
-            self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._tome_info["ratio"] = [1.0] + [self.ratio] * (len(self.blocks)-1)
             self._tome_info["size"] = None
             self._tome_info["source"] = None
             self.total_flop = 0
@@ -106,7 +105,7 @@ def make_tome_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, register_blk == i)
+                x = blk(x, self._tome_info["output_attn"])
             x = self.norm(x)
             self.final_shape = x.shape 
             return x
@@ -115,7 +114,7 @@ def make_tome_class(transformer_class):
         def forward_features(self, x, register_blk=-1) -> torch.Tensor:
       
             self._tome_info["r"] = [self.r]* len(self.blocks) 
-            self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._tome_info["ratio"] = [1.0] + [self.ratio] * (len(self.blocks) -1)
             self._tome_info["size"] = None
             self._tome_info["source"] = None
             self.total_flop = 0
@@ -134,7 +133,7 @@ def make_tome_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, register_blk == i)
+                x = blk(x, self._tome_info["output_attn"])
             self.final_shape = x.shape 
             x = self.norm(x)
             return x
@@ -153,7 +152,7 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False, output_attn=False):
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.
 
@@ -176,6 +175,7 @@ def apply_patch(
         "margin":  [],
         "size": None,
         "source": None,
+        "output_attn": output_attn,
         "trace_source": trace_source,
         "prop_attn": prop_attn,
         "class_token": model.cls_token is not None,
