@@ -42,7 +42,11 @@ class PiToMeBlock(Block):
         # x = x + self.drop_path(self.mlp(self.norm2(x)))
         # return x
         x = self.compress_x(x, x) 
-        x = x + self.drop_path(self.attn(self.norm1(x), register_hook=register_hook))
+
+        x_attn, attn = self.attn(self.norm1(x), register_hook=register_hook)
+        if self._tome_info['output_attn']:
+            self._tome_info['attn'].append(attn)
+        x = x + self.drop_path(x_attn)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
 
@@ -81,7 +85,7 @@ class PiToMeAttention(Attention):
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
-        return x
+        return x, attn
 
 def make_pitome_class(transformer_class):
     class PiToMeVisionTransformer(transformer_class):
@@ -95,7 +99,7 @@ def make_pitome_class(transformer_class):
             self._tome_info["ratio"] =[1.0] + [self.ratio] * (len(self.blocks)-1)
             self._tome_info["size"] = None
             self._tome_info["source"] = None
-            self._tome_info["attn"] = None
+            self._tome_info["attn"] = []
             self.total_flop = 0
             self.final_shape = 0
             B = x.shape[0]
@@ -111,7 +115,7 @@ def make_pitome_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, self._tome_info["output_attn"])
+                x = blk(x, register_blk==i)
             x = self.norm(x)
             self.final_shape = x.shape
             return x
@@ -138,7 +142,7 @@ def make_pitome_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, self._tome_info["output_attn"] )
+                x = blk(x, i==register_blk)
             x = self.norm(x)
             self.final_shape = x.shape
 
@@ -182,6 +186,7 @@ def apply_patch(
         "size": None,
         "source": None,
         "output_attn": output_attn,
+        "attn": [],
         "trace_source": trace_source,
         "prop_attn": prop_attn,
         "class_token": True,
