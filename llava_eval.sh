@@ -15,7 +15,7 @@ do
     #     --algo baseline \
     #     --ratio 1.0 
     #     # --wandb_args project=$model,name=baseline
-    for ratio in '0.875' '0.9' '0.925' '0.95'
+    for ratio in  '0.9' '0.925' '0.95'
     do 
         for algo in 'pitome' 'tome' 'tofu' 'diffrate'  'dct'
         do 
