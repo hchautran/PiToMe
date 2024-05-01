@@ -161,7 +161,7 @@ def make_diffrate_class(transformer_class):
         """
         def forward(self,x, register_blk=-1):
             self._diffrate_info["r"] = [self.r]* len(self.blocks) 
-            self._diffrate_info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._diffrate_info["ratio"] = [1.0]  + [self.ratio] * (len(self.blocks) - 1.0)
             self._diffrate_info["size"] = None
             self._diffrate_info["source"] = None
             self.total_flop = 0

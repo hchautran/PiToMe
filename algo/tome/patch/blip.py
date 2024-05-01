@@ -44,7 +44,6 @@ class ToMeBlock(Block):
 
 
 
-
 class ToMeAttention(Attention):
     """
     Modifications:
@@ -77,7 +76,7 @@ class ToMeAttention(Attention):
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
-        return x, k.mean(1), attn
+        return x
 
 def make_tome_class(transformer_class):
     class ToMeVisionTransformer(transformer_class):
@@ -195,5 +194,5 @@ def apply_patch(
             module.__class__ = ToMeBlock
             module._tome_info = model._tome_info
             current_layer +=1
-        # elif isinstance(module, Attention):
-        #     module.__class__ = PiToMeAttention
+        elif isinstance(module, Attention):
+            module.__class__ = ToMeAttention 

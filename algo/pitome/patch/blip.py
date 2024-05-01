@@ -81,7 +81,7 @@ class PiToMeAttention(Attention):
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
-        return x, k.mean(1), attn
+        return x
 
 def make_pitome_class(transformer_class):
     class PiToMeVisionTransformer(transformer_class):
@@ -202,5 +202,5 @@ def apply_patch(
             module.init_margin(margins[current_layer])
             module._tome_info = model._tome_info
             current_layer +=1
-        # elif isinstance(module, Attention):
-        #     module.__class__ = PiToMeAttention
+        elif isinstance(module, Attention):
+            module.__class__ = PiToMeAttention

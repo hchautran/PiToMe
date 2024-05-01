@@ -36,9 +36,9 @@ class ToFuBlock(Block):
         # x = self.compress_x(metric, x) 
         # x = x + self.drop_path(self.mlp(self.norm2(x)))
         # return x
+        x = self.compress_x(x, x) 
         x = x + self.drop_path(self.attn(self.norm1(x), register_hook=register_hook))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
-        x = self.compress_x(x, x) 
         # print(x.shape)
         return x
 
@@ -87,7 +87,7 @@ def make_tofu_class(transformer_class):
         """
         def forward(self,x, register_blk=-1):
             self._tofu_info["r"] = [self.r]* len(self.blocks) 
-            self._tofu_info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._tofu_info["ratio"] = [1.0] + [self.ratio] * (len(self.blocks) - 1)
             self._tofu_info["size"] = None
             self._tofu_info["source"] = None
             self.total_flop = 0
@@ -104,7 +104,7 @@ def make_tofu_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, register_blk == i)
+                x = blk(x, self._tofu_info['output_attn'])
             x = self.norm(x)
             self.final_shape = x.shape
             return x
@@ -112,7 +112,7 @@ def make_tofu_class(transformer_class):
         def forward_features(self, x, register_blk=-1) -> torch.Tensor:
       
             self._tofu_info["r"] = [self.r]* len(self.blocks) 
-            self._tofu_info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._tofu_info["ratio"] = [1.0] + [self.ratio] * (len(self.blocks) - 1)
             self._tofu_info["size"] = None
             self._tofu_info["source"] = None
             self.total_flop = 0
@@ -130,7 +130,7 @@ def make_tofu_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, register_blk == i)
+                x = blk(x, self._tofu_info['output_attn'])
             x = self.norm(x)
             self.final_shape = x.shape
             return x
@@ -149,7 +149,7 @@ def make_tofu_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False, output_attn=False):
     """
     Applies ToFu to this transformer. Afterward, set r using model.r.
 
@@ -174,6 +174,7 @@ def apply_patch(
         "source": None,
         "trace_source": trace_source,
         "prop_attn": prop_attn,
+        "output_attn": output_attn,
         "class_token": model.cls_token is not None,
         "distill_token": False,
     }
