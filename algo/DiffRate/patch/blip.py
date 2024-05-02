@@ -73,6 +73,7 @@ class DiffRateBlock(Block):
             
         else:
             # pruning
+            print(x.shape)
             prune_kept_num = self.prune_ddp.kept_token_number
             x = x[:, :prune_kept_num]
             self._diffrate_info["size"] = self._diffrate_info["size"][:, :prune_kept_num]
@@ -160,12 +161,16 @@ def make_diffrate_class(transformer_class):
         - Initialize r, token size, and token sources.
         """
         def forward(self,x, register_blk=-1):
-            self._diffrate_info["r"] = [self.r]* len(self.blocks) 
-            self._diffrate_info["ratio"] = [1.0]  + [self.ratio] * (len(self.blocks) - 1.0)
-            self._diffrate_info["size"] = None
-            self._diffrate_info["source"] = None
-            self.total_flop = 0
+            # self._diffrate_info["r"] = [self.r]* len(self.blocks) 
+            # self._diffrate_info["ratio"] = [1.0]  + [self.ratio] * (len(self.blocks) - 1.0)
             B = x.shape[0]
+            self._diffrate_info["size"] = torch.ones([B,self.patch_embed.num_patches+1,1], device=x.device)
+            self._diffrate_info["mask"] =  torch.ones((B,self.patch_embed.num_patches+1),device=x.device)
+            self._diffrate_info["prune_kept_num"] = []
+            self._diffrate_info["merge_kept_num"] = []
+            if self._diffrate_info["trace_source"]:
+                self._diffrate_info["source"] = torch.eye(self.patch_embed.num_patches+1, device=x.device)[None, ...].expand(B, self.patch_embed.num_patches+1, self.patch_embed.num_patches+1)
+            self.total_flop = 0
             x = self.patch_embed(x)
 
             cls_tokens = self.cls_token.expand(

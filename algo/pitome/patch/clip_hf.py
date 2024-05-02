@@ -141,7 +141,7 @@ class PiToMeCLIPEncoder(CLIPEncoder):
 
 
 def apply_patch(
-   model: CLIPEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
+   model: CLIPEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False, output_attn=False):
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.
 
@@ -167,6 +167,8 @@ def apply_patch(
         "prop_attn": prop_attn,
         "class_token": True,
         "distill_token": False,
+        "attn": [],
+        "output_attn": output_attn 
     }
     current_layer = 0
     margin = margin 
