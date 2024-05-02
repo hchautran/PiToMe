@@ -178,7 +178,7 @@ def make_diffrate_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, register_blk == i)
+                x = blk(x, self._diffrate_info["output_attn"])
             self.final_shape = x.shape
             x = self.norm(x)
             return x
@@ -207,7 +207,7 @@ def make_diffrate_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, register_blk == i)
+                x = blk(x, self._diffrate_info["output_attn"])
             self.final_shape = x.shape
             x = self.norm(x)
             return x
@@ -278,7 +278,7 @@ def make_diffrate_class(transformer_class):
 
 
 def apply_patch(
-    model: VisionTransformer, trace_source: bool = False,prune_granularity=1, merge_granularity=1
+    model: VisionTransformer, trace_source: bool = False,prune_granularity=1, merge_granularity=1, output_attn=False
 ):
     """
     Applies DiffRate to this transformer.
@@ -293,6 +293,7 @@ def apply_patch(
         "source": None,
         "class_token": model.cls_token is not None,
         "trace_source": trace_source,
+        "output_attn": output_attn
     }
 
     block_index = 0

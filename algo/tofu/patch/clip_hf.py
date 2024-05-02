@@ -141,7 +141,7 @@ class ToFuCLIPEncoder(CLIPEncoder):
 
 
 def apply_patch(
-   model: CLIPEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
+   model: CLIPEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False, output_attn=False):
     """
     Applies ToFu to this transformer. Afterward, set r using model.r.
 
@@ -166,6 +166,7 @@ def apply_patch(
         "margin":  [],
         "size": None,
         "source": None,
+        "output_attn": output_attn,
         "trace_source": trace_source,
         "prop_attn": prop_attn,
         "class_token": True,
