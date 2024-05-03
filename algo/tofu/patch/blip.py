@@ -24,7 +24,7 @@ class ToFuBlock(Block):
 
             if self._tofu_info["trace_source"]:
                 self._tofu_info["source"] = merge_source(
-                    merge, x, self._tofu_info["source"]
+                    merge, x, self._tofu_info["source"], mode='amax' if self.strategy != 'prune' else 'prune'
                 )
             x = merge(x, mode=self.strategy)
         return x

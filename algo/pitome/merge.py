@@ -198,7 +198,7 @@ def pitome_vision(
             protected = x[batch_idx, protected_idx, :]
 
             if not prune:
-                a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:] 
+                a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2] 
                 scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
                 scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
                 _, dst_idx = scores.max(dim=-1) 

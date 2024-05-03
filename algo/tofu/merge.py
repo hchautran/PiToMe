@@ -208,7 +208,7 @@ def merge_wavg(
 
 
 def merge_source(
-    merge: Callable, x: torch.Tensor, source: torch.Tensor = None
+    merge: Callable, x: torch.Tensor, source: torch.Tensor = None, mode='amax'
 ) -> torch.Tensor:
     """
     For source tracking. Source is an adjacency matrix between the initial tokens and final merged groups.
@@ -218,7 +218,7 @@ def merge_source(
         n, t, _ = x.shape
         source = torch.eye(t, device=x.device)[None, ...].expand(n, t, t)
 
-    source = merge(source, mode="amax")
+    source = merge(source, mode=mode)
     return source
 
 def merge_attention_mask(
