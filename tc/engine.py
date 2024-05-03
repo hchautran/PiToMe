@@ -94,7 +94,7 @@ model_dict  = {
 }
 class Engine:
 
-    def __init__(self, task_name, model_ckt, ratio=1.0, algo=NONE, batch_size=32, enable_log=False, trained=False):
+    def __init__(self, task_name, model_ckt, ratio=1.0, algo=NONE, batch_size=None, enable_log=False, trained=False):
 
         self.accelerator = Accelerator(
             mixed_precision='fp16',
@@ -103,11 +103,11 @@ class Engine:
 
         task = TASKS[task_name]
         if task_name == 'imdb' and algo==NONE: self.batch_size = 12
-        else: self.batch_size = batch_sizes[task_name]
+        else: self.batch_size = batch_sizes[task_name] if batch_size is None else batch_size
         self.ratio = ratio
         self.config, self.model_config = task.config_getter()    
-        train_dataset = task.dataset_fn(self.config, split='train')
-        eval_dataset = task.dataset_fn(self.config, split='eval')    
+        self.train_dataset = task.dataset_fn(self.config, split='train')
+        self.eval_dataset = task.dataset_fn(self.config, split='eval')    
         self.max_train_steps = int(np.ceil(self.config.total_train_samples / self.batch_size))
         self.enable_log = enable_log
         self.algo = algo
@@ -130,13 +130,13 @@ class Engine:
         self.config.tokenizer = self.tokenizer
 
         self.train_loader = self.accelerator.prepare(DataLoader(
-            train_dataset, 
+            self.train_dataset, 
             batch_size=self.batch_size, 
             collate_fn=lambda batch: transformers_collator(batch, self.tokenizer),
             shuffle=True
         ))
         self.eval_loader = self.accelerator.prepare(DataLoader(
-            eval_dataset, 
+            self.eval_dataset, 
             batch_size=self.batch_size, 
             collate_fn=lambda batch: transformers_collator(batch, self.tokenizer),
             shuffle=False

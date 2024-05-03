@@ -56,10 +56,11 @@ class PiToMeBertLayer(BertLayer):
 
             weight = isolated_score
             x, self._tome_info["size"] = merge_wavg(merge, x, weight)
-            attention_mask = torch.where(attention_mask.squeeze_() >= 0, 1, 0)
-            attention_mask = merge_attention_mask(merge, attention_mask=attention_mask[..., None]).squeeze_()
+            B, T, _ = x.shape
+            attention_mask = torch.where(attention_mask.squeeze_(-2).squeeze_(-2) >= 0, 1, 0)
+            attention_mask = merge_attention_mask(merge, attention_mask=attention_mask[..., None]).view(B, T)
         else:
-            attention_mask = torch.where(attention_mask.squeeze_() >= 0, 1, 0)
+            attention_mask = torch.where(attention_mask.squeeze_(-2).squeeze_(-2) >= 0, 1, 0)
 
         x = apply_chunking_to_forward(
             self.feed_forward_chunk, self.chunk_size_feed_forward, self.seq_len_dim, x
