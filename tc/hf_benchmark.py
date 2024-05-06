@@ -21,12 +21,10 @@ from lra_datasets import (ListOpsDataset, Cifar10Dataset, ImdbDataset)
 from argparse import ArgumentParser
 from accelerate import Accelerator
 from model.bert import CompressedBERT 
-from dotenv import load_dotenv
 import os
 import wandb
 
 # Load environment variables from .env file
-load_dotenv()
 
 # Access the environment variable
 DATA_PATH = os.environ.get('DATA_PATH')

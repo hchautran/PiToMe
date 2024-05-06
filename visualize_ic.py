@@ -28,8 +28,6 @@ from datasets import load_dataset
 from torchvision import transforms
 import torch
 import os
-from PIL import Image
-from dotenv import load_dotenv
 from main_ic import process_image
 import algo.tome as tome
 import algo.pitome as pitome

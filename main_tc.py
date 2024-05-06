@@ -3,7 +3,6 @@ import torch.nn.functional as F
 from tc.lra_datasets import (ListOpsDataset, Cifar10Dataset, ImdbDataset)
 from argparse import ArgumentParser
 from accelerate import Accelerator
-from dotenv import load_dotenv
 from algo import (
     PITOME,
     TOME,
