@@ -7,15 +7,15 @@ do
     for model in 'blip' 
     # for model in 'blip2' 
     do
-        # for algo in 'pitome' 'tome' 'tofu' 'dct' 
-        # do
-        #     # for ratio in '0.925' 
-        #     for ratio in '0.925' 
-        #     do
-        #         echo "running $model $size $algo $ratio."
-        #         sh train_scripts/train_itr_$model.sh $dataset $algo $ratio
-        #     done
-        # done
-        sh train_scripts/train_itr_$model.sh $dataset none 1.0 
+        for algo in 'pitome' 'tome' 'tofu' 'dct' 
+        do
+            # for ratio in '0.925' 
+            for ratio in '0.95' 
+            do
+                echo "running $model $size $algo $ratio."
+                sh train_scripts/train_itr_$model.sh $dataset $algo $ratio
+            done
+        done
+        # sh train_scripts/train_itr_$model.sh $dataset none 1.0 
     done
 done
