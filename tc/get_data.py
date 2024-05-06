@@ -4,10 +4,9 @@ from dotenv import load_dotenv
 import os
 
 # Load environment variables from .env file
-load_dotenv()
 
 # Access the environment variable
-DATA_PATH = os.environ.get('DATA_PATH')
+DATA_PATH = '' 
 
 
 os.makedirs(DATA_PATH, exist_ok=True)

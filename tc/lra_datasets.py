@@ -6,7 +6,7 @@ import torch
 from glob import glob
 from itertools import cycle
 from datasets import load_dataset
-
+import os
 
 # Access the environment variable
 # DATA_PATH =  '/mnt/data/mount_4TBSSD/nmduy/pitome'
