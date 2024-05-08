@@ -1,4 +1,4 @@
-dataset,model,algo,gflops,ratio,txt_r1,txt_r5,txt_r10,img_r1,img_r5,img_r10,r_sum,train time,eval time,sigma,setting 
+dataset,model,algo,gflops,ratio,txt_r1,txt_r5,txt_r10,img_r1,img_r5,img_r10,r_sum,train time,eval time,sigma,setting
 flickr,BLIP,pitome,48.12842176512,0.95,95.4,99.6,100.0,85.5,97.02,98.4,575.92,0,56.25594687461853,2.0,fixed sigma
 flickr,BLIP,pitome,48.12842176512,0.95,95.5,99.5,100.0,85.72,97.06,98.34,576.12,0,55.844780921936035,1.5,fixed sigma
 flickr,BLIP,pitome,48.12842176512,0.95,95.1,99.6,99.9,85.58,97.14,98.46,575.78,0,55.996153354644775,1.75,fixed sigma
@@ -8,4 +8,4 @@ flickr,BLIP,pitome,48.12842176512,0.95,95.7,99.5,99.9,85.86,97.14,98.5,576.6,0,5
 flickr,BLIP,pitome,48.12842176512,0.95,95.7,99.6,100.0,85.52,97.12,98.56,576.5,0,56.373960733413696,0.5,fixed sigma
 flickr,BLIP,pitome,48.12842176512,0.95,91.7,98.5,99.4,81.08,95.42,97.5,563.6,0,56.151111125946045, 0.25,fixed sigma
 flickr,BLIP,pitome,48.12842176512,0.95,88.6,97.0,99.2,75.66,93.52,96.98,550.96,0,56.11112117767334, 0.1,fixed sigma
-flickr,BLIP,pitome,48.12842176512,0.95,96.1,99.6,100.0,85.88,97.44,98.78,577.8,0,55.966087102890015, adaptive,adaptive sigma
+flickr,BLIP,pitome,48.12842176512,0.95,96.1,99.6,100.0,85.88,97.44,98.78,577.8,0,55.966087102890015, 0.5,adaptive sigma
