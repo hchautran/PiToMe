@@ -278,8 +278,6 @@ def unprotected_pitome_vision(
         return merge, 1- F.softmax(isolation_score, dim=-1) 
 
 
-
-
 def pitome_vision_using_attn(
     metric: torch.Tensor, 
     attn:torch.Tensor=None,
@@ -315,7 +313,6 @@ def pitome_vision_using_attn(
             # isolation_score = (2*torch.exp(-(((1 - sim)/sigma)**2))-1).mean(-1) 
 
             score = attn[:, :, 1:, 1:].mean(1).mean(-1)
-            # print(attn.shape)
             indices =  torch.argsort(score, descending=True)
             merge_idx = indices[..., :2*r]
             protected_idx = indices[..., 2*r:]
@@ -348,7 +345,7 @@ def pitome_vision_using_attn(
 
         if class_token:
             return merge, None 
-        return merge, 1- F.softmax(isolation_score, dim=-1) 
+        return merge, None 
 
 
 def pitome_text(
