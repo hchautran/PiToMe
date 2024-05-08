@@ -5,12 +5,8 @@ from functools import reduce
 import torch
 from glob import glob
 from itertools import cycle
-from dotenv import load_dotenv
 from datasets import load_dataset
 import os
-
-# Load environment variables from .env file
-load_dotenv()
 
 # Access the environment variable
 # DATA_PATH =  '/mnt/data/mount_4TBSSD/nmduy/pitome'

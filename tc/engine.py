@@ -21,7 +21,6 @@ from tc.lra_config import (
 from tc.lra_datasets import (BBCDataset, SST2Dataset, ImdbDataset, RottenTomatoes)
 from argparse import ArgumentParser
 from accelerate import Accelerator
-from dotenv import load_dotenv
 from algo import (
     pitome, 
     tome,
