@@ -1,13 +1,6 @@
-from transformers import CLIPVisionModelWithProjection, CLIPTextModelWithProjection
-from peft import get_peft_model, LoraConfig, TaskType
-
-
-
-import torch
-import torch.nn as nn
-import numpy as np
 import math
-
+import torch
+import numpy as np
 
 def dct(x, norm=None):
     """

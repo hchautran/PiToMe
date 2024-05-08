@@ -1,6 +1,6 @@
 import torch
 from lavis.models.vit import VisionTransformer, Attention, Block
-from ..merge import merge_source, pitome_vision, prune, merge_mean, merge_wavg
+from ..merge import merge_source, pitome_vision, merge_wavg, pitome_vision_using_attn, unprotected_pitome_vision
 
 class PiToMeBlock(Block):
     """
@@ -12,15 +12,25 @@ class PiToMeBlock(Block):
         # self.margin = nn.Parameter(torch.tensor(margin)) 
         self.margin = margin
     
-    def compress_x(self, metric, x):
+    def compress_x(self, metric, x, attn=None):
         ratio = self._pitome_info["ratio"].pop()
         if ratio < 1.0:
-            merge, isolated_score = pitome_vision(
-                ratio=ratio,
-                metric=metric,
-                margin=self.margin,
-                class_token=self._pitome_info["class_token"]
-            )
+            if attn is None:
+                merge, isolated_score = unprotected_pitome_vision(
+                    ratio=ratio,
+                    metric=metric,
+                    margin=self.margin,
+                    class_token=self._pitome_info["class_token"]
+                )
+            else:
+                merge, isolated_score = pitome_vision_using_attn(
+                    ratio=ratio,
+                    attn=attn,
+                    use_cls_attn=True,
+                    metric=metric,
+                    margin=self.margin,
+                    class_token=self._pitome_info["class_token"]
+                )
 
             if self._pitome_info["trace_source"]:
                 self._pitome_info["source"] = merge_source(
@@ -36,11 +46,12 @@ class PiToMeBlock(Block):
 
     def forward(self, x, register_hook=False):
 
-        x = self.compress_x(x, x) 
-        x = x + self.drop_path(self.attn(self.norm1(x), register_hook=register_hook))
+
+        x = self.compress_x(x, x)
+        x = x + self.drop_path(self.attn(self.norm1(x), register_hook=True))
+        # print(self.attn.attention_map.shape)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
-
 
 
 
@@ -186,7 +197,7 @@ def apply_patch(
     current_layer = 0
     num_layers = len(model.blocks)
     # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
-    margins = [.9 - .9*(i/num_layers) for i in range(num_layers)]
+    margins = [0.9 - .9*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._pitome_info["distill_token"] = True

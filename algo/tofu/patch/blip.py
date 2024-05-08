@@ -43,15 +43,12 @@ class ToFuBlock(Block):
         return x
 
 
-
-
 class ToFuAttention(Attention):
     """
     Modifications:
      - Apply proportional attention
      - Return the mean of k over heads from attention
     """
-
 
     def forward(self, x, register_hook=False):
         B, N, C = x.shape
