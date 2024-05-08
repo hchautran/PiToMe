@@ -13,7 +13,8 @@ class ToMeBlock(Block):
         ratio = self._tome_info["ratio"].pop()
         # if ratio < 1.0:
         merge, isolated_score = bipartite_soft_matching(
-            ratio=ratio,
+            r=13,
+            # ratio=ratio,
             metric=metric,
             class_token=self._tome_info["class_token"]
         )

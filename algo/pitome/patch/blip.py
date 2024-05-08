@@ -45,11 +45,8 @@ class PiToMeBlock(Block):
         return x
 
     def forward(self, x, register_hook=False):
-
-
         x = self.compress_x(x, x)
         x = x + self.drop_path(self.attn(self.norm1(x), register_hook=True))
-        # print(self.attn.attention_map.shape)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
 
