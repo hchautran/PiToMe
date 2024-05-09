@@ -1,10 +1,10 @@
 
 # Loop through each element in the array
-for size in  'small'
+for size in  'tiny'
 do
     # for algo in 'diffrate' 
-    # for algo in 'tome' 'pitome' 'dct' 'tofu' 
     for algo in 'diffrate' 
+    # for algo in 'diffrate' 
     do
         for ratio in '0.925'  
         do
