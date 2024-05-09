@@ -3,7 +3,7 @@ export HF_DATASETS_CACHE='/media/caduser/MyBook/chau/.cache'
 # for tasks in 'coco_cap' 'scienceqa_full' 'vqav2' 'flickr30k'
 export model='llava-v1.5-13b'
 # for task in  'vqav2' 'vizwiz_vqa_val' 'mmbench' 'mme'
-for task in  'mme'
+for task in  'mme' 'vqav2' 'vizwiz_vqa_val' 'scienceqa_img' 'gqa' 'textvqa'
 do 
     accelerate launch  --main_process_port 29500 --num_processes=5 -m lmms_eval \
         --model llava   \
