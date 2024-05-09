@@ -15,23 +15,13 @@ class PiToMeBlock(Block):
     def compress_x(self, metric, x, attn=None):
         ratio = self._pitome_info["ratio"].pop()
         if ratio < 1.0:
-            if attn is None:
-                merge, isolated_score = unprotected_pitome_vision(
-                    ratio=ratio,
-                    metric=metric,
-                    margin=self.margin,
-                    class_token=self._pitome_info["class_token"]
-                )
-            else:
-                merge, isolated_score = pitome_vision_using_attn(
-                    ratio=ratio,
-                    attn=attn,
-                    use_cls_attn=True,
-                    metric=metric,
-                    margin=self.margin,
-                    class_token=self._pitome_info["class_token"]
-                )
-
+            merge, isolated_score = pitome_vision(
+                ratio=ratio,
+                metric=metric,
+                margin=self.margin,
+                class_token=self._pitome_info["class_token"]
+            )
+          
             if self._pitome_info["trace_source"]:
                 self._pitome_info["source"] = merge_source(
                     merge, x, self._pitome_info["source"]

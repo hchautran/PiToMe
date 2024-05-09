@@ -144,7 +144,7 @@ def pitome_vision(
         idx = torch.cat((cls_index, idx+1), dim=1)
         merge = get_merge_func(metric, ratio=ratio, class_token=class_token, attn_idx=idx)
         return merge, None
-    elif margin >=0.45 and not prune:
+    elif margin >=0.45:
         # with torch.no_grad():
         #     if class_token:
         #         metric=metric[:,1:,:]
@@ -175,12 +175,10 @@ def pitome_vision(
             # sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
             # isolation_score = sim.mean(dim=-1) + sim.sum(-1)
             # indices =  torch.argsort(isolation_score, descending=True)
-            sigma = margin 
+            sigma =  1 - margin 
             sim = metric@metric.transpose(-1,-2) 
             isolation_score = (2*(torch.exp(-(((1 - sim)/sigma)**2))) - 1).mean(-1) *  1/(sigma*torch.sqrt(torch.tensor(2*torch.pi)))
-            # isolation_score = (2*torch.exp(-(((1 - sim)/sigma)**2))-1).mean(-1) 
 
-            # print(isolation_score.shape)
             indices =  torch.argsort(isolation_score , descending=True)
             merge_idx = indices[..., :2*r]
             protected_idx = indices[..., 2*r:]
@@ -196,7 +194,7 @@ def pitome_vision(
             protected = x[batch_idx, protected_idx, :]
 
             if not prune:
-                a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:] 
+                a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2] 
                 scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
                 scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
                 _, dst_idx = scores.max(dim=-1) 
@@ -213,7 +211,7 @@ def pitome_vision(
 
         if class_token:
             return merge, None 
-        return merge, 1- F.softmax(isolation_score, dim=-1) 
+        return merge, None 
 
 
 def unprotected_pitome_vision(
