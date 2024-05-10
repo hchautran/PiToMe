@@ -254,7 +254,7 @@ def make_diffrate_class(transformer_class):
             N = self.patch_embed.num_patches
             for block in self.blocks:
                 r = math.floor(N - N*ratio)
-                block.prune_ddp.kept_token_number = N - 1 
+                block.prune_ddp.kept_token_number = N 
                 block.merge_ddp.kept_token_number = N - r
                 N -= r
             
@@ -262,7 +262,7 @@ def make_diffrate_class(transformer_class):
             N = self.patch_embed.num_patches
             for block in self.blocks:
                 r = min(r, N // 2)
-                block.prune_ddp.kept_token_number = N - 1 
+                block.prune_ddp.kept_token_number = N  
                 block.merge_ddp.kept_token_number = N - r
                 N -= r
         

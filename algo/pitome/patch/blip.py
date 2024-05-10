@@ -15,7 +15,7 @@ class PiToMeBlock(Block):
     def compress_x(self, metric, x, attn=None):
         ratio = self._pitome_info["ratio"].pop()
         if ratio < 1.0:
-            merge, isolated_score = pitome_vision(
+            merge, isolated_score = unprotected_pitome_vision(
                 ratio=ratio,
                 metric=metric,
                 margin=self.margin,
