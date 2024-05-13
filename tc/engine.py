@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 from transformers import (
     AutoTokenizer,
+    AlbertForSequenceClassification,
     BertForSequenceClassification,
     DistilBertForSequenceClassification,
 )
@@ -66,10 +67,12 @@ batch_sizes = {
 BERT_BASE = 'bert-base-uncased'
 DISTILBERT_BASE = 'distilbert-base-uncased'
 BERT_LARGE= 'bert-large-uncased'
+ALBERT= 'albert'
 model_imdb_dict = {
     BERT_BASE: 'JiaqiLee/imdb-finetuned-bert-base-uncased',
     DISTILBERT_BASE: 'lvwerra/distilbert-imdb',
-    BERT_LARGE:BERT_LARGE
+    BERT_LARGE:BERT_LARGE,
+    ALBERT:'JeffreyJIANG/albert-imdb'
 }
 model_rotten_dict = {
     BERT_BASE: 'zebans/bert-base-cased-finetuned-rotten-tomatoes-epochs-2',
@@ -79,7 +82,8 @@ model_rotten_dict = {
 model_sst2_dict = {
     BERT_BASE: 'gchhablani/bert-base-cased-finetuned-sst2',
     DISTILBERT_BASE: 'distilbert/distilbert-base-uncased-finetuned-sst-2-english',
-    BERT_LARGE:'assemblyai/bert-large-uncased-sst2'
+    BERT_LARGE:'assemblyai/bert-large-uncased-sst2',
+    ALBERT:'Alireza1044/albert-base-v2-sst2'
 }
 model_bbc_dict = {
     BERT_LARGE:'AyoubChLin/BERT-Large_BBC_news',
@@ -147,8 +151,12 @@ class Engine:
         print(self.model_dict[model_ckt])
         if model_ckt == BERT_BASE or model_ckt == BERT_LARGE:
             self._prepare_bert_model(self.model_dict[model_ckt],algo=algo)
-        else:
+        elif model_ckt == DISTILBERT_BASE:
             self._prepare_distil_model(self.model_dict[model_ckt],algo=algo)
+        else:
+            self.model = AlbertForSequenceClassification.from_pretrained(self.model_dict[model_ckt], cache_dir=f'{DATA_PATH}/.cache')
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_dict[model_ckt], cache_dir=f'{DATA_PATH}/.cache')
+            self.model = self.accelerator.prepare(self.model)
 
     def log(self, stats):
         if self.enable_log:
@@ -282,11 +290,11 @@ class Engine:
             loss = F.cross_entropy(outputs[0], target)
             eval_running_loss += loss.item()
             eval_running_acc += accuracy_score(outputs[0], target)
-            gflops += outputs[3]/1e9 
+            # gflops += outputs[3]/1e9 
             eval_pbar.set_postfix_str(
                 f"eval loss: {100*eval_running_loss/(j+1):.2f} "
                 f"eval accuracy: {100*eval_running_acc/(j+1):.2f} "
-                f"gflops: {gflops/(j+1):.2f}"
+                # f"gflops: {gflops/(j+1):.2f}"
             )
         eval_time = time.time() - start
         if isinstance(self.model, BertForSequenceClassification):

@@ -1,9 +1,9 @@
 export DATASET_PATH='/media/caduser/MyBook/chau/.cache'
 export HF_DATASETS_CACHE='/media/caduser/MyBook/chau/.cache'
 # for tasks in 'coco_cap' 'scienceqa_full' 'vqav2' 'flickr30k'
-export model='llava-v1.5-13b'
+export model='llava-v1.5-7b'
 # for task in  'vqav2' 'vizwiz_vqa_val' 'mmbench' 'mme'
-for task in  'mme' 'vqav2' 'vizwiz_vqa_val' 'scienceqa_img' 'gqa' 'textvqa'
+for task in  'TextVQA' 'mme'  'vizwiz_vqa_val' 'scienceqa_img' 'gqa' 'textvqa' 'vqav2'
 do 
     accelerate launch  --main_process_port 29500 --num_processes=5 -m lmms_eval \
         --model llava   \
@@ -15,7 +15,7 @@ do
         --algo baseline \
         --ratio 1.0 
         # --wandb_args project=$model,name=baseline
-    for ratio in   '0.95'
+    for ratio in   '0.9'
     do 
         for algo in 'pitome' 'tome' 'tofu' 'diffrate'  'dct'
         do 

@@ -11,7 +11,7 @@ from algo import (
     DCT,
     NONE
 )
-from tc.engine import Engine, BERT_BASE, DISTILBERT_BASE, BERT_LARGE
+from tc.engine import Engine, BERT_BASE, DISTILBERT_BASE, BERT_LARGE, ALBERT
 
 
 # consts
@@ -28,7 +28,8 @@ TASKS = [
 model_dict = {
     BERT_BASE: 'BERT-B',
     DISTILBERT_BASE: 'DISTILEDBERT-B',
-    BERT_LARGE: 'BERT-L'
+    BERT_LARGE: 'BERT-L',
+    ALBERT: 'ALBERT'
 }
 
 if __name__ == "__main__":
@@ -38,13 +39,13 @@ if __name__ == "__main__":
                         help="choose an LRA dataset from available options")
     parser.add_argument("--algo", default=PITOME, choices=[PITOME, TOME, NONE, TOFU, DCT, DIFFRATE],
                         help="choose an LRA dataset from available options")
-    parser.add_argument("--model", default=BERT_BASE, choices=[BERT_BASE, DISTILBERT_BASE, BERT_LARGE],
+    parser.add_argument("--model", default=BERT_BASE, choices=[BERT_BASE, DISTILBERT_BASE, BERT_LARGE, ALBERT],
                         help="choose an LRA dataset from available options")
     parser.add_argument("--ratio", default=0.55, help="remain ratio")
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
     parser.add_argument('--batch_size', default=8, help='Perform evaluation only')
     args = parser.parse_args()
-    batch_size = 4 
+    batch_size = 16 
     avg_factor = 0.95
     task_name = args.task
     algo = args.algo
