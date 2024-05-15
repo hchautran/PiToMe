@@ -1,4 +1,4 @@
-python LLaVA/llava/serve/cli.py \
+python -m llava.serve.cli  \
     --model-path liuhaotian/llava-v1.5-7b \
     --image-file "/home/caduser/HDD/vit_token_compress/PiToMe/examples/images/Confusing-Pictures.jpg" \
     --algo $1 --ratio $2 
