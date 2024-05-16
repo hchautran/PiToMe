@@ -15,7 +15,7 @@ class PiToMeBlock(Block):
     def compress_x(self, metric, x, attn=None):
         ratio = self._pitome_info["ratio"].pop()
         if ratio < 1.0:
-            merge, isolated_score = unprotected_pitome_vision(
+            merge, isolated_score = pitome_vision(
                 ratio=ratio,
                 metric=metric,
                 margin=self.margin,
@@ -26,6 +26,7 @@ class PiToMeBlock(Block):
                 self._pitome_info["source"] = merge_source(
                     merge, x, self._pitome_info["source"]
                 )
+                self._pitome_info["sources"].append(self._pitome_info["source"])
             if isolated_score is not None and self._pitome_info["size"] is not None:
                 weight = self._pitome_info["size"] + isolated_score
                 x, self._pitome_info["size"] = merge_wavg(merge, x, weight)
@@ -89,6 +90,7 @@ def make_pitome_class(transformer_class):
             self._pitome_info["size"] = None
             self._pitome_info["source"] = None
             self._pitome_info["attn"] = []
+            self._pitome_info["sources"] = []
             self.total_flop = 0
             self.final_shape = 0
             B = x.shape[0]
