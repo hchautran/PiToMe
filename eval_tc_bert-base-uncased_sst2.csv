@@ -1,5 +1,5 @@
 dataset, model, algo, gflops, ratio, acc
-sst2, bert-base-uncased, none, 4.944780288, 1.0, 91.4579326923077
+sst2, bert-base-uncased, baseline, 4.944780288, 1.0, 91.4579326923077
 sst2, bert-base-uncased, pitome, 1.05276864, 0.525, 78.57662259615384
 sst2, bert-base-uncased, pitome, 1.164900096, 0.55, 78.96724759615384
 sst2, bert-base-uncased, pitome, 1.382202624, 0.6, 81.49879807692308

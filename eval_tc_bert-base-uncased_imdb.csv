@@ -1,5 +1,5 @@
 dataset, model, algo, gflops, ratio, acc
-imdb, bert-base-uncased, none, 47.76324270531986, 1.0, 92.6543506078055
+imdb, bert-base-uncased, baseline, 47.76324270531986, 1.0, 92.6543506078055
 imdb, bert-base-uncased, pitome, 8.43428129117854, 0.525, 84.91682661548305
 imdb, bert-base-uncased, pitome, 9.429301205742927, 0.55, 86.11244401791427
 imdb, bert-base-uncased, pitome, 11.675785384045888, 0.6, 88.09980806142035

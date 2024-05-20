@@ -1,5 +1,5 @@
 dataset, model, algo, gflops, ratio, acc
-imdb, distilbert-base-uncased, none, 24.095523453788452, 1.0, 92.802303262956
+imdb, distilbert-base-uncased, baseline, 24.095523453788452, 1.0, 92.802303262956
 imdb, distilbert-base-uncased, pitome, 5.1943114461112305, 0.525, 87.95585412667947
 imdb, distilbert-base-uncased, pitome, 5.713495124514243, 0.55, 88.7116122840691
 imdb, distilbert-base-uncased, pitome, 6.847092707501143, 0.6, 89.90323096609085
