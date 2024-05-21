@@ -3,7 +3,7 @@ from typing import Tuple
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 from .timm import ToFuBlock, ToFuBlockUsingRatio, ToFuAttention 
-from timm.models.helpers import checkpoint_seq 
+# from timm.models.helpers import checkpoint_seq 
 
 def make_tofu_class(transformer_class):
     class ToFuVisionTransformer(transformer_class):
@@ -29,13 +29,13 @@ def make_tofu_class(transformer_class):
             x = self.patch_embed(x)
             x = self._pos_embed(x)
             x = self.norm_pre(x)
-            if self.grad_checkpointing and not torch.jit.is_scripting():
+            # if self.grad_checkpointing and not torch.jit.is_scripting():
+                # self.total_flop += self.calculate_block_flop(x.shape) 
+                # x = checkpoint_seq(self.blocks, x)
+            # else:
+            for block in self.blocks:
                 self.total_flop += self.calculate_block_flop(x.shape) 
-                x = checkpoint_seq(self.blocks, x)
-            else:
-                for block in self.blocks:
-                    self.total_flop += self.calculate_block_flop(x.shape) 
-                    x = block(x)
+                x = block(x)
             x = self.norm(x)
             return x
  
