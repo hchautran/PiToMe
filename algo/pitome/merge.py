@@ -147,7 +147,7 @@ def pitome_vision(
     elif margin >=0.45:
         return bipartite_soft_matching(metric, ratio=ratio, class_token=class_token, a_idx=None, b_idx=None, scores=None)
     else:
-        # print(metric.shape)
+        print(metric.shape)
         with torch.no_grad():
             if class_token:
                 metric=metric[:,1:,:]
@@ -202,7 +202,6 @@ def unprotected_pitome_vision(
     prune:bool=False
 ):
     # if margin >=0.45 and not prune:
-
         # return bipartite_soft_matching(metric, ratio=ratio, class_token=class_token, a_idx=None, b_idx=None, scores=None)
     # else:
         # print(metric.shape)
