@@ -204,7 +204,7 @@ def merge_wavg(
     size = merge(size, mode="sum")
     x = x / size
 
-    return x, None 
+    return x, size 
 
 
 def merge_source(

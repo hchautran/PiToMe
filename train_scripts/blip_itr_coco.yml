@@ -7,7 +7,7 @@ model:
   arch: blip_retrieval
 
   model_type: coco
-  load_finetuned: False
+  load_finetuned: True 
 
   queue_size: 57600
   alpha: 0.4
@@ -36,12 +36,12 @@ run:
   init_lr: 2e-5
   min_lr: 0
   weight_decay: 0.04
-  max_epoch: 1
+  max_epoch: 4
 
   # dataloading
-  num_workers: 4
-  batch_size_train: 32
-  batch_size_eval: 64 
+  num_workers: 5
+  batch_size_train: 20 
+  batch_size_eval: 32 
 
   train_splits: ["train"]
   valid_splits: ["val", "test"]

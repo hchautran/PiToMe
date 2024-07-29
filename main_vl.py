@@ -32,12 +32,14 @@ from algo import (
     DCT,
     TOFU,
     LTMP,
+    MCTF,
     NONE, 
     pitome,
     tome,
     DiffRate,
     tofu,
     dct, 
+    mctf,
     # ltmp
 )
 
@@ -65,7 +67,6 @@ def get_pitome_model(model, args):
         pitome.patch.clip(model.visual.transformer, use_k=args.use_k)
         model.visual.transformer.ratio=float(args.ratio)
         model.visual.transformer.r=int(args.reduced_token)
-    
     elif 'blip2' in args.model:
         pitome.patch.blip2(model.visual_encoder,use_k=args.use_k)
         model.visual_encoder.ratio=float(args.ratio)
@@ -79,6 +80,28 @@ def get_pitome_model(model, args):
         model.visual_encoder_m.r=int(args.reduced_token)
     else:
         raise ValueError("only support clip, blip, albef and blip2 in this codebase")
+
+
+def get_mctf_model(model, args):
+    if 'clip' in args.model:
+        mctf.patch.clip(model.visual.transformer, use_k=args.use_k)
+        model.visual.transformer.ratio=float(args.ratio)
+        model.visual.transformer.r=int(args.reduced_token)
+    elif 'blip2' in args.model:
+        mctf.patch.blip2(model.visual_encoder,use_k=args.use_k)
+        model.visual_encoder.ratio=float(args.ratio)
+        model.visual_encoder.r=int(args.reduced_token)
+    elif 'blip' or 'albef' in args.model:
+        mctf.patch.blip(model.visual_encoder,use_k=args.use_k)
+        mctf.patch.blip(model.visual_encoder_m,use_k=args.use_k)
+        model.visual_encoder.ratio=float(args.ratio)
+        model.visual_encoder_m.ratio=float(args.ratio)
+        model.visual_encoder.r=int(args.reduced_token)
+        model.visual_encoder_m.r=int(args.reduced_token)
+    else:
+        raise ValueError("only support clip, blip, albef and blip2 in this codebase")
+
+
 
 def get_diffrate_model(model, args):
     if 'clip' in args.model:
@@ -264,6 +287,8 @@ def main():
         get_tofu_model(model, args)
     elif args.algo == DCT:
         get_dct_model(model, args)
+    elif args.algo == MCTF:
+        get_mctf_model(model, args)
     elif args.algo == NONE:
         args.ratio = 1.0
         get_tome_model(model, args)
@@ -309,8 +334,8 @@ if __name__ == "__main__":
     }
     abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
     metrics, args, train_time, eval_time = main()
-    # file_name = f'{"eval" if args.eval else "train"}_itr_{model_dict[args.model]}.csv'
-    file_name = f'ablation_study_wo_step.csv'
+    file_name = f'{"eval" if args.eval else "train"}_itr_{model_dict[args.model]}.csv'
+    # file_name = f'ablation_study_wo_step.csv'
     path = f'{abs_path}/{file_name}'
     if not pathlib.Path(path).is_file():
         head = "dataset,model,algo,gflops,ratio,txt_r1,txt_r5,txt_r10,img_r1,img_r5,img_r10,r_sum,train time,eval time,use attn\n"

@@ -3,10 +3,10 @@ from typing import Tuple
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 # from timm.models.helpers import checkpoint_seq 
-from .timm import ToMeBlock, ToMeBlockUsingRatio, ToMeAttention 
+from .timm import MCTFBlock, MCTFBlockUsingRatio, MCTFAttention 
 
 def make_tome_class(transformer_class):
-    class ToMeVisionTransformer(transformer_class):
+    class MCTFVisionTransformer(transformer_class):
         """
         Modifications:
         - Initialize r, token size, and token sources.
@@ -54,7 +54,7 @@ def make_tome_class(transformer_class):
             return flops
 
 
-    return ToMeVisionTransformer
+    return MCTFVisionTransformer
 
 
 
@@ -62,7 +62,7 @@ def apply_patch(
    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, use_k=False
 ):
     """
-    Applies ToMe to this transformer. Afterward, set r using model.r.
+    Applies MCTF to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
     The sources will be available at model._tome_info["source"] afterward.
@@ -70,10 +70,10 @@ def apply_patch(
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    ToMeVisionTransformer = make_tome_class(model.__class__)
+    MCTFVisionTransformer = make_tome_class(model.__class__)
     print('using', 'tome')
 
-    model.__class__ = ToMeVisionTransformer
+    model.__class__ = MCTFVisionTransformer
     model.r = 0
     model.ratio = 1.0 
     model.use_k = use_k
@@ -86,7 +86,7 @@ def apply_patch(
         "source": None,
         "trace_source": trace_source,
         "prop_attn": prop_attn,
-        "class_token": True,
+        "class_token": model.cls_token is not None,
         "distill_token": False,
     }
 
@@ -96,7 +96,7 @@ def apply_patch(
     for module in model.modules():
 
         if isinstance(module, Block):
-            module.__class__ = ToMeBlock if use_k  else ToMeBlockUsingRatio
+            module.__class__ = MCTFBlock if use_k  else MCTFBlockUsingRatio
             module._tome_info = model._tome_info
         elif isinstance(module, Attention):
-            module.__class__ = ToMeAttention
+            module.__class__ = MCTFAttention

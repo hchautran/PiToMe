@@ -2,38 +2,41 @@ import torch
 from lavis.models.vit import VisionTransformer, Attention, Block
 from ..merge import merge_source, bipartite_soft_matching, merge_wavg
 
-class ToMeBlock(Block):
+class MCTFBlock(Block):
     """
     Modifications:
-     - Apply ToMe between the attention and mlp blocks
+     - Apply MCTF between the attention and mlp blocks
      - Compute and propogate token size and potentially the token sources.
     """
     
     def compress_x(self, metric, x):
-        ratio = self._tome_info["ratio"].pop()
-        # if ratio < 1.0:
-        merge, isolated_score = bipartite_soft_matching(
-            # r=13,
+        ratio = self._mctf_info["ratio"].pop()
+        merge, _ = bipartite_soft_matching(
             ratio=ratio,
             metric=metric,
-            class_token=self._tome_info["class_token"]
+            class_token   = self._mctf_info["class_token"],
+            tau_sim       = self._mctf_info["tau_sim"],
+            tau_info      = self._mctf_info["tau_info"],
+            tau_size      = self._mctf_info["tau_size"],
+            size          = self._mctf_info["size"],
+            bidirection   = self._mctf_info["bidirection"]
         )
 
-        if self._tome_info["trace_source"]:
-            self._tome_info["source"] = merge_source(
-                merge, x, self._tome_info["source"]
+        if self._mctf_info["trace_source"]:
+            self._mctf_info["source"] = merge_source(
+                merge, x, self._mctf_info["source"]
             )
-        weight = self._tome_info["size"] 
-        x, self._tome_info["size"] = merge_wavg(merge, x, weight)
+
+        x, self._mctf_info["size"], _ = merge_wavg(
+            merge=merge, 
+            x=x, 
+            attn=self.attn.attention_map,
+            size=self._mctf_info["size"]
+        )
         return x
 
     def forward(self, x, register_hook=False):
-        # attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        # x_attn, metric, attn = self.attn(self.norm1(x), register_hook=register_hook)
-        # x = x + self.drop_path(x_attn)
-        # x = self.compress_x(metric, x) 
-        # x = x + self.drop_path(self.mlp(self.norm2(x)))
-        # return x
+        self.attn(self.norm1(x), register_hook=True)
         x = self.compress_x(x, x) 
         x = x + self.drop_path(self.attn(self.norm1(x), register_hook=register_hook))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
@@ -41,7 +44,7 @@ class ToMeBlock(Block):
 
 
 
-class ToMeAttention(Attention):
+class MCTFAttention(Attention):
     """
     Modifications:
      - Apply proportional attention
@@ -75,17 +78,17 @@ class ToMeAttention(Attention):
         x = self.proj_drop(x)
         return x
 
-def make_tome_class(transformer_class):
-    class ToMeVisionTransformer(transformer_class):
+def make_mctf_class(transformer_class):
+    class MCTFVisionTransformer(transformer_class):
         """
         Modifications:
         - Initialize r, token size, and token sources.
         """
         def forward(self,x, register_blk=-1):
-            self._tome_info["r"] = [self.r]* len(self.blocks) 
-            self._tome_info["ratio"] = [1.0] + [self.ratio] * (len(self.blocks)-1)
-            self._tome_info["size"] = None
-            self._tome_info["source"] = None
+            self._mctf_info["r"] = [self.r]* len(self.blocks) 
+            self._mctf_info["ratio"] = [1.0] + [self.ratio] * (len(self.blocks)-1)
+            self._mctf_info["size"] = None
+            self._mctf_info["source"] = None
             self.total_flop = 0
             self.final_shape = None
             B = x.shape[0]
@@ -101,7 +104,7 @@ def make_tome_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, self._tome_info["output_attn"])
+                x = blk(x, self._mctf_info["output_attn"])
             x = self.norm(x)
             self.final_shape = x.shape 
             return x
@@ -109,10 +112,10 @@ def make_tome_class(transformer_class):
 
         def forward_features(self, x, register_blk=-1) -> torch.Tensor:
       
-            self._tome_info["r"] = [self.r]* len(self.blocks) 
-            self._tome_info["ratio"] = [1.0] + [self.ratio] * (len(self.blocks) -1)
-            self._tome_info["size"] = None
-            self._tome_info["source"] = None
+            self._mctf_info["r"] = [self.r]* len(self.blocks) 
+            self._mctf_info["ratio"] = [1.0] + [self.ratio] * (len(self.blocks) -1)
+            self._mctf_info["size"] = None
+            self._mctf_info["source"] = None
             self.total_flop = 0
             self.final_shape= 0
 
@@ -129,7 +132,7 @@ def make_tome_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, self._tome_info["output_attn"])
+                x = blk(x, self._mctf_info["output_attn"])
             self.final_shape = x.shape 
             x = self.norm(x)
             return x
@@ -144,52 +147,55 @@ def make_tome_class(transformer_class):
             flops += ffn_flops
             return flops
 
-    return ToMeVisionTransformer
+    return MCTFVisionTransformer
 
 
 def apply_patch(
    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False, output_attn=False):
     """
-    Applies ToMe to this transformer. Afterward, set r using model.r.
+    Applies MCTF to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tome_info["source"] afterward.
+    The sources will be available at model._mctf_info["source"] afterward.
 
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    ToMeVisionTransformer = make_tome_class(model.__class__)
-    print('using', 'tome')
+    MCTFVisionTransformer = make_mctf_class(model.__class__)
+    print('using', 'mctf')
 
-    model.__class__ = ToMeVisionTransformer
+    model.__class__ = MCTFVisionTransformer
     model.ratio = 1.0 
     model.r=0.0
-    
-    # model.compress_method = 'tome' 
-    model._tome_info = {
-        "ratio": model.ratio,
-        "margin":  [],
+    default=[0.35, 0.15, 0, 1, 1, 1, 20, 40, 1, 1, 0]
+    model._mctf_info = {
+        "trace_source"   : False,
+        "prop_attn"      : 1,
+        "one_step_ahead" : 1,
+        "tau_sim"        : 1,
+        "tau_info"       : 20,
+        "tau_size"       : 40,
+        "bidirection"    : 1,
+        "pooling_type"   : 0,
         "size": None,
-        "source": None,
+        "class_token"  : model.cls_token is not None,
         "output_attn": output_attn,
-        "trace_source": trace_source,
-        "prop_attn": prop_attn,
-        "class_token": model.cls_token is not None,
-        "distill_token": False,
     }
+
+
     current_layer = 0
     margin = margin 
     num_layers = len(model.blocks)
     # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._tome_info["distill_token"] = True
+        model._mctf_info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, Block):
-            # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
-            module.__class__ = ToMeBlock
-            module._tome_info = model._tome_info
+            # module.__class__ = MCTFBlock if compress_method == 'mctf' else PiMCTFBlock 
+            module.__class__ = MCTFBlock
+            module._mctf_info = model._mctf_info
             current_layer +=1
         elif isinstance(module, Attention):
-            module.__class__ = ToMeAttention 
+            module.__class__ = MCTFAttention 

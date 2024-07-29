@@ -41,20 +41,22 @@ def make_pitome_class(transformer_class):
                 return x
                 
   
-        
         def forward_features(self, x):
             x = self.patch_embed(x)
-            x = self._pos_embed(x)
-            x = self.norm_pre(x)
-            # if self.grad_checkpointing and not torch.jit.is_scripting():
-                # x = checkpoint_seq(self.blocks, x)
-            # else:
+            cls_token = self.cls_token.expand(x.shape[0], -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+            if self.dist_token is None:
+                x = torch.cat((cls_token, x), dim=1)
+            else:
+                x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
+            x = self.pos_drop(x + self.pos_embed)
             for block in self.blocks:
                 self.total_flop += self.calculate_block_flop(x.shape) 
                 x = block(x)
-
             x = self.norm(x)
-            return x
+            if self.dist_token is None:
+                return self.pre_logits(x[:, 0])
+            else:
+                return x[:, 0], x[:, 1]
  
         def calculate_block_flop(self, shape):
             flops = 0
@@ -103,7 +105,7 @@ def apply_patch(
     margin = margin 
     num_layers = len(model.blocks)
     # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
-    margins = [.9 - .9*(i/num_layers) for i in range(num_layers)]
+    margins = [.95 - .95*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._tome_info["distill_token"] = True

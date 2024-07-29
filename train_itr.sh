@@ -10,7 +10,7 @@ do
         for algo in 'pitome' 'tome' 'tofu' 'dct' 
         do
             # for ratio in '0.925' 
-            for ratio in '0.975' 
+            for ratio in '0.95' 
             do
                 echo "running $model $size $algo $ratio."
                 sh train_scripts/train_itr_$model.sh $dataset $algo $ratio

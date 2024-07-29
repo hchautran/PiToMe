@@ -145,19 +145,6 @@ def pitome_vision(
         merge = get_merge_func(metric, ratio=ratio, class_token=class_token, attn_idx=idx)
         return merge, None
     elif margin >=0.45:
-        # with torch.no_grad():
-        #     if class_token:
-        #         metric=metric[:,1:,:]
-        #     B,T,C = metric.shape
-        #     metric = F.normalize(metric, p=2, dim=-1) 
-        #     sigma =  1 - margin 
-        #     sim = metric@metric.transpose(-1,-2) 
-        #     isolation_score = (2*(torch.exp(-(((1 - sim)/sigma)**2))) - 1).mean(-1) *  1/(sigma*torch.sqrt(torch.tensor(2*torch.pi)))
-        #     indices =  torch.argsort(isolation_score , descending=True)
-        #     a_idx, b_idx = indices[..., ::2], indices[..., 1::2]
-        #     scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, b_idx.shape[-1])) 
-        #     scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, a_idx.shape[-1], b_idx.shape[-1] ))
-
         return bipartite_soft_matching(metric, ratio=ratio, class_token=class_token, a_idx=None, b_idx=None, scores=None)
     else:
         # print(metric.shape)
@@ -172,13 +159,8 @@ def pitome_vision(
             else:
                 return do_nothing, do_nothing
             metric = F.normalize(metric, p=2, dim=-1) 
-            # sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
-            # isolation_score = sim.mean(dim=-1) + sim.sum(-1)
-            # indices =  torch.argsort(isolation_score, descending=True)
-            sigma =  1 - margin 
-            sim = metric@metric.transpose(-1,-2) 
-            isolation_score = (2*(torch.exp(-(((1 - sim)/sigma)**2))) - 1).mean(-1) *  1/(sigma*torch.sqrt(torch.tensor(2*torch.pi)))
-
+            sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
+            isolation_score = sim.mean(dim=-1) 
             indices =  torch.argsort(isolation_score , descending=True)
             merge_idx = indices[..., :2*r]
             protected_idx = indices[..., 2*r:]
@@ -193,16 +175,13 @@ def pitome_vision(
             batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
             protected = x[batch_idx, protected_idx, :]
 
-            if not prune:
-                a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2] 
-                scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
-                scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
-                _, dst_idx = scores.max(dim=-1) 
-                src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
-                dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
-            else:
-                dst_idx = merge_idx[...,  r:]
-                dst = x[batch_idx,  dst_idx, :]
+            a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2] 
+            scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
+            scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
+            _, dst_idx = scores.max(dim=-1) 
+            src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
+            dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
+
 
             if x_cls is not None:
                 return torch.cat([x_cls, protected, dst], dim=1)
@@ -326,7 +305,7 @@ def pitome_vision_using_attn(
             protected = x[batch_idx, protected_idx, :]
 
             if not prune:
-                a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:] 
+                a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2] 
                 scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
                 scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
                 _, dst_idx = scores.max(dim=-1) 
@@ -452,7 +431,7 @@ def merge_wavg(
     size = merge(size, mode="sum")
     x = x / size
 
-    return x, size 
+    return x, None 
 
 
 def merge_source(
