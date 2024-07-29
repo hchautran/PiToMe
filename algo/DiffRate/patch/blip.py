@@ -22,7 +22,7 @@ class DiffRateBlock(Block):
         size = self._diffrate_info["size"]
         mask = self._diffrate_info["mask"]
         # x_attn, attn = self.attn(x=self.norm1(x), size=size, mask=self._diffrate_info["mask"], register_hook=register_hook)
-        x_attn = self.attn(x=self.norm1(x), register_hook=True)
+        x_attn = self.attn.forward_and_save_attn(x=self.norm1(x), register_hook=True)
         attn = self.attn.get_attention_map()
         x = x + self.drop_path(x_attn)
 
@@ -112,7 +112,7 @@ class DiffRateAttention(Attention):
         attn = (attn + eps/N) / (attn.sum(dim=-1, keepdim=True) + eps)
         return attn.type_as(max_att)
 
-    def forward(
+    def forward_and_save_attn(
         self, x: torch.Tensor, size: torch.Tensor = None, mask: torch.Tensor = None, register_hook=False
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # Note: this is copied from timm.models.vision_transformer.Attention with modifications.

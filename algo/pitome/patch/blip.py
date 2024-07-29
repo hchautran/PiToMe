@@ -12,10 +12,10 @@ class PiToMeBlock(Block):
         # self.margin = nn.Parameter(torch.tensor(margin)) 
         self.margin = margin
     
-    def compress_x(self, metric, x, attn=None):
+    def compress_x(self, metric, x):
         ratio = self._pitome_info["ratio"].pop()
         if ratio < 1.0:
-            merge, isolated_score = unprotected_pitome_vision(
+            merge, isolated_score = pitome_vision(
                 ratio=ratio,
                 metric=metric,
                 margin=self.margin,
@@ -27,6 +27,7 @@ class PiToMeBlock(Block):
                     merge, x, self._pitome_info["source"]
                 )
                 self._pitome_info["sources"].append(self._pitome_info["source"])
+
             if isolated_score is not None and self._pitome_info["size"] is not None:
                 weight = self._pitome_info["size"] + isolated_score
                 x, self._pitome_info["size"] = merge_wavg(merge, x, weight)
@@ -37,21 +38,15 @@ class PiToMeBlock(Block):
 
     def forward(self, x, register_hook=False):
         x = self.compress_x(x, x)
-        x = x + self.drop_path(self.attn(self.norm1(x), register_hook=True))
+        x = x + self.drop_path(self.attn.forward_and_save_attn(self.norm1(x), register_hook=True))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
 
 
 
 class PiToMeAttention(Attention):
-    """
-    Modifications:
-     - Apply proportional attention
-     - Return the mean of k over heads from attention
-    """
 
-
-    def forward(self, x, register_hook=False):
+    def forward_and_save_attn(self, x, register_hook=False):
         B, N, C = x.shape
         qkv = (
             self.qkv(x)
@@ -75,7 +70,7 @@ class PiToMeAttention(Attention):
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
-        return x, attn
+        return x
 
 def make_pitome_class(transformer_class):
     class PiToMeVisionTransformer(transformer_class):
@@ -106,7 +101,7 @@ def make_pitome_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, self._pitome_info['output_attn'])
+                x = blk(x)
             x = self.norm(x)
             self.final_shape = x.shape
             return x
@@ -132,8 +127,7 @@ def make_pitome_class(transformer_class):
             x = self.pos_drop(x)
 
             for i, blk in enumerate(self.blocks):
-                self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, self._pitome_info['output_attn'])
+                x = blk(x) 
             x = self.norm(x)
             self.final_shape = x.shape
 
@@ -198,5 +192,5 @@ def apply_patch(
             module.init_margin(margins[current_layer])
             module._pitome_info = model._pitome_info
             current_layer +=1
-        # elif isinstance(module, Attention):
-        #     module.__class__ = PiToMeAttention
+        elif isinstance(module, Attention):
+            module.__class__ = PiToMeAttention

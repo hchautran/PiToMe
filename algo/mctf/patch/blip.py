@@ -38,7 +38,7 @@ class MCTFBlock(Block):
     def forward(self, x, register_hook=False):
         self.attn(self.norm1(x), register_hook=True)
         x = self.compress_x(x, x) 
-        x = x + self.drop_path(self.attn(self.norm1(x), register_hook=register_hook))
+        x = x + self.drop_path(self.attn.forward_and_save_attn(self.norm1(x), register_hook=register_hook))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
 
@@ -52,7 +52,7 @@ class MCTFAttention(Attention):
     """
 
 
-    def forward(self, x, register_hook=False):
+    def forward_and_save_attn(self, x, register_hook=False):
         B, N, C = x.shape
         qkv = (
             self.qkv(x)

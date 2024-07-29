@@ -9,16 +9,13 @@ import argparse
 import random
 import torch
 import time
+import os
 
 import lavis.tasks as tasks
 import torch.backends.cudnn as cudnn
 from lavis.common.config import Config
 from lavis.common.dist_utils import get_rank, init_distributed_mode
 from lavis.common.logger import setup_logger
-from lavis.common.optims import (
-    LinearWarmupCosineLRScheduler,
-    LinearWarmupStepLRScheduler,
-)
 from lavis.common.utils import now
 from lavis.datasets.builders import *
 from lavis.models import *
@@ -332,7 +329,7 @@ if __name__ == "__main__":
         'blip2': 'BLIP2',
         'albef': 'ALBEF'
     }
-    abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
+    abs_path =f'{os.getcwd()}/outputs'
     metrics, args, train_time, eval_time = main()
     file_name = f'{"eval" if args.eval else "train"}_itr_{model_dict[args.model]}.csv'
     # file_name = f'ablation_study_wo_step.csv'

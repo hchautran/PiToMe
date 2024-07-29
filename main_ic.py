@@ -589,10 +589,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-
-    abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
+    
+    abs_path = os.getcwd()
     file_name = f'{"eval" if args.eval else "train"}_ic_{args.model}.csv'
-    path = f'{abs_path}/{file_name}'
+    path = f'{abs_path}/outputs/{file_name}'
     if not pathlib.Path(path).is_file():
         head = "model, algo, gflops, ratio ,acc_1\n"
         if utils.is_main_process():

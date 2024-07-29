@@ -1,4 +1,5 @@
 import torch.nn.functional as F
+import os
 
 from tc.lra_datasets import (ListOpsDataset, Cifar10Dataset, ImdbDataset)
 from argparse import ArgumentParser
@@ -65,7 +66,8 @@ if __name__ == "__main__":
     else:
         metrics = engine.train(num_epochs=10)
             
-    abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe/'
+    # abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe/'
+    abs_path =f'{os.getcwd()}/outputs'
     path = f'{abs_path}/{file_name}'
     if not pathlib.Path(path).is_file():
         head = "dataset,model,algo,gflops,ratio,acc,eval time,train time\n"

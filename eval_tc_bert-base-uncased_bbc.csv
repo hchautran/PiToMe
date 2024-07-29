@@ -1,3 +1,0 @@
-dataset, model, algo, gflops, ratio, acc
-bbc, bert-base-uncased, pitome, 8.53446604800001, 0.525, 3.6706349206349205
-bbc, bert-base-uncased, pitome, 9.549170688000002, 0.55, 3.2738095238095237

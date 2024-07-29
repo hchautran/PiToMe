@@ -16,7 +16,7 @@ class ToFuBlock(Block):
     def compress_x(self, metric, x):
         ratio = self._tofu_info["ratio"].pop()
         if ratio < 1.0:
-            merge, isolated_score = bipartite_soft_matching(
+            merge, _ = bipartite_soft_matching(
                 ratio=ratio,
                 metric=metric,
                 class_token=self._tofu_info["class_token"]
@@ -37,7 +37,7 @@ class ToFuBlock(Block):
         # x = x + self.drop_path(self.mlp(self.norm2(x)))
         # return x
         x = self.compress_x(x, x) 
-        x = x + self.drop_path(self.attn(self.norm1(x), register_hook=register_hook))
+        x = x + self.drop_path(self.attn.forward_and_save_attn(self.norm1(x), register_hook=register_hook))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         # print(x.shape)
         return x
@@ -50,7 +50,7 @@ class ToFuAttention(Attention):
      - Return the mean of k over heads from attention
     """
 
-    def forward(self, x, register_hook=False):
+    def forward_and_save_attn(self, x, register_hook=False):
         B, N, C = x.shape
         qkv = (
             self.qkv(x)
@@ -74,7 +74,7 @@ class ToFuAttention(Attention):
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
-        return x, k.mean(1), attn
+        return x
 
 def make_tofu_class(transformer_class):
     class ToFuVisionTransformer(transformer_class):
@@ -189,3 +189,5 @@ def apply_patch(
             module._tofu_info = model._tofu_info
             module.init_strategy(strategies[current_layer])
             current_layer +=1
+        elif isinstance(module, Attention):
+            module.__class__ = ToFuAttention 

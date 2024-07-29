@@ -35,7 +35,6 @@ import algo.DiffRate as DiffRate
 import ic.models_mae as models_mae 
 from main_ic import get_args_parser
 from ic.utils import build_transform, DATA_PATH
-import wandb
 
 def get_tome_model(model, args):
     if 'deit' in model_ckt:

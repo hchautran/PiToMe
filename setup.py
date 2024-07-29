@@ -8,18 +8,18 @@
 from setuptools import find_packages, setup
 
 setup(
-    name="tome",
+    name="pitome",
     version="0.1",
     author="Meta",
-    url="https://github.com/facebookresearch/tome",
-    description="Token Merging for Vision Transformers",
+    url="https://github.com/hchautran/PiToMe",
+    description="Token Merging with Spectrum Preservation",
     install_requires=[
-        "torchvision",
-        "numpy",
-        "timm==0.4.12",
-        "pillow",
-        "tqdm",
-        "scipy",
+        "salesforce-lavis",
+        "datasets",
+        "accelerate",
+        # "timm==0.6.13",
+        "tokenizers==0.15.1",
+        "transformers==4.37.0",
     ],
     packages=find_packages(exclude=("examples", "build")),
 )

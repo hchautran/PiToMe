@@ -35,7 +35,7 @@ class ToMeBlock(Block):
         # x = x + self.drop_path(self.mlp(self.norm2(x)))
         # return x
         x = self.compress_x(x, x) 
-        x = x + self.drop_path(self.attn(self.norm1(x), register_hook=register_hook))
+        x = x + self.drop_path(self.attn.forward_and_save_attn(self.norm1(x), register_hook=register_hook))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
 
@@ -49,7 +49,7 @@ class ToMeAttention(Attention):
     """
 
 
-    def forward(self, x, register_hook=False):
+    def forward_and_save_attn(self, x, register_hook=False):
         B, N, C = x.shape
         qkv = (
             self.qkv(x)
@@ -187,7 +187,6 @@ def apply_patch(
 
     for module in model.modules():
         if isinstance(module, Block):
-            # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
             module.__class__ = ToMeBlock
             module._tome_info = model._tome_info
             current_layer +=1
