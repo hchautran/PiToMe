@@ -38,7 +38,7 @@ class PiToMeBlock(Block):
 
     def forward(self, x, register_hook=False):
         x = self.compress_x(x, x)
-        x = x + self.drop_path(self.attn.forward_and_save_attn(self.norm1(x), register_hook=True))
+        x = x + self.drop_path(self.attn.forward_and_save_attn(self.norm1(x), register_hook=register_hook))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
 
@@ -127,6 +127,7 @@ def make_pitome_class(transformer_class):
             x = self.pos_drop(x)
 
             for i, blk in enumerate(self.blocks):
+                self.total_flop += self.calculate_block_flop(x.shape)
                 x = blk(x) 
             x = self.norm(x)
             self.final_shape = x.shape
@@ -187,7 +188,6 @@ def apply_patch(
 
     for module in model.modules():
         if isinstance(module, Block):
-            # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
             module.__class__ = PiToMeBlock
             module.init_margin(margins[current_layer])
             module._pitome_info = model._pitome_info

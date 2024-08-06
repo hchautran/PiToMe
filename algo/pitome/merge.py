@@ -130,7 +130,7 @@ def pitome_vision(
     ratio:float=1.0,
     margin:torch.Tensor=0.5,
     class_token: bool = False,
-    prune:bool=False
+    alpha=1.0
 ):
     if attn is not None and class_token:
         B,T,C = metric.shape
@@ -147,7 +147,6 @@ def pitome_vision(
     elif margin >=0.45:
         return bipartite_soft_matching(metric, ratio=ratio, class_token=class_token, a_idx=None, b_idx=None, scores=None)
     else:
-        print(metric.shape)
         with torch.no_grad():
             if class_token:
                 metric=metric[:,1:,:]
@@ -159,7 +158,7 @@ def pitome_vision(
             else:
                 return do_nothing, do_nothing
             metric = F.normalize(metric, p=2, dim=-1) 
-            sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
+            sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01, alpha=alpha)
             isolation_score = sim.mean(dim=-1) 
             indices =  torch.argsort(isolation_score , descending=True)
             merge_idx = indices[..., :2*r]

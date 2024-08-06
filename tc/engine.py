@@ -27,12 +27,16 @@ from algo import (
     tome,
     tofu,
     dct,
+    mctf,
+    crossget,
     PITOME,
     TOME,
     TOFU,
     DCT,
     NONE,
     DIFFRATE,
+    CROSSGET,
+    MCTF,
 )
 import os
 import wandb
@@ -177,6 +181,10 @@ class Engine:
             dct.patch.bert(self.model.bert.encoder)
         elif self.algo == DIFFRATE:
             pitome.patch.bert(self.model.bert.encoder, use_attn=True)
+        elif self.algo == MCTF:
+            mctf.patch.bert(self.model.bert.encoder)
+        elif self.algo == CROSSGET:
+            crossget.patch.bert(self.model.bert.encoder)
         else:
             pitome.patch.bert(self.model.bert.encoder)
             self.set_ratio(1.0)
@@ -201,6 +209,10 @@ class Engine:
             dct.patch.distilbert(self.model.distilbert.transformer)
         elif self.algo == DIFFRATE:
             pitome.patch.distilbert(self.model.distilbert.transformer, use_attn=True)
+        elif self.algo == MCTF:
+            mctf.patch.distilbert(self.model.distilbert.transformer)
+        elif self.algo == CROSSGET:
+            crossget.patch.distilbert(self.model.distilbert.transformer)
         else:
             tome.patch.distilbert(self.model.distilbert.transformer)
             self.set_ratio(1.0)
@@ -290,7 +302,7 @@ class Engine:
             loss = F.cross_entropy(outputs[0], target)
             eval_running_loss += loss.item()
             eval_running_acc += accuracy_score(outputs[0], target)
-            # gflops += outputs[3]/1e9 
+            gflops += outputs[3]/1e9 
             eval_pbar.set_postfix_str(
                 f"eval loss: {100*eval_running_loss/(j+1):.2f} "
                 f"eval accuracy: {100*eval_running_acc/(j+1):.2f} "

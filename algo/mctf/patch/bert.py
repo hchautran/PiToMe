@@ -29,7 +29,7 @@ class MCTFBertLayer(BertLayer):
         head_mask: Optional[torch.FloatTensor] = None,
         output_attentions: Optional[bool] = False,
     ) -> Tuple[torch.Tensor]:
-        # attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
+        # attn_size = self._mctf_info["size"] if self._mctf_info["prop_attn"] else None
 
         self_attention_outputs = self.attention(
             hidden_states,
@@ -37,9 +37,10 @@ class MCTFBertLayer(BertLayer):
             head_mask,
             output_attentions=output_attentions,
         )
-        ratio = self._tome_info["ratio"].pop()
+        ratio = self._mctf_info["ratio"].pop()
         x = self_attention_outputs[0]
         key = self_attention_outputs[1]
+        attn = self_attention_outputs[2]
 
     
 
@@ -47,12 +48,19 @@ class MCTFBertLayer(BertLayer):
             merge, _ = bipartite_soft_matching(
                 ratio=ratio,
                 metric=key,
-                class_token=self._tome_info["class_token"]
+                class_token   = self._mctf_info["class_token"],
+                tau_sim       = self._mctf_info["tau_sim"],
+                tau_info      = self._mctf_info["tau_info"],
+                tau_size      = self._mctf_info["tau_size"],
+                size          = self._mctf_info["size"],
+                bidirection   = self._mctf_info["bidirection"]
+                
             )
-
-            weight = self._tome_info["size"] 
-            x, self._tome_info["size"] = merge_wavg(merge, x, None)
-            # print(attention_mask.shape)
+            x, self._mctf_info["size"], _ = merge_wavg(
+                merge, 
+                x, 
+                attn, 
+            )
 
             attention_mask = torch.where(attention_mask.squeeze_() >= 0, 1, 0)
             attention_mask = merge_attention_mask(merge, attention_mask=attention_mask[..., None]).squeeze_()
@@ -66,7 +74,6 @@ class MCTFBertLayer(BertLayer):
 
 
 
-        # print(x.isnan()._is_any_true())
 
         outputs = self_attention_outputs[1:]  # add self attentions if we output attention weights
         outputs = (x, attention_mask, )  + outputs
@@ -93,7 +100,7 @@ class MCTFBertAttention(BertAttention):
             encoder_hidden_states,
             encoder_attention_mask,
             past_key_value,
-            output_attentions,
+            output_attentions=True,
         )
         attention_output = self.output(self_outputs[0], hidden_states)
         outputs = (attention_output,) + (key,) + self_outputs[1:]  # add attentions if we output them
@@ -159,13 +166,10 @@ class MCTFBertSelfAttention(BertSelfAttention):
         context_layer = context_layer.view(new_context_layer_shape)
 
         outputs = (context_layer, attention_probs) if output_attentions else (context_layer,)
-        
-
-    
         return outputs, key_layer.mean(1)
 
 
-def make_tome_class(transformer_class):
+def make_mctf_class(transformer_class):
     class MCTFBertEncoder(transformer_class, ModuleUtilsMixin):
         """
         Modifications:
@@ -186,14 +190,14 @@ def make_tome_class(transformer_class):
             output_hidden_states: Optional[bool] = False,
         ): 
             len_layers = len(self.layer)
-            self._tome_info["ratio"] = [self.ratio if i in [
+            
+            self._mctf_info["size"] = None 
+            self._mctf_info["ratio"] = [self.ratio if i in [
                 len_layers - 1, 
                 len_layers - 2,
                 len_layers - 3,
-                # len_layers - 6,
-                # len_layers - 9,
             ] else 1.0 for i in range(len_layers) ]
-            # self._tome_info["ratio"] = [self.ratio for i in range(len(self.layer))]
+            # self._mctf_info["ratio"] = [self.ratio for i in range(len(self.layer))]
             all_hidden_states = () if output_hidden_states else None
             all_self_attentions = () if output_attentions else None
             flops = 0
@@ -202,7 +206,6 @@ def make_tome_class(transformer_class):
                 if output_hidden_states:
                     all_hidden_states = all_hidden_states + (hidden_states,)
 
-   
                 layer_head_mask = head_mask[i] if head_mask is not None else None
 
                 layer_outputs = layer_module(
@@ -248,43 +251,43 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-   model: BertEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
+   model: BertEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False,output_attn=False):
     """
     Applies MCTF to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tome_info["source"] afterward.
+    The sources will be available at model._mctf_info["source"] afterward.
 
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    MCTFBertEncoder = make_tome_class(model.__class__)
-    print('using', 'tome')
+    MCTFBertEncoder = make_mctf_class(model.__class__)
+    print('using', 'mctf')
 
     model.__class__ = MCTFBertEncoder
     model.ratio = 1.0 
     model.r=0.0
     
-    # model.compress_method = 'tome' 
-    model._tome_info = {
-        "ratio": model.ratio,
-        "margin":  [],
+    # model.compress_method = 'mctf' 
+    model._mctf_info = {
+        "trace_source"   : False,
+        "prop_attn"      : 1,
+        "one_step_ahead" : 1,
+        "tau_sim"        : 1,
+        "tau_info"       : 20,
+        "tau_size"       : 40,
+        "bidirection"    : 1,
+        "pooling_type"   : 0,
         "size": None,
-        "source": None,
-        "trace_source": trace_source,
-        "prop_attn": prop_attn,
-        "class_token": True,
-        "distill_token": False,
+        "class_token"  : True,
+        "output_attn": output_attn,
     }
     current_layer = 0
-    margin = margin 
-    num_layers = len(model.layer)
-
 
     for module in model.modules():
         if isinstance(module, BertLayer):
             module.__class__ = MCTFBertLayer
-            module._tome_info = model._tome_info
+            module._mctf_info = model._mctf_info
             current_layer +=1
         if isinstance(module, BertAttention):
             module.__class__ = MCTFBertAttention 

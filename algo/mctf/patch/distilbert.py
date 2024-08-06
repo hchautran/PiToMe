@@ -47,29 +47,27 @@ class MCTFDistilBertBlock(TransformerBlock):
             value=x,
             mask=attn_mask,
             head_mask=head_mask,
-            output_attentions=output_attentions,
+            output_attentions=True,
         )
-        ratio = self._tome_info["ratio"].pop()
-        if output_attentions:
-            sa_output, metric ,sa_weights = sa_output  # (bs, seq_length, dim), (bs, n_heads, seq_length, seq_length)
-        else:  # To handle these `output_attentions` or `output_hidden_states` cases returning tuples
-            if type(sa_output) != tuple:
-                raise TypeError(f"sa_output must be a tuple but it is {type(sa_output)} type")
-            sa_output, metric = sa_output
+        ratio = self._mctf_info["ratio"].pop()
+        sa_output, metric ,sa_weights = sa_output  # (bs, seq_length, dim), (bs, n_heads, seq_length, seq_length)
     
         sa_output = self.sa_layer_norm(sa_output + x)  # (bs, seq_length, dim)
+   
 
         if ratio < 1.0:
             merge, _ = bipartite_soft_matching(
                 ratio=ratio,
                 metric=metric,
-                class_token=self._tome_info["class_token"]
+                class_token   = self._mctf_info["class_token"],
+                tau_sim       = self._mctf_info["tau_sim"],
+                tau_info      = self._mctf_info["tau_info"],
+                tau_size      = self._mctf_info["tau_size"],
+                size          = self._mctf_info["size"],
+                bidirection   = self._mctf_info["bidirection"]
             )
-            # weight = self._tome_info["size"] 
-            sa_output, self._tome_info["size"] = merge_wavg(merge, sa_output, None)
-            # print(attention_mask.shape)
+            sa_output, self._mctf_info["size"] = merge_wavg(merge, sa_output, sa_weights, None)
 
-            # attn_mask = torch.where(attn_mask.squeeze_() >= 0, 1, 0)
             attn_mask = merge_attention_mask(merge, attention_mask=attn_mask[..., None]).squeeze_()
         else:
             attn_mask = attn_mask
@@ -153,7 +151,7 @@ class MCTFDistilBertAttention(MultiHeadSelfAttention):
             return (context, k.mean(1))
 
 
-def make_tome_class(transformer_class):
+def make_mctf_class(transformer_class):
     class MCTFTransformers(transformer_class):
         """
         Modifications:
@@ -170,14 +168,14 @@ def make_tome_class(transformer_class):
         ): 
 
             len_layers = len(self.layer)
-            self._tome_info["ratio"] = [self.ratio if i in [
+            self._mctf_info["ratio"] = [self.ratio if i in [
                 len_layers - 1, 
                 len_layers - 2,
                 len_layers - 3,
                 # len_layers - 6,
                 # len_layers - 9,
             ] else 1.0 for i in range(len_layers) ]
-            # self._tome_info["ratio"] = [self.ratio for i in range(len(self.layer))]
+            # self._mctf_info["ratio"] = [self.ratio for i in range(len(self.layer))]
             all_hidden_states = () if output_hidden_states else None
             all_attentions = () if output_attentions else None
 
@@ -226,20 +224,20 @@ def apply_patch(
     Applies MCTF to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tome_info["source"] afterward.
+    The sources will be available at model._mctf_info["source"] afterward.
 
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    MCTFTransformers = make_tome_class(model.__class__)
-    print('using', 'tome')
+    MCTFTransformers = make_mctf_class(model.__class__)
+    print('using', 'mctf')
 
     model.__class__ = MCTFTransformers
     model.ratio = 1.0 
     model.r=0.0
     
-    # model.compress_method = 'tome' 
-    model._tome_info = {
+    # model.compress_method = 'mctf' 
+    model._mctf_info = {
         "ratio": model.ratio,
         "margin":  [],
         "size": None,
@@ -259,7 +257,7 @@ def apply_patch(
         if isinstance(module, TransformerBlock):
             module.__class__ = MCTFDistilBertBlock 
             module.init_margin(margins[current_layer])
-            module._tome_info = model._tome_info
+            module._mctf_info = model._mctf_info
             current_layer +=1
         if isinstance(module, MultiHeadSelfAttention):
             module.__class__ = MCTFDistilBertAttention 

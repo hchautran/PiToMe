@@ -28,7 +28,7 @@ from algo import (
     DIFFRATE,
     DCT,
     TOFU,
-    LTMP,
+    CROSSGET,
     MCTF,
     NONE, 
     pitome,
@@ -37,6 +37,7 @@ from algo import (
     tofu,
     dct, 
     mctf,
+    crossget
     # ltmp
 )
 
@@ -97,6 +98,28 @@ def get_mctf_model(model, args):
         model.visual_encoder_m.r=int(args.reduced_token)
     else:
         raise ValueError("only support clip, blip, albef and blip2 in this codebase")
+
+
+def get_crossget_model(model, args):
+    if 'clip' in args.model:
+        crossget.patch.clip(model.visual.transformer, use_k=args.use_k)
+        model.visual.transformer.ratio=float(args.ratio)
+        model.visual.transformer.r=int(args.reduced_token)
+    elif 'blip2' in args.model:
+        crossget.patch.blip2(model.visual_encoder,use_k=args.use_k)
+        model.visual_encoder.ratio=float(args.ratio)
+        model.visual_encoder.r=int(args.reduced_token)
+    elif 'blip' or 'albef' in args.model:
+        crossget.patch.blip(model.visual_encoder,use_k=args.use_k)
+        crossget.patch.blip(model.visual_encoder_m,use_k=args.use_k)
+        model.visual_encoder.ratio=float(args.ratio)
+        model.visual_encoder_m.ratio=float(args.ratio)
+        model.visual_encoder.r=int(args.reduced_token)
+        model.visual_encoder_m.r=int(args.reduced_token)
+    else:
+        raise ValueError("only support clip, blip, albef and blip2 in this codebase")
+
+
 
 
 
@@ -286,11 +309,13 @@ def main():
         get_dct_model(model, args)
     elif args.algo == MCTF:
         get_mctf_model(model, args)
+    elif args.algo == CROSSGET:
+        get_crossget_model(model, args)
     elif args.algo == NONE:
         args.ratio = 1.0
         get_tome_model(model, args)
     else:
-        raise ValueError("only support pitome, tome, tofu, dct, diffrate for image retrieval task")
+        raise ValueError("only support pitome, tome, tofu, dct, diffrate, mctf, crossget for image retrieval task")
 
 
     runner = RunnerBase(
@@ -329,18 +354,18 @@ if __name__ == "__main__":
         'blip2': 'BLIP2',
         'albef': 'ALBEF'
     }
-    abs_path =f'{os.getcwd()}/outputs'
+    abs_path =f'{os.getcwd()}/itr_results'
     metrics, args, train_time, eval_time = main()
     file_name = f'{"eval" if args.eval else "train"}_itr_{model_dict[args.model]}.csv'
     # file_name = f'ablation_study_wo_step.csv'
     path = f'{abs_path}/{file_name}'
     if not pathlib.Path(path).is_file():
         head = "dataset,model,algo,gflops,ratio,txt_r1,txt_r5,txt_r10,img_r1,img_r5,img_r10,r_sum,train time,eval time,use attn\n"
-        with open(file_name, "a") as myfile:
+        with open(path, "a") as myfile:
             myfile.write(head)
 
     if metrics is not None:
         sum = metrics["txt_r1"] + metrics["txt_r5"] + metrics["txt_r10"] + metrics["img_r1"] + metrics["img_r5"] + metrics["img_r10"]
         row = f'{args.dataset},{model_dict[args.model]},{args.algo},{metrics["gflops"]},{args.ratio},{metrics["txt_r1"]},{metrics["txt_r5"]},{metrics["txt_r10"]},{metrics["img_r1"]},{metrics["img_r5"]},{metrics["img_r10"]},{sum},{train_time},{eval_time},{"false"}\n'
-        with open(file_name, "a") as myfile:
+        with open(path, "a") as myfile:
             myfile.write(row)

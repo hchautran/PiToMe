@@ -3,7 +3,7 @@
 # import tome 
 # import pitome 
 
-__all__ = ["tome", "pitome",'DiffRate', "tofu","mctf"]
+__all__ = ["tome", "pitome",'DiffRate', "tofu","mctf", "crossget"]
 
 PITOME = 'pitome'
 TOME = 'tome'
@@ -11,5 +11,6 @@ DCT = 'dct'
 TOFU = 'tofu'
 LTMP = 'ltmp'
 DIFFRATE = 'diffrate'
+CROSSGET = 'crossget'
 MCTF='mctf'
 NONE = 'none'

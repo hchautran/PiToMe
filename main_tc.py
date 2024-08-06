@@ -10,7 +10,9 @@ from algo import (
     DIFFRATE,
     TOFU,
     DCT,
-    NONE
+    NONE,
+    MCTF,
+    CROSSGET
 )
 from tc.engine import Engine, BERT_BASE, DISTILBERT_BASE, BERT_LARGE, ALBERT
 
@@ -38,7 +40,7 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--task", default="imdb", choices=TASKS,
                         help="choose an LRA dataset from available options")
-    parser.add_argument("--algo", default=PITOME, choices=[PITOME, TOME, NONE, TOFU, DCT, DIFFRATE],
+    parser.add_argument("--algo", default=PITOME, choices=[PITOME, TOME, NONE, TOFU, DCT, DIFFRATE, MCTF, CROSSGET],
                         help="choose an LRA dataset from available options")
     parser.add_argument("--model", default=BERT_BASE, choices=[BERT_BASE, DISTILBERT_BASE, BERT_LARGE, ALBERT],
                         help="choose an LRA dataset from available options")
@@ -66,17 +68,16 @@ if __name__ == "__main__":
     else:
         metrics = engine.train(num_epochs=10)
             
-    # abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe/'
-    abs_path =f'{os.getcwd()}/outputs'
+    abs_path =f'{os.getcwd()}/tc_results/'
     path = f'{abs_path}/{file_name}'
     if not pathlib.Path(path).is_file():
         head = "dataset,model,algo,gflops,ratio,acc,eval time,train time\n"
-        with open(file_name, "a") as myfile:
+        with open(path, "a") as myfile:
             myfile.write(head)
 
     if metrics is not None:
         row = f'{args.task}, {args.model}, {args.algo}, {metrics["gflops"]}, {metrics["ratio"]}, {metrics["acc"]}, {metrics["eval time"]}, {metrics["train time"]}\n'
-        with open(file_name, "a") as myfile:
+        with open(path, "a") as myfile:
             myfile.write(row)
                     
                 

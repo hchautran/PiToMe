@@ -36,7 +36,7 @@ class MCTFBlock(Block):
         return x
 
     def forward(self, x, register_hook=False):
-        self.attn(self.norm1(x), register_hook=True)
+        self.attn.forward_and_save_attn(self.norm1(x), register_hook=True)
         x = self.compress_x(x, x) 
         x = x + self.drop_path(self.attn.forward_and_save_attn(self.norm1(x), register_hook=register_hook))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
@@ -184,16 +184,12 @@ def apply_patch(
 
 
     current_layer = 0
-    margin = margin 
-    num_layers = len(model.blocks)
-    # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._mctf_info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, Block):
-            # module.__class__ = MCTFBlock if compress_method == 'mctf' else PiMCTFBlock 
             module.__class__ = MCTFBlock
             module._mctf_info = model._mctf_info
             current_layer +=1
