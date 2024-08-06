@@ -79,8 +79,9 @@ class PiToMeCLIPEncoder(CLIPEncoder):
                 Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
         """
         len_layers = len(self.layers)
-        self._pitome_info["ratio"] = [self.ratio if i%2==0 else 1.0 for i in range(len_layers)]
-        # self._pitome_info["ratio"] = [self.ratio] * len(self.layers) 
+        # self._pitome_info["ratio"] = [self.ratio if i%2==0 else 1.0 for i in range(len_layers)]
+        # self._tome_info["ratio"] = [self.ratio for i in range(len_layers) ]
+        self._pitome_info["ratio"] = [self.ratio] * len(self.layers) 
         self._pitome_info["size"] = None
         self._pitome_info["source"] = None
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions

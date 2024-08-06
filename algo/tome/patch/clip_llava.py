@@ -72,7 +72,8 @@ class ToMeCLIPEncoder(CLIPEncoder):
         self._tome_info["r"] = [self.r]* len(self.layers) 
         # self._tome_info["ratio"] = [self.ratio] * len(self.layers) 
         # self._tome_info["ratio"] = [self.ratio] * len(self.layers) 
-        self._tome_info["ratio"] = [self.ratio if i%2==0  else 1.0 for i in range(len_layers) ]
+        # self._tome_info["ratio"] = [self.ratio if i%2==0  else 1.0 for i in range(len_layers) ]
+        self._tome_info["ratio"] = [self.ratio for i in range(len_layers) ]
         self._tome_info["size"] = None
         self._tome_info["source"] = None
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions

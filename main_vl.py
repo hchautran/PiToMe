@@ -367,5 +367,5 @@ if __name__ == "__main__":
     if metrics is not None:
         sum = metrics["txt_r1"] + metrics["txt_r5"] + metrics["txt_r10"] + metrics["img_r1"] + metrics["img_r5"] + metrics["img_r10"]
         row = f'{args.dataset},{model_dict[args.model]},{args.algo},{metrics["gflops"]},{args.ratio},{metrics["txt_r1"]},{metrics["txt_r5"]},{metrics["txt_r10"]},{metrics["img_r1"]},{metrics["img_r5"]},{metrics["img_r10"]},{sum},{train_time},{eval_time},{"false"}\n'
-        with open(path, "a") as myfile:
+        with open(path, "a") as myfile
             myfile.write(row)
