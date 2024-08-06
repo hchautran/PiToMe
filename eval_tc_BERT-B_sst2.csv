@@ -1,0 +1,5 @@
+dataset,model,algo,gflops,ratio,acc,eval time,train time
+sst2, bert-base-uncased, pitome, 0.985164672, 0.505, 65.92548076923077, 0.850924015045166, 0
+sst2, bert-base-uncased, pitome, 1.05276864, 0.525, 69.83173076923077, 0.8585982322692871, 0
+sst2, bert-base-uncased, pitome, 1.164900096, 0.55, 71.39423076923077, 0.8700647354125977, 0
+sst2, bert-base-uncased, pitome, 1.382202624, 0.6, 75.98407451923077, 0.8743417263031006, 0
