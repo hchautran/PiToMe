@@ -1,6 +1,6 @@
 
 # Loop through each element in the array
-for dataset in 'sst2' 
+for dataset in 'imdb' 
 do
     for model in  'bert-base-uncased'  
     do 

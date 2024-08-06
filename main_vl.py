@@ -70,8 +70,8 @@ def get_pitome_model(model, args):
         model.visual_encoder.ratio=float(args.ratio)
         model.visual_encoder.r=int(args.reduced_token)
     elif 'blip' or 'albef' in args.model:
-        pitome.patch.blip(model.visual_encoder,use_k=args.use_k)
-        pitome.patch.blip(model.visual_encoder_m,use_k=args.use_k)
+        pitome.patch.blip(model.visual_encoder,use_k=args.use_k, margin=float(args.margin) if args.margin is not None else None, alpha=float(args.alpha))
+        pitome.patch.blip(model.visual_encoder_m,use_k=args.use_k, margin=float(args.margin) if args.margin is not None else None, alpha=float(args.alpha))
         model.visual_encoder.ratio=float(args.ratio)
         model.visual_encoder_m.ratio=float(args.ratio)
         model.visual_encoder.r=int(args.reduced_token)
@@ -198,6 +198,8 @@ def parse_args():
     parser.add_argument('--granularity', type=int, default=4, help='the token number gap between each compression rate candidate')
     parser.add_argument('--dataset', default='flickr', help='dataset')
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
+    parser.add_argument("--margin", default=None)
+    parser.add_argument("--alpha", default=1.0, type=float)
     parser.add_argument(
         "--options",
         nargs="+",
@@ -356,16 +358,18 @@ if __name__ == "__main__":
     }
     abs_path =f'{os.getcwd()}/itr_results'
     metrics, args, train_time, eval_time = main()
-    file_name = f'{"eval" if args.eval else "train"}_itr_{model_dict[args.model]}.csv'
-    # file_name = f'ablation_study_wo_step.csv'
+    # file_name = f'{"eval" if args.eval else "train"}_itr_{model_dict[args.model]}.csv'
+    file_name = f'ablation_alpha.csv'
     path = f'{abs_path}/{file_name}'
     if not pathlib.Path(path).is_file():
-        head = "dataset,model,algo,gflops,ratio,txt_r1,txt_r5,txt_r10,img_r1,img_r5,img_r10,r_sum,train time,eval time,use attn\n"
+        # head = "dataset,model,algo,gflops,ratio,txt_r1,txt_r5,txt_r10,img_r1,img_r5,img_r10,r_sum,train time,eval time,use attn\n"
+        head = "dataset,model,gflops,ratio,r_sum,alpha\n"
         with open(path, "a") as myfile:
             myfile.write(head)
 
     if metrics is not None:
         sum = metrics["txt_r1"] + metrics["txt_r5"] + metrics["txt_r10"] + metrics["img_r1"] + metrics["img_r5"] + metrics["img_r10"]
-        row = f'{args.dataset},{model_dict[args.model]},{args.algo},{metrics["gflops"]},{args.ratio},{metrics["txt_r1"]},{metrics["txt_r5"]},{metrics["txt_r10"]},{metrics["img_r1"]},{metrics["img_r5"]},{metrics["img_r10"]},{sum},{train_time},{eval_time},{"false"}\n'
-        with open(path, "a") as myfile
+        # row = f'{args.dataset},{model_dict[args.model]},{args.algo},{metrics["gflops"]},{args.ratio},{metrics["txt_r1"]},{metrics["txt_r5"]},{metrics["txt_r10"]},{metrics["img_r1"]},{metrics["img_r5"]},{metrics["img_r10"]},{sum},{train_time},{eval_time},{"false"}\n'
+        row = f'{args.dataset},{model_dict[args.model]},{metrics["gflops"]},{args.ratio},{sum},{args.alpha}\n'
+        with open(path, "a") as myfile:
             myfile.write(row)

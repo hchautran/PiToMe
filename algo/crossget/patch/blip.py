@@ -145,7 +145,6 @@ def make_cross_get_class(transformer_class):
 
     return CrossGetVisionTransformer
 
-
 def apply_patch(
    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False, output_attn=False):
     """

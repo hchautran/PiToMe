@@ -180,13 +180,10 @@ def pitome_vision(
             _, dst_idx = scores.max(dim=-1) 
             src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
             dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
-
-
             if x_cls is not None:
                 return torch.cat([x_cls, protected, dst], dim=1)
             else:
                 return torch.cat([protected, dst], dim=1)
-
         if class_token:
             return merge, None 
         return merge, None 
@@ -282,7 +279,6 @@ def pitome_vision_using_attn(
             # sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
             # isolation_score = sim.mean(dim=-1) + sim.sum(-1)
             # indices =  torch.argsort(isolation_score, descending=True)
-            sigma =  1 - margin 
             sim = metric@metric.transpose(-1,-2) 
             # isolation_score = (2*(torch.exp(-(((1 - sim)/sigma)**2))) - 1).mean(-1) *  1/(sigma*torch.sqrt(torch.tensor(2*torch.pi)))
             # isolation_score = (2*torch.exp(-(((1 - sim)/sigma)**2))-1).mean(-1) 
@@ -329,7 +325,7 @@ def pitome_text(
     attn:torch.Tensor = None,
     margin:torch.Tensor=0.5,
     class_token: bool = False,
-    training:bool=False
+    alpha=1.0
 ):
     if attn is not None and class_token:
         B,T,C = metric.shape
@@ -353,11 +349,12 @@ def pitome_text(
         B,T,C = metric.shape
         r = math.floor(T- T*ratio)
         metric = F.normalize(metric, p=2, dim=-1) 
-
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
         sim = metric@metric.transpose(-1,-2)
         sigma = 1 - margin 
         isolation_score = (torch.exp(-(((1 - sim)/sigma)**2 * 0.5))).mean(-1) *  1/(sigma*torch.sqrt(torch.tensor(2*torch.pi))) 
+        # sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01, alpha=alpha)
+        # isolation_score = sim.mean(dim=-1) 
         indices =  torch.argsort(isolation_score, descending=True)
 
     with torch.no_grad():

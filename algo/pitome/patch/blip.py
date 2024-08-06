@@ -19,7 +19,8 @@ class PiToMeBlock(Block):
                 ratio=ratio,
                 metric=metric,
                 margin=self.margin,
-                class_token=self._pitome_info["class_token"]
+                class_token=self._pitome_info["class_token"],
+                alpha=self._pitome_info["alpha"]
             )
           
             if self._pitome_info["trace_source"]:
@@ -148,7 +149,7 @@ def make_pitome_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False, output_attn=False):
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=None, use_k=False, output_attn=False, alpha=1.0):
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.
 
@@ -177,11 +178,15 @@ def apply_patch(
         "prop_attn": prop_attn,
         "class_token": True,
         "distill_token": False,
+        "alpha": alpha,
     }
     current_layer = 0
     num_layers = len(model.blocks)
     # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
-    margins = [0.9 - .9*(i/num_layers) for i in range(num_layers)]
+    if margin is None:
+        margins = [0.9 - .9*(i/num_layers) for i in range(num_layers)]
+    else:
+        margins = [margin for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._pitome_info["distill_token"] = True
