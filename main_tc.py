@@ -15,7 +15,7 @@ from algo import (
     CROSSGET
 )
 from tc.engine import Engine, BERT_BASE, DISTILBERT_BASE, BERT_LARGE, ALBERT
-
+    
 
 # consts
 OUTPUT_DIR = "output_dir/"
