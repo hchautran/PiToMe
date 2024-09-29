@@ -15,8 +15,7 @@ Increasing the throughput of the Transformer architecture, a foundational compon
 ## Method
 ![Example Image](/figures/method.png)
 
-
-[Link Text](relative/path/to/file)
+All implementations of PiToMe and baselines can be found in the [algo](algo) folder
 
 ---
 ## Experiments 
