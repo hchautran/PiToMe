@@ -20,7 +20,16 @@ Increasing the throughput of the Transformer architecture, a foundational compon
 
 ---
 ### Experiments 
+##### Installation 
+
+```
+conda create -n pitome python=3.10
+conda activate pitome
+conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia 
+pip install -r requirements.txt
+```
 ##### Image-Text Retrieval 
+
 ##### Image Classification 
 ##### Text Classification 
 ##### Visual Question Answering
