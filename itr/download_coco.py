@@ -1,15 +1,24 @@
 import os
 import subprocess
-from dotenv import load_dotenv
 import os
+import lavis
+from lavis.common.utils import (
+    cleanup_dir,
+    get_abs_path,
+    get_cache_path
+) 
+from omegaconf import OmegaConf
+from pathlib import Path
+lavis_path = '/'.join(lavis.__file__.split('/')[:-1])
+config_path = get_abs_path(f"{lavis_path}/configs/datasets/coco/defaults_ret.yaml")
 
-# Load environment variables from .env file
-load_dotenv()
 
-# Access the environment variable
-DATA_PATH = os.environ.get('DATA_PATH')
 
-COCO_PATH = os.path.join(DATA_PATH, "coco/images")
+storage_dir = OmegaConf.load(
+    config_path
+).datasets.coco_retrieval.build_info.images.storage
+COCO_PATH = Path(get_cache_path(storage_dir))
+print('downloading coco dataset to:', COCO_PATH)
 
 os.makedirs(COCO_PATH, exist_ok=True)
 

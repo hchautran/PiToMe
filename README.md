@@ -20,20 +20,55 @@ All implementations of PiToMe and baselines can be found in the [algo](algo) fol
 ---
 ## Experiments 
 ### Installation 
-
+First, you need to install the required packaged using the command below:  
 ```
 conda create -n pitome python=3.10
 conda activate pitome
 conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia 
 pip install -r requirements.txt
 ```
+
 ### Image-Text Retrieval 
 
+#### Data Preparaion
+
+In our paper we evaluate our method on 2 dataset - Flickr30k and MS-COCO. Please foolow these step to prepare the datasets
+
+**step 1**: Configure the data storage path to your wanted path in the `default.yml` file. This file is located in the the root folder where lavis is installed. you can find it quickly by  using this command:
+```
+print(f"{'/'.join(lavis.__file__.split('/')[:-1])}/configs")
+
+```
+
+Update the `cache_root`  to the path that you wanted.
+
+
+**step 2**: Download the data
+you can download Flickr30k and MSCOCO:
+```
+python itr/download_coco.py
+python itr/download_flickr.py
+```
+
+
+
+#### Evaluation 
+
+
 ### Image Classification 
+#### Data Preparation 
+
+#### Evaluation 
 
 ### Text Classification 
+#### Data Preparation 
+
+#### Evaluation 
 
 ### Visual Question Answering
+#### Data Preparation 
+
+#### Evaluation 
 
 ---
 ## Citation

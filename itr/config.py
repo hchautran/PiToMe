@@ -1,7 +1,9 @@
 import argparse
-from dotenv import load_dotenv
 import os
 import torch
+import lavis
+lavis_path = '/'.join(lavis.__file__.split('/')[:-1])
+
 # from consts import DATA_PATH
 
 DATA_PATH = '/media/caduser/MyBook/chau'

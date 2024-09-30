@@ -6,10 +6,8 @@ from utils.data_utils import  get_loaders
 from lavis.models import load_model_and_preprocess
 from config import parser
 from config import LAVIS_BLIP_BASE_FLICKR, LAVIS_BLIP_BASE_COCO, COCO, FLICKR, FLICKR_PATH, COCO_PATH 
-from dotenv import load_dotenv
 
-# DATA_PATH = '/media/caduser/MyBook/chau'
-# Load environment variables from .env file
+
 
 if __name__ == "__main__":
     config = parser.parse_args()

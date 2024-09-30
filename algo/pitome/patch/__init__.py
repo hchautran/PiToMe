@@ -9,6 +9,5 @@ from .blip import apply_patch as blip
 from .blip2 import apply_patch as blip2
 from .clip import apply_patch as clip 
 from .clip_hf import apply_patch as clip_hf 
-from .llama import apply_patch as llama 
 
-__all__ = ["deit", "swag", "mae", "aug", "bert", "distilbert",  "blip", "blip2", "clip", "clip_hf", 'llama']
+__all__ = ["deit", "swag", "mae", "aug", "bert", "distilbert",  "blip", "blip2", "clip", "clip_hf" ]
