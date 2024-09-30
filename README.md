@@ -34,7 +34,7 @@ pip install -r requirements.txt
 
 In our paper we evaluate our method on 2 dataset - Flickr30k and MS-COCO. 
 
-**step 1**: Configure the data storage path to your wanted path in the `default.yml` file. This file is located in the the root folder where lavis is installed. you can find it quickly by  using this command:
+**step 1**: Configure the data storage path to your wanted path in the `default.yml` file. This file is located in the the folder where lavis is installed. you can find it quickly by  using this command:
 ```
 print(f"{'/'.join(lavis.__file__.split('/')[:-1])}/configs")
 
