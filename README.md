@@ -50,3 +50,4 @@ pip install -r requirements.txt
   copyright = {Creative Commons Attribution 4.0 International}
 }
 ```
+If you have any issue, feel free to contact me at tranhoaichau.00@gmail.com
