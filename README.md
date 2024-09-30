@@ -66,7 +66,7 @@ python -m torch.distributed.run \
     --eval 
 ```
 
-Use can also evaluate for all other baselines with multiple ration `r` by running
+You can also evaluate for all other baselines with multiple ration `r` by running
 
 ```
 python scripts/eval_itr.sh
