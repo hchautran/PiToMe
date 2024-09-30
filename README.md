@@ -2,9 +2,9 @@
 ![Example Image](/figures/overview.png)
 ---
 ### News
-[29/09/2024] Release code for image-text retrieval task
-[25/09/2024] Our paper has been accepted at NeurIPS 2024 
-[29/05/2024] Upload PrePrint on Arxiv
+- [29/09/2024] Release code for image-text retrieval task
+- [25/09/2024] Our paper has been accepted at NeurIPS 2024 
+- [29/05/2024] Upload PrePrint on Arxiv
 
 --- 
 ## Abstract
@@ -51,24 +51,38 @@ python itr/download_flickr.py
 ```
 
 
+#### Run 
 
-#### Evaluation 
+Currently we are supporting `blip`, `blip2`, `clip`, and `albef` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+```
+python -m torch.distributed.run \
+    --nproc_per_node=5 main_vl.py \
+    --cfg-path scripts/eval_scripts/blip_itr_coco.yml \
+    --algo pitome \
+    --use_k False \
+    --ratio 0.95 \
+    --model blip \
+    --dataset flickr \
+    --eval 
+```
 
+Use can also evaluate for all other baselines with multiple ration `r` by running
+
+```
+python scripts/eval_itr.sh
+```
+
+The results will be printed and saved to `itr_outputs` directory.
 
 ### Image Classification 
-#### Data Preparation 
+Comming soon
 
-#### Evaluation 
 
 ### Text Classification 
-#### Data Preparation 
-
-#### Evaluation 
+Comming soon
 
 ### Visual Question Answering
-#### Data Preparation 
-
-#### Evaluation 
+Comming soon
 
 ---
 ## Citation
