@@ -32,7 +32,7 @@ pip install -r requirements.txt
 
 #### Data Preparaion
 
-In our paper we evaluate our method on 2 dataset - Flickr30k and MS-COCO. Please foolow these step to prepare the datasets
+In our paper we evaluate our method on 2 dataset - Flickr30k and MS-COCO. 
 
 **step 1**: Configure the data storage path to your wanted path in the `default.yml` file. This file is located in the the root folder where lavis is installed. you can find it quickly by  using this command:
 ```
