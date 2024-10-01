@@ -1,9 +1,7 @@
 import torch.nn.functional as F
 import os
 
-from tc.lra_datasets import (ListOpsDataset, Cifar10Dataset, ImdbDataset)
 from argparse import ArgumentParser
-from accelerate import Accelerator
 from algo import (
     PITOME,
     TOME,
@@ -55,8 +53,8 @@ if __name__ == "__main__":
     task_name = args.task
     algo = args.algo
 
-    # file_name = f'train_tc_{model_dict[args.model]}_{task_name}.csv' if not args.eval else f'eval_tc_{model_dict[args.model]}_{task_name}.csv'
-    file_name = 'ablation_study_alpha.csv' 
+    file_name = f'train_tc_{model_dict[args.model]}_{task_name}.csv' if not args.eval else f'eval_tc_{model_dict[args.model]}_{task_name}.csv'
+    # file_name = 'ablation_study_alpha.csv' 
     engine = Engine(
         task_name=task_name,
         model_ckt=args.model,
@@ -73,8 +71,11 @@ if __name__ == "__main__":
     else:
         metrics = engine.train(num_epochs=10)
             
-    abs_path =f'{os.getcwd()}/tc_results/'
+    abs_path =f'{os.getcwd()}tc_results/'
     path = f'{abs_path}/{file_name}'
+    if not os.path.exists(abs_path):
+        os.mkdir(abs_path)
+
     if not pathlib.Path(path).is_file():
         head = "dataset,model,algo,gflops,ratio,acc,eval time,train time,alpha\n"
         with open(path, "a") as myfile:

@@ -66,7 +66,7 @@ python -m torch.distributed.run \
     --eval 
 ```
 
-You can also evaluate for all other baselines with multiple ration `r` by running
+You can also evaluate for all other baselines with multiple ratio `r` by running:
 
 ```
 python scripts/eval_itr.sh
@@ -79,7 +79,30 @@ Comming soon
 
 
 ### Text Classification 
-Comming soon
+
+**step 2**: Download the data
+you can download Flickr30k and MSCOCO:
+```
+python tc/get_data.py
+```
+
+#### Run
+
+Currently we are supporting `bert`,  and `distilbert` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+```
+python main_tc.py \
+   --algo pitome \
+   --ratio  0.65 \
+   --task imdb \
+   --model bert-base-uncased \
+   --eval 
+```
+
+You can also evaluate for all other baselines with multiple ratio `r` by running:
+```
+python scripts/eval_tc.sh
+```
+The results will be printed and saved to `tc_outputs` directory.
 
 ### Visual Question Answering
 Comming soon

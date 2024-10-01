@@ -322,23 +322,9 @@ def pitome_vision_using_attn(
 def pitome_text(
     metric: torch.Tensor, 
     ratio:float=1.0,
-    attn:torch.Tensor = None,
     margin:torch.Tensor=0.5,
     class_token: bool = False,
-    alpha=1.0
 ):
-    if attn is not None and class_token:
-        B,T,C = metric.shape
-        if len(attn.shape)==3:
-            cls_attn = attn[:,  0, 1:]
-        else:
-            cls_attn = attn[:, :, 0, 1:]
-            cls_attn = cls_attn.mean(dim=1)
-        _, idx = torch.sort(cls_attn, descending=True)
-        cls_index = torch.zeros((B,1), device=idx.device).long()
-        idx = torch.cat((cls_index, idx+1), dim=1)
-        return get_merge_func(metric, ratio=ratio, class_token=class_token, attn_idx=idx), None
-
     with torch.no_grad():
 
         if class_token:
@@ -356,11 +342,9 @@ def pitome_text(
         # sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01, alpha=alpha)
         # isolation_score = sim.mean(dim=-1) 
         indices =  torch.argsort(isolation_score, descending=True)
-
-    with torch.no_grad():
         merge_idx = indices[..., :2*r]
         protected_idx = indices[..., 2*r:]
-        a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:]
+        a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2]
         scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
         scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
         _, dst_idx = scores.max(dim=-1) 

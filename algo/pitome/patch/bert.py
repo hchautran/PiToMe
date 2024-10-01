@@ -49,7 +49,6 @@ class PiToMeBertLayer(BertLayer):
                 metric=key,
                 margin=self.margin,
                 class_token=self._pitome_info["class_token"],
-                alpha=self._pitome_info["alpha"],
             )
 
             weight = isolated_score

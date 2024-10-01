@@ -100,3 +100,4 @@ logs/
 */*.p
 */*.pdf
 */cache/
+*/data/

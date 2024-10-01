@@ -21,15 +21,8 @@ from lra_datasets import (ListOpsDataset, Cifar10Dataset, ImdbDataset)
 from argparse import ArgumentParser
 from accelerate import Accelerator
 from model.bert import CompressedBERT 
-import os
+from get_data import DATA_PATH
 import wandb
-
-# Load environment variables from .env file
-
-# Access the environment variable
-DATA_PATH = os.environ.get('DATA_PATH')
-# DATA_PATH = '/mnt/data/mount_4TBSSD/nmduy/pitome'
-DATA_PATH = '/media/caduser/MyBook/chau'
 
 
 
@@ -93,7 +86,6 @@ def train(model, config, dataset ,use_deepspeed):
             optimizer, dataloader, scheduler= accelerator.prepare(optimizer, dataloader, scheduler)
     
     # train model
-    model.to(device)
     model.train()
     avg_loss = None
     avg_acc = None
@@ -153,12 +145,6 @@ if __name__ == "__main__":
     avg_factor = 0.95
     task_name = args.task
     model_ckt = 'JiaqiLee/imdb-finetuned-bert-base-uncased'
-    # model_ckt = 'bert-base-uncased'
-    # model_ckt = 'bert-large-uncased'
-
-    # compress_methjod='none' 
-    # compress_method='dct'
-    wandb
     for method in [
         'tome', 
         'pitome',

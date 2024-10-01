@@ -19,7 +19,7 @@ from tc.lra_config import (
     get_cifar10_config, 
     get_text_classification_config
 )
-from tc.lra_datasets import (BBCDataset, SST2Dataset, ImdbDataset, RottenTomatoes)
+from tc.lra_datasets import (SST2Dataset, ImdbDataset, RottenTomatoes)
 from argparse import ArgumentParser
 from accelerate import Accelerator
 from algo import (
@@ -40,7 +40,7 @@ from algo import (
 )
 import os
 import wandb
-from consts import (
+from .get_data import (
     DATA_PATH
 )
 from copy import deepcopy
@@ -60,11 +60,9 @@ TASKS = {
     'imdb': ConfigDict(dict(dataset_fn=ImdbDataset, config_getter=get_text_classification_config)),
     'rotten': ConfigDict(dict(dataset_fn=RottenTomatoes, config_getter=get_text_classification_config)),
     'sst2': ConfigDict(dict(dataset_fn=SST2Dataset, config_getter=get_text_classification_config)),
-    'bbc': ConfigDict(dict(dataset_fn=BBCDataset, config_getter=get_text_classification_config)),
 }
 batch_sizes = {
     'imdb': 24, 
-    'bbc': 16, 
     'rotten': 256,
     'sst2': 256,
 }
@@ -72,6 +70,7 @@ BERT_BASE = 'bert-base-uncased'
 DISTILBERT_BASE = 'distilbert-base-uncased'
 BERT_LARGE= 'bert-large-uncased'
 ALBERT= 'albert'
+
 model_imdb_dict = {
     BERT_BASE: 'JiaqiLee/imdb-finetuned-bert-base-uncased',
     DISTILBERT_BASE: 'lvwerra/distilbert-imdb',
@@ -98,6 +97,23 @@ model_dict  = {
     BERT_BASE: BERT_BASE,
     DISTILBERT_BASE: DISTILBERT_BASE,
     BERT_LARGE: BERT_LARGE,
+}
+
+BERT_PATCHES = {
+    PITOME: pitome.patch.bert, 
+    TOME: tome.patch.bert, 
+    TOFU: tofu.patch.bert, 
+    DCT: dct.patch.bert, 
+    MCTF: mctf.patch.bert, 
+    CROSSGET: crossget.patch.bert, 
+}
+DISTILBERT_PATCHES = {
+    PITOME: pitome.patch.distilbert, 
+    TOME: tome.patch.distilbert, 
+    TOFU: tofu.patch.distilbert, 
+    DCT: dct.patch.distilbert, 
+    MCTF: mctf.patch.distilbert, 
+    CROSSGET: pitome.patch.distilbert, 
 }
 class Engine:
 
@@ -171,22 +187,11 @@ class Engine:
     def _prepare_bert_model(self, model_ckt, algo=None):
         self.model= BertForSequenceClassification.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
 
-        if algo is not None:
-            self.algo = algo
-        if self.algo == PITOME:
-            pitome.patch.bert(self.model.bert.encoder, margin=self.margin, alpha=self.alpha)
-        elif self.algo == TOME:
-            tome.patch.bert(self.model.bert.encoder)
-        elif self.algo == TOFU:
-            tofu.patch.bert(self.model.bert.encoder)
-        elif self.algo == DCT:
-            dct.patch.bert(self.model.bert.encoder)
-        elif self.algo == DIFFRATE:
-            pitome.patch.bert(self.model.bert.encoder, use_attn=True)
-        elif self.algo == MCTF:
-            mctf.patch.bert(self.model.bert.encoder)
-        elif self.algo == CROSSGET:
-            crossget.patch.bert(self.model.bert.encoder)
+        self.algo = algo
+
+
+        if self.algo is not None:
+            BERT_PATCHES[self.algo](self.model.bert.encoder)
         else:
             pitome.patch.bert(self.model.bert.encoder)
             self.set_ratio(1.0)
@@ -199,22 +204,10 @@ class Engine:
 
     def _prepare_distil_model(self, model_ckt, algo=None):
         self.model = DistilBertForSequenceClassification.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
-        if self.algo is not None:
-            self.algo = algo
+        self.algo = algo
+
         if self.algo == PITOME:
-            pitome.patch.distilbert(self.model.distilbert.transformer)
-        elif self.algo == TOME:
-            tome.patch.distilbert(self.model.distilbert.transformer)
-        elif self.algo == TOFU:
-            tofu.patch.distilbert(self.model.distilbert.transformer)
-        elif self.algo == DCT:
-            dct.patch.distilbert(self.model.distilbert.transformer)
-        elif self.algo == DIFFRATE:
-            pitome.patch.distilbert(self.model.distilbert.transformer, use_attn=True)
-        elif self.algo == MCTF:
-            mctf.patch.distilbert(self.model.distilbert.transformer)
-        elif self.algo == CROSSGET:
-            crossget.patch.distilbert(self.model.distilbert.transformer)
+            DISTILBERT_PATCHES[self.algo](self.model.distilbert.transformer)
         else:
             tome.patch.distilbert(self.model.distilbert.transformer)
             self.set_ratio(1.0)
@@ -250,7 +243,7 @@ class Engine:
 
         lr = self.config.learning_rate
         wd = self.config.weight_decay
-        optimizer = torch.optim.AdamW(self.model.parameters(), lr=1e-5, weight_decay=0.01)
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, weight_decay=wd)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1, min_lr=1e-8, mode='max')
         # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,  eta_min=1e-8, T_max=3)
         optimizer, scheduler= self.accelerator.prepare(optimizer, scheduler)

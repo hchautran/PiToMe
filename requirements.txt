@@ -2,3 +2,5 @@ salesforce-lavis
 datasets
 accelerate
 timm==0.4.12 
+ml_collections
+wandb
