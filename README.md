@@ -35,17 +35,17 @@ pip install -r requirements.txt
 
 In our paper we evaluate our method on 2 dataset - Flickr30k and MS-COCO. 
 
-**step 1**: Configure the data storage path to your wanted path in the `default.yml` file. This file is located in the the folder where lavis is installed. you can find it quickly by  using this command:
+**step 1**: Configure the data storage path to your wanted path in the `default.yml` file. This file is located in the the folder where lavis is installed. you can find it quickly by using this command:
 ```
 print(f"{'/'.join(lavis.__file__.split('/')[:-1])}/configs")
 
 ```
 
-Update the `cache_root`  to the path that you wanted.
+Update the `cache_root`  entry to the path that you wanted.
 
 
 **step 2**: Download the data
-you can download Flickr30k and MSCOCO:
+You can download Flickr30k and MSCOCO by using avaiable scripts:
 ```
 python itr/download_coco.py
 python itr/download_flickr.py
@@ -55,6 +55,7 @@ python itr/download_flickr.py
 #### Run 
 
 Currently we are supporting `blip`, `blip2`, `clip`, and `albef` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+
 ```
 python -m torch.distributed.run \
     --nproc_per_node=5 main_vl.py \
