@@ -31,11 +31,11 @@ pip install -r requirements.txt
 
 ### Image-Text Retrieval 
 
-#### Data Preparaion
+#### Data Preparation
 
 In our paper we evaluate our method on 2 dataset - Flickr30k and MS-COCO. 
 
-**step 1**: Configure the data storage path to your wanted path in the `default.yml` file. This file is located in the the folder where lavis is installed. you can find it quickly by using this command:
+**Step 1**: Configure the data storage path to your wanted path in the `default.yml` file. This file is located in the the folder where lavis is installed. you can find it quickly by using this command:
 ```
 print(f"{'/'.join(lavis.__file__.split('/')[:-1])}/configs")
 
@@ -44,7 +44,7 @@ print(f"{'/'.join(lavis.__file__.split('/')[:-1])}/configs")
 Update the `cache_root`  entry to the path that you wanted.
 
 
-**step 2**: Download the data
+**Step 2**: Download the data
 You can download Flickr30k and MSCOCO by using avaiable scripts:
 ```
 python itr/download_coco.py
@@ -54,7 +54,7 @@ python itr/download_flickr.py
 
 #### Run 
 
-Currently we are supporting `blip`, `blip2`, `clip`, and `albef` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+Currently, we are supporting `blip`, `blip2`, `clip`, and `albef` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
 
 ```
 python -m torch.distributed.run \
@@ -68,13 +68,13 @@ python -m torch.distributed.run \
     --eval 
 ```
 
-You can also evaluate for all other baselines with multiple ratio `r` by running:
+You can also evaluate all other baselines with multiple ratio `r` by running:
 
 ```
 python scripts/eval_itr.sh
 ```
 
-The results will be printed and saved to `itr_outputs` directory.
+The results will be printed and saved to the `itr_outputs` directory.
 
 ### Image Classification 
 Comming soon
@@ -82,7 +82,7 @@ Comming soon
 
 ### Text Classification 
 
-**step 2**: Download the data
+First, you need to download the data
 you can download Flickr30k and MSCOCO:
 ```
 python tc/get_data.py
@@ -90,7 +90,7 @@ python tc/get_data.py
 
 #### Run
 
-Currently we are supporting `bert`,  and `distilbert` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+Currently, we are supporting `bert`,  and `distilbert` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
 ```
 python main_tc.py \
    --algo pitome \
@@ -100,14 +100,14 @@ python main_tc.py \
    --eval 
 ```
 
-You can also evaluate for all other baselines with multiple ratio `r` by running:
+You can also evaluate all other baselines with multiple ratio `r` by running:
 ```
 python scripts/eval_tc.sh
 ```
 The results will be printed and saved to `tc_outputs` directory.
 
 ### Visual Question Answering
-Comming soon
+Coming soon
 
 ---
 ## Citation
@@ -124,4 +124,4 @@ Comming soon
   copyright = {Creative Commons Attribution 4.0 International}
 }
 ```
-If you have any issue, feel free to contact me at tranhoaichau.00@gmail.com
+If you have any issues, feel free to contact me at tranhoaichau.00@gmail.com
