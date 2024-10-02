@@ -21,7 +21,7 @@ All implementations of PiToMe and baselines can be found in the [algo](algo) fol
 ---
 ## Experiments 
 ### Installation 
-First, you need to install the required packaged using the command below:  
+First, you need to install the required packages using the commands below:  
 ```
 conda create -n pitome python=3.10
 conda activate pitome
