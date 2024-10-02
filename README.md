@@ -83,7 +83,7 @@ Comming soon
 ### Text Classification 
 
 First, you need to download the data
-you can download Flickr30k and MSCOCO:
+you can download IMDb, Rotten Tomato, and SST datasets:
 ```
 python tc/get_data.py
 ```
