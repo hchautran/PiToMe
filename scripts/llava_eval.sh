@@ -31,8 +31,6 @@ do
                     --batch_size 1 \
                     --algo $algo \
                     --ratio $ratio \
-                    --compress_vit \
-                    --compress_llm \
                     # --wandb_args project=$model,name=$algo-$ratio 
             done
         done

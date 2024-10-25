@@ -58,7 +58,7 @@ Currently, we are supporting `blip`, `blip2`, `clip`, and `albef` you can try di
 
 ```
 python -m torch.distributed.run \
-    --nproc_per_node=5 main_vl.py \
+    --nproc_per_node=5 main_itr.py \
     --cfg-path scripts/eval_scripts/blip_itr_coco.yml \
     --algo pitome \
     --use_k False \

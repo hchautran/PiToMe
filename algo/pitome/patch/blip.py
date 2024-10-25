@@ -81,7 +81,7 @@ def make_pitome_class(transformer_class):
         """
 
         def forward(self,x, register_blk=-1):
-            self._pitome_info["r"] = [self.r]* len(self.blocks) 
+            self._pitome_info["k"] = [self.k]* len(self.blocks) 
             self._pitome_info["ratio"] =[1.0] + [self.ratio] * (len(self.blocks)-1)
             self._pitome_info["size"] = None
             self._pitome_info["source"] = None
@@ -109,7 +109,7 @@ def make_pitome_class(transformer_class):
 
         def forward_features(self, x, register_blk=-1) -> torch.Tensor:
       
-            self._pitome_info["r"] = [self.r]* len(self.blocks) 
+            self._pitome_info["k"] = [self.k]* len(self.blocks) 
             self._pitome_info["ratio"] = [self.ratio] * len(self.blocks) 
             self._pitome_info["size"] = None
             self._pitome_info["source"] = None
@@ -149,7 +149,7 @@ def make_pitome_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=None, use_k=False, output_attn=False, alpha=1.0):
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=None, output_attn=False, alpha=1.0):
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.
 
@@ -164,7 +164,7 @@ def apply_patch(
 
     model.__class__ = PiToMeVisionTransformer
     model.ratio = 1.0 
-    model.r=0.0
+    model.k=0.0
     
     # model.compress_method = 'tome' 
     model._pitome_info = {

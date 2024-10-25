@@ -14,30 +14,27 @@ from pathlib import Path
 from timm.data import Mixup
 from timm.models import create_model
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
-import ic.models_mae
-from ic.accelerated_engine import train_one_epoch, evaluate
-from ic.samplers import RASampler
-import ic.utils as utils
+import tasks.ic.models_mae
+from tasks.ic.engine import train_one_epoch, evaluate
+from tasks.ic.samplers import RASampler
+import tasks.ic.utils as utils
 import shutil
 import warnings
 from timm.scheduler.cosine_lr import CosineLRScheduler 
-from ic.utils import build_transform
+from tasks.ic.utils import build_transform
 import torch
 from algo import (
     PITOME,
     TOME,
     DCT,
     TOFU,
-    LTMP,
     DIFFRATE,
-    NONE, 
     pitome,
     dct,
     tome,
     tofu,
     DiffRate
 )
-from consts import DATA_PATH 
 import os
 from accelerate import Accelerator
 from torch.utils.data import DataLoader
@@ -45,6 +42,14 @@ import wandb
 from torchvision import transforms
 from skimage import color
 
+ALGO = {
+    PITOME: pitome,
+    TOME: tome,
+    DCT: dct,
+    TOFU: tofu,
+}
+
+DATA_PATH = f'{os.getcwd()}/data/ic' #
 
 torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
 warnings.filterwarnings('ignore')
@@ -101,7 +106,6 @@ model_dict = {
 
 def get_args_parser():
     parser = argparse.ArgumentParser('ic training and evaluation script', add_help=False)
-    parser.add_argument('--use_k', default=False, type=bool)
     parser.add_argument('--batch-size', default=100, type=int)
     parser.add_argument('--epochs', default=10, type=int)
     parser.add_argument('--ratio', default=0.9125, type=float)
@@ -252,15 +256,15 @@ def get_args_parser():
 
 def get_tome_model(model, args):
     if 'deit' in args.model:
-        tome.patch.deit(model,use_k=args.use_k)
+        tome.patch.deit(model)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
     elif 'mae' in args.model:
-        tome.patch.mae(model,use_k=args.use_k)
+        tome.patch.mae(model)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
     elif 'vit' in args.model:
-        tome.patch.aug(model,use_k=args.use_k)
+        tome.patch.aug(model)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
 
@@ -270,15 +274,15 @@ def get_tome_model(model, args):
 
 def get_pitome_model(model, args):
     if 'deit' in args.model:
-        pitome.patch.deit(model,use_k=args.use_k)
+        pitome.patch.deit(model)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
     elif 'mae' in args.model:
-        pitome.patch.mae(model,use_k=args.use_k)
+        pitome.patch.mae(model)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
     elif 'vit' in args.model:
-        pitome.patch.aug(model,use_k=args.use_k)
+        pitome.patch.aug(model)
         model.ratio=float(args.ratio)
         model.r=int(args.reduced_token)
     else:
