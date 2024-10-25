@@ -8,8 +8,8 @@ do
     # for model in  'blip' 
     do
         # for algo in 'diffrate' 
-        sh scripts/eval_scripts/eval_itr_$model.sh $dataset none 1.0 
-        for algo in 'pitome' 'tome' 'diffrate' 'dct' 'crossget' 'mctf' 
+        # sh scripts/eval_scripts/eval_itr_$model.sh $dataset none 1.0 
+        for algo in  'dct' 'crossget' 'mctf' 
         # for algo in  'diffrate'
         do
             for ratio in '0.85' '0.875' '0.9' '0.925' '0.95' '0.975' 

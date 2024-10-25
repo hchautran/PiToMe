@@ -51,6 +51,7 @@ ALGOS = {
 
 
 def get_model(model, args):
+    print(args.algo)
     if 'clip' in args.model:
         ALGOS[args.algo].patch.clip(model.visual.transformer)
         model.visual.transformer.ratio=float(args.ratio) if args.algo != NONE else 1.0
