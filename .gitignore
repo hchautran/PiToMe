@@ -100,4 +100,5 @@ logs/
 */*.p
 */*.pdf
 */cache/
+*_results/
 */data/
