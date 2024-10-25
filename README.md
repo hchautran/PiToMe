@@ -10,7 +10,7 @@
 --- 
 ## Abstract
 
-Increasing the throughput of the Transformer architecture, a foundational component used in numerous state-of-the-art models for vision and language tasks (e.g., GPT, LLaVa), is an important problem in machine learning. One recent and effective strategy is to merge token representations within Transformer models, aiming to reduce computational and memory requirements while maintaining accuracy. Prior works have proposed algorithms based on Bipartite Soft Matching (BSM), which divides tokens into distinct sets and merges the top k similar tokens. However, these methods have significant drawbacks, such as sensitivity to token-splitting strategies and damage to informative tokens in later layers. This paper presents a novel paradigm called PiToMe, which prioritizes the preservation of informative tokens using an additional metric termed the energy score. This score identifies large clusters of similar tokens as high-energy, indicating potential candidates for merging, while smaller (unique and isolated) clusters are considered as low-energy and preserved. Experimental findings demonstrate that PiToMe saved from 40-60\% FLOPs of the base models while exhibiting superior off-the-shelf performance on image classification (0.5\% average performance drop of ViT-MAE-H compared to 2.6\% as baselines), image-text retrieval (0.3\% average performance drop of CLIP on Flickr30k compared to 4.5\% as others), and analogously in visual questions answering with LLaVa-7B. Furthermore, PiToMe is theoretically shown to preserve intrinsic spectral properties of the original token space under mild conditions.
+Increasing the throughput of the Transformer architecture, a foundational component used in numerous state-of-the-art models for vision and language tasks (e.g., GPT, LLaVa), is an important problem in machine learning. One recent and effective strategy is to merge token representations within Transformer models, aiming to reduce computational and memory requirements while maintaining accuracy. Prior works have proposed algorithms based on Bipartite Soft Matching (BSM), which divides tokens into distinct sets and merges the top k similar tokens. However, these methods have significant drawbacks, such as sensitivity to token-splitting strategies and damage to informative tokens in later layers. This paper presents a novel paradigm called `PiToMe`, which prioritizes the preservation of informative tokens using an additional metric termed the energy score. This score identifies large clusters of similar tokens as high-energy, indicating potential candidates for merging, while smaller (unique and isolated) clusters are considered as low-energy and preserved. Experimental findings demonstrate that PiToMe saved from 40-60\% FLOPs of the base models while exhibiting superior off-the-shelf performance on image classification (0.5\% average performance drop of ViT-MAE-H compared to 2.6\% as baselines), image-text retrieval (0.3\% average performance drop of CLIP on Flickr30k compared to 4.5\% as others), and analogously in visual questions answering with LLaVa-7B. Furthermore, PiToMe is theoretically shown to preserve intrinsic spectral properties of the original token space under mild conditions.
 
 ---
 ## Method
@@ -21,7 +21,7 @@ All implementations of PiToMe and baselines can be found in the [algo](algo) fol
 ---
 ## Experiments 
 ### Installation 
-First, you need to install the required packaged using the command below:  
+First, you need to install the required packages using the commands below:  
 ```
 conda create -n pitome python=3.10
 conda activate pitome
@@ -31,11 +31,11 @@ pip install -r requirements.txt
 
 ### Image-Text Retrieval 
 
-#### Data Preparaion
+#### Data Preparation
 
 In our paper we evaluate our method on 2 dataset - Flickr30k and MS-COCO. 
 
-**step 1**: Configure the data storage path to your wanted path in the `default.yml` file. This file is located in the the folder where lavis is installed. you can find it quickly by using this command:
+**Step 1**: Configure the data storage path in the `default.yml` file and change this to your preferred path. This file is located in the the folder where lavis is installed. you can find it quickly by using this command:
 ```
 print(f"{'/'.join(lavis.__file__.split('/')[:-1])}/configs")
 
@@ -44,7 +44,7 @@ print(f"{'/'.join(lavis.__file__.split('/')[:-1])}/configs")
 Update the `cache_root`  entry to the path that you wanted.
 
 
-**step 2**: Download the data
+**Step 2**: Download the data
 You can download Flickr30k and MSCOCO by using avaiable scripts:
 ```
 python itr/download_coco.py
@@ -54,7 +54,7 @@ python itr/download_flickr.py
 
 #### Run 
 
-Currently we are supporting `blip`, `blip2`, `clip`, and `albef` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+Currently, we are supporting `blip`, `blip2`, `clip`, and `albef` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
 
 ```
 python -m torch.distributed.run \
@@ -68,13 +68,13 @@ python -m torch.distributed.run \
     --eval 
 ```
 
-You can also evaluate for all other baselines with multiple ratio `r` by running:
+You can also evaluate all other baselines with multiple ratio `r` by running:
 
 ```
 python scripts/eval_itr.sh
 ```
 
-The results will be printed and saved to `itr_outputs` directory.
+The results will be printed and saved to the `itr_outputs` directory.
 
 ### Image Classification 
 Comming soon
@@ -82,15 +82,15 @@ Comming soon
 
 ### Text Classification 
 
-**step 2**: Download the data
-you can download Flickr30k and MSCOCO:
+First, you need to download the data
+you can download IMDb, Rotten Tomato, and SST datasets:
 ```
 python tc/get_data.py
 ```
 
 #### Run
 
-Currently we are supporting `bert`,  and `distilbert` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+Currently, we are supporting `bert`,  and `distilbert` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
 ```
 python main_tc.py \
    --algo pitome \
@@ -100,14 +100,14 @@ python main_tc.py \
    --eval 
 ```
 
-You can also evaluate for all other baselines with multiple ratio `r` by running:
+You can also evaluate all other baselines with multiple ratio `r` by running:
 ```
 python scripts/eval_tc.sh
 ```
 The results will be printed and saved to `tc_outputs` directory.
 
 ### Visual Question Answering
-Comming soon
+Coming soon
 
 ---
 ## Citation
@@ -124,4 +124,4 @@ Comming soon
   copyright = {Creative Commons Attribution 4.0 International}
 }
 ```
-If you have any issue, feel free to contact me at tranhoaichau.00@gmail.com
+If you have any issues, feel free to contact me at tranhoaichau.00@gmail.com
