@@ -1,0 +1,4 @@
+dataset,model,algo,gflops,ratio,txt_r1,txt_r5,txt_r10,img_r1,img_r5,img_r10,r_sum,train time,eval time,use attn
+flickr,BLIP,none,65.54411016192,1.0,96.9,99.8,100.0,87.48,97.6,98.98,580.76,0,78.02349257469177,false
+flickr,BLIP,pitome,28.67598323712,0.85,79.1,91.8,95.2,69.72,88.8,93.82,518.4399999999999,0,34.3005256652832,false
+flickr,BLIP,pitome,32.12378591232,0.875,86.5,96.2,98.2,76.12,92.86,96.22,546.1,0,37.66153621673584,false

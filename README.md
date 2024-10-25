@@ -37,7 +37,7 @@ In our paper we evaluate our method on 2 dataset - Flickr30k and MS-COCO.
 
 **Step 1**: Configure the data storage path in the `default.yml` file and change this to your preferred path. This file is located in the the folder where lavis is installed. you can find it quickly by using this command:
 ```
-print(f"{'/'.join(lavis.__file__.split('/')[:-1])}/configs")
+import lavis;print(f"{'/'.join(lavis.__file__.split('/')[:-1])}/configs");
 
 ```
 
