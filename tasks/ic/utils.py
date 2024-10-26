@@ -40,6 +40,7 @@ import os
 from torch.utils.data import Dataset
 from PIL import Image
 import json
+DATA_PATH = f'{os.getcwd()}/data/ic'
 
 
 class ImageNetKaggle(Dataset):
@@ -588,7 +589,7 @@ def build_dataset(is_train, args):
     elif args.data_set == 'IMNET':
         from datasets import load_dataset
         # dataset = ImageNetKaggle(root=args.data_path, split='train' if is_train else 'val', transform=transform)
-        dataset = load_dataset('imagenet-1k', cache_dir='/media/caduser/MyBook/chau/.cache')
+        dataset = load_dataset('imagenet-1k', cache_dir=DATA_PATH)
         dataset = dataset['train' if is_train else 'validation']
         nb_classes = 1000
   

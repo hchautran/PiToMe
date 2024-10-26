@@ -29,6 +29,7 @@ from algo import (
     DCT,
     TOFU,
     DIFFRATE,
+    NONE,
     pitome,
     dct,
     tome,
@@ -41,15 +42,16 @@ from torch.utils.data import DataLoader
 import wandb
 from torchvision import transforms
 from skimage import color
+from tasks.ic.utils import DATA_PATH
 
 ALGO = {
     PITOME: pitome,
     TOME: tome,
     DCT: dct,
     TOFU: tofu,
+    NONE: tome,
 }
 
-DATA_PATH = f'{os.getcwd()}/data/ic' #
 
 torch.hub.set_dir(f'{DATA_PATH}/.vision_ckts')
 warnings.filterwarnings('ignore')
@@ -252,59 +254,19 @@ def get_args_parser():
     parser.add_argument('--warmup_compression_rate', action='store_true', default=False, help='inactive computational constraint in first epoch')
     return parser
 
-
-
-def get_tome_model(model, args):
+def get_model(model, args):
     if 'deit' in args.model:
-        tome.patch.deit(model)
+        ALGO[args.algo].patch.deit(model)
         model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
     elif 'mae' in args.model:
-        tome.patch.mae(model)
+        ALGO[args.algo].patch.mae(model)
         model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
     elif 'vit' in args.model:
-        tome.patch.aug(model)
+        ALGO[args.algo].patch.aug(model)
         model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
-
-    else:
-        raise ValueError("only support deit, mae and caformer in this codebase")
-    
-
-def get_pitome_model(model, args):
-    if 'deit' in args.model:
-        pitome.patch.deit(model)
-        model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
-    elif 'mae' in args.model:
-        pitome.patch.mae(model)
-        model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
-    elif 'vit' in args.model:
-        pitome.patch.aug(model)
-        model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
 
-
-
-def get_tofu_model(model, args):
-    if 'deit' in args.model:
-        tofu.patch.deit(model,use_k=args.use_k)
-        model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
-    elif 'mae' in args.model:
-        tofu.patch.mae(model,use_k=args.use_k)
-        model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
-    elif 'vit' in args.model:
-        tofu.patch.aug(model,use_k=args.use_k)
-        model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
-    else:
-        raise ValueError("only support deit, mae and caformer in this codebase")
 
 
 def get_diffrate_model(model, args):
@@ -316,42 +278,8 @@ def get_diffrate_model(model, args):
         DiffRate.patch.aug(model, prune_granularity=args.granularity, merge_granularity=args.granularity)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
-
-    
-    if args.load_compression_rate:
-        with open('compression_rate.json', 'r') as f:
-            compression_rate = json.load(f) 
-            model_name = model_dict[args.model]
-            if not str(args.target_flops) in compression_rate[model_name]:
-                raise ValueError(f"compression_rate.json does not contaion {model_name} with {args.target_flops}G flops")
-            prune_kept_num = eval(compression_rate[model_name][str(args.target_flops)]['prune_kept_num'])
-            merge_kept_num = eval(compression_rate[model_name][str(args.target_flops)]['merge_kept_num'])
-            model.set_kept_num(prune_kept_num, merge_kept_num)
-    
-    else:
-        if args.use_k:
-            model.init_kept_num_using_r(args.reduced_token)
-        else:
-            model.init_kept_num_using_ratio(args.ratio)
+    model.init_kept_num_using_ratio(args.ratio)
             
-
-def get_dct_model(model, args):
-    if 'deit' in args.model:
-        dct.patch.deit(model,use_k=args.use_k)
-        model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
-    elif 'mae' in args.model:
-        dct.patch.mae(model,use_k=args.use_k)
-        model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
-    elif 'vit' in args.model:
-        dct.patch.aug(model,use_k=args.use_k)
-        model.ratio=float(args.ratio)
-        model.r=int(args.reduced_token)
-    else:
-        raise ValueError("only support deit, mae and caformer in this codebase")
-
-
 
 def main(args):
     accelerator = Accelerator(mixed_precision='no') 
@@ -427,21 +355,13 @@ def main(args):
         drop_path_rate=args.drop_path,
         drop_block_rate=None,
     )
-    
-    args.use_k=False
-    if args.algo == TOME:
-        get_tome_model(model, args)
-    elif args.algo == PITOME:
-        get_pitome_model(model, args)
-    elif args.algo == DIFFRATE:
+    if args.algo != DIFFRATE: 
         get_diffrate_model(model, args)
-    elif args.algo == TOFU:
-        get_tofu_model(model, args)
-    elif args.algo == DCT:
-        get_dct_model(model, args)
+    elif args.algo != NONE:
+        get_model(model, args)
     else:
         args.ratio = 1.0
-        get_tome_model(model, args)
+        get_model(model, args)
 
 
     if args.finetune:
@@ -596,7 +516,7 @@ if __name__ == '__main__':
     
     abs_path = os.getcwd()
     file_name = f'{"eval" if args.eval else "train"}_ic_{args.model}.csv'
-    path = f'{abs_path}/outputs/{file_name}'
+    path = f'{abs_path}/outputs/ic_outputs/{file_name}'
     if not pathlib.Path(path).is_file():
         head = "model, algo, gflops, ratio ,acc_1\n"
         if utils.is_main_process():

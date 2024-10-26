@@ -10,8 +10,8 @@ do
         do
         # Indented for loop body:
         echo "running vit $size $algo."
-        sh eval_scripts/eval_deit.sh vit $size 384 $ratio $algo  # Execute eval_ic.sh with arguments
+        sh scripts/eval_scripts/eval_deit.sh vit $size 384 $ratio $algo  # Execute eval_ic.sh with arguments
         done
     done
-    sh eval_scripts/eval_deit.sh vit $size 384 1.0 none  # Execute eval_ic.sh with arguments
+    sh scripts/eval_scripts/eval_deit.sh vit $size 384 1.0 none  # Execute eval_ic.sh with arguments
 done

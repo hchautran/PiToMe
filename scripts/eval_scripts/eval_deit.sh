@@ -20,4 +20,4 @@ export ALGO=$5
 
 # python main_ic.py --eval --load_compression_rate ---algo $1 --use_k False --ratio 0.925 --input_size ${INPUT_SIZE} 
 
-python main_ic.py --eval --batch-size 250 --model ${ARCH}_${SIZE}_patch16_${INPUT_SIZE}  --algo ${ALGO} --use_k False --ratio ${RATIO} --input-size ${INPUT_SIZE} 
+python main_ic.py --eval --batch-size 250 --model ${ARCH}_${SIZE}_patch16_${INPUT_SIZE}  --algo ${ALGO} --ratio ${RATIO} --input-size ${INPUT_SIZE} 
