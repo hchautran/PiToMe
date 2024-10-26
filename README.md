@@ -82,14 +82,6 @@ Comming soon
 
 ### Text Classification 
 
-First, you need to download the data
-you can download IMDb, Rotten Tomato, and SST datasets:
-```
-python tasks/tc/get_data.py
-```
-
-#### Run
-
 Currently, we are supporting `bert`,  and `distilbert` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
 ```
 python main_tc.py \

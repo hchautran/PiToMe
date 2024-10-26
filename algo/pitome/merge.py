@@ -85,8 +85,6 @@ def bipartite_soft_matching(
         dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce=mode)
 
         return torch.cat([unm, dst], dim=1)
-
-
     return merge, None
 
 def pitome_vision(
@@ -194,8 +192,8 @@ def pitome_text(
     isolation_score = 1 - F.softmax(isolation_score, dim=-1) 
 
     if class_token:
-        return merge, torch.cat([torch.ones(B, 1).to(metric.device), isolation_score], dim=-1)[..., None]
-    return merge, isolation_score[..., None] 
+        return merge, None 
+    return merge, None 
 
 
 def merge_mean(
