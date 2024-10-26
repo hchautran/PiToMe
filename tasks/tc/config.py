@@ -1,5 +1,13 @@
+import torch
+import ml_collections
+
+
 import numpy as np
 from torch.optim.lr_scheduler import LambdaLR
+import os
+
+
+DATA_PATH = f'{os.getcwd()}/data/tc' #you can change this to your desired path
 
 
 # kindly adapted from google-research/long-range-arena code
@@ -54,3 +62,80 @@ def create_learning_rate_scheduler(factors, config):
         return ret
 
     return lambda optimizer: LambdaLR(optimizer, step_fn)
+
+# helper fns
+def make_char_tokenizer(allowed_chars, lowercase_input=False):
+    # make distinct
+    allowed_chars = list(set(allowed_chars))
+
+    def _tokenizer(x, max_length):
+        # note: x is not batched
+        x = x[:max_length]
+        if lowercase_input:
+            x = x.lower()
+        n = len(x)
+        mask = ([1] * n) + ([0] * (max_length - n))
+        ids = list(map(lambda c: allowed_chars.index(c) + 1, x)) + ([0] * (max_length - n))
+        return {'input_ids': torch.LongTensor([ids]), 'attention_mask': torch.LongTensor([mask])}
+
+    _tokenizer.vocab_size = len(allowed_chars) + 1
+    return _tokenizer
+
+
+def make_word_tokenizer(allowed_words, lowercase_input=False, allow_unk=True):
+    # make distinct
+    allowed_words = list(set(allowed_words))
+    PAD_TOKEN = 0
+    UNK_TOKEN = 1
+
+    def _tokenizer(x_str, max_length):
+        # note: x_str is not batched
+        if lowercase_input:
+            x_str = x_str.lower()
+
+        x = x_str.split()
+        x = x[:max_length]
+        n = len(x)
+        mask = ([1] * n) + ([0] * (max_length - n))
+        ids = list(map(lambda c: allowed_words.index(c) + 2 if c in allowed_words else UNK_TOKEN, x)) + \
+                  ([PAD_TOKEN] * (max_length - n))
+        if not allow_unk:
+            assert UNK_TOKEN not in ids, "unknown words are not allowed by this tokenizer"
+        return {'input_ids': torch.LongTensor([ids]), 'attention_mask': torch.LongTensor([mask])}
+
+    _tokenizer.vocab_size = len(allowed_words) + 2
+    return _tokenizer
+
+
+
+ascii_tokenizer = make_char_tokenizer(''.join(chr(i) for i in range(256)))
+
+
+
+
+def get_text_classification_config(num_labels=2):
+    config = ml_collections.ConfigDict()
+    config.batch_size = 4
+    config.eval_frequency = 100
+    config.total_train_samples = 640000
+    config.total_eval_samples = -1
+    config.learning_rate = 0.05
+    config.weight_decay = 1e-1
+    config.warmup_steps = 8000
+    config.lr_scheduler = create_learning_rate_scheduler("constant * linear_warmup * cosine_decay", config)
+    config.tokenizer = ascii_tokenizer
+    config.tied_weights = False
+    config.max_length = 1000
+
+    model_config = ml_collections.ConfigDict()
+    model_config.max_position_embeddings = config.max_length
+    model_config.num_attention_heads = 4
+    model_config.num_hidden_layers = 4
+    model_config.hidden_size = 256
+    model_config.intermediate_size = 1024
+    model_config.num_labels = num_labels
+    model_config.vocab_size = config.tokenizer.vocab_size
+
+    return config, model_config
+
+

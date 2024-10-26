@@ -1,6 +1,6 @@
 import torch
 from lavis.models.vit import VisionTransformer, Attention, Block
-from ..merge import merge_source, pitome_vision, merge_wavg, pitome_vision_using_attn, unprotected_pitome_vision
+from ..merge import merge_source, pitome_vision, merge_wavg
 
 class PiToMeBlock(Block):
     """

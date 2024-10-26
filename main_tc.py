@@ -67,7 +67,7 @@ if __name__ == "__main__":
     else:
         metrics = engine.train(num_epochs=10)
             
-    abs_path =f'{os.getcwd()}/outputs/tc_results/'
+    abs_path =f'{os.getcwd()}/outputs/tc_outputs/'
     path = f'{abs_path}/{file_name}'
     if not os.path.exists(abs_path):
         os.mkdir(abs_path)

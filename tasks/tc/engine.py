@@ -14,12 +14,10 @@ from tqdm import tqdm
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from ml_collections import ConfigDict
-from tc.lra_config import (
-    get_listops_config, 
-    get_cifar10_config, 
+from tasks.tc.config import (
     get_text_classification_config
 )
-from tc.lra_datasets import (SST2Dataset, ImdbDataset, RottenTomatoes)
+from tasks.tc.dataset import (SST2Dataset, ImdbDataset, RottenTomatoes)
 from argparse import ArgumentParser
 from accelerate import Accelerator
 from algo import (
@@ -34,16 +32,11 @@ from algo import (
     TOFU,
     DCT,
     NONE,
-    DIFFRATE,
     CROSSGET,
     MCTF,
 )
-import os
 import wandb
-from .get_data import (
-    DATA_PATH
-)
-from copy import deepcopy
+from tasks.tc.config import DATA_PATH
 
 def transformers_collator(batch, tokenizer):
     input_list, target_list = zip(*batch)
@@ -113,7 +106,7 @@ DISTILBERT_PATCHES = {
     TOFU: tofu.patch.distilbert, 
     DCT: dct.patch.distilbert, 
     MCTF: mctf.patch.distilbert, 
-    CROSSGET: pitome.patch.distilbert, 
+    CROSSGET: crossget.patch.distilbert, 
 }
 class Engine:
 

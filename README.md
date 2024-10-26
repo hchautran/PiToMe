@@ -85,7 +85,7 @@ Comming soon
 First, you need to download the data
 you can download IMDb, Rotten Tomato, and SST datasets:
 ```
-python tc/get_data.py
+python tasks/tc/get_data.py
 ```
 
 #### Run

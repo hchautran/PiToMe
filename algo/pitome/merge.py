@@ -89,40 +89,6 @@ def bipartite_soft_matching(
 
     return merge, None
 
-
-def get_merge_func(metric: torch.Tensor, attn_idx:torch.Tensor, ratio: float=1.0, r:int=0,  class_token: bool = True):
-    B,T,C = metric.shape
-    if r > 0:
-        r = min(r, T // 2)
-    elif ratio < 1.0:
-        kept_number = math.ceil(T*ratio)
-    else:
-        return do_nothing, do_nothing
-
-    with torch.no_grad():
-        metric = torch.gather(metric, dim=1, index=attn_idx.unsqueeze(-1).expand(-1, -1, metric.shape[-1]))
-        metric = metric/metric.norm(dim=-1, keepdim=True)
-        unimportant_tokens_metric = metric[:, kept_number:]
-        compress_number = unimportant_tokens_metric.shape[1]
-        important_tokens_metric = metric[:,:kept_number]
-        similarity = unimportant_tokens_metric@important_tokens_metric.transpose(-1,-2)
-        if class_token:
-            similarity[..., :, 0] = -math.inf
-        _, node_idx = similarity.max(dim=-1)
-        dst_idx = node_idx[..., None]
-    def merge(x: torch.Tensor, mode="mean", training=False) -> torch.Tensor:
-        x= torch.gather(x, dim=1, index=attn_idx.unsqueeze(-1).expand(-1, -1, x.shape[-1]))
-        src = x[:,kept_number:]
-        dst = x[:,:kept_number]
-        n, t1, c = src.shape
-        dst = dst.scatter_reduce(-2, dst_idx.expand(n, compress_number, c), src, reduce=mode) 
-        if training:
-            return torch.cat([dst, src], dim=1)
-        else:
-            return dst
-    return merge
-
-
 def pitome_vision(
     metric: torch.Tensor, 
     attn:torch.Tensor=None,
@@ -132,19 +98,8 @@ def pitome_vision(
     class_token: bool = False,
     alpha=1.0
 ):
-    if attn is not None and class_token:
-        B,T,C = metric.shape
-        if len(attn.shape)==3:
-            cls_attn = attn[:,  0, 1:]
-        else:
-            cls_attn = attn[:, :, 0, 1:]
-            cls_attn = cls_attn.mean(dim=1)
-        _, idx = torch.sort(cls_attn, descending=True)
-        cls_index = torch.zeros((B,1), device=idx.device).long()
-        idx = torch.cat((cls_index, idx+1), dim=1)
-        merge = get_merge_func(metric, ratio=ratio, class_token=class_token, attn_idx=idx)
-        return merge, None
-    elif margin >=0.45:
+   
+    if margin >=0.45:
         return bipartite_soft_matching(metric, ratio=ratio, class_token=class_token, a_idx=None, b_idx=None, scores=None)
     else:
         with torch.no_grad():
@@ -189,136 +144,6 @@ def pitome_vision(
         return merge, None 
 
 
-def unprotected_pitome_vision(
-    metric: torch.Tensor, 
-    r:int=0,
-    ratio:float=1.0,
-    margin:torch.Tensor=0.5,
-    class_token: bool = False,
-    prune:bool=False
-):
-    # if margin >=0.45 and not prune:
-        # return bipartite_soft_matching(metric, ratio=ratio, class_token=class_token, a_idx=None, b_idx=None, scores=None)
-    # else:
-        # print(metric.shape)
-        with torch.no_grad():
-            if class_token:
-                metric=metric[:,1:,:]
-            B,T,C = metric.shape
-            if r > 0:
-                r = min(r, T // 2)
-            elif ratio < 1.0:
-                r = math.floor(T- T*ratio)
-            else:
-                return do_nothing, do_nothing
-            metric = F.normalize(metric, p=2, dim=-1) 
-            # sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
-            # isolation_score = sim.mean(dim=-1) + sim.sum(-1)
-            # indices =  torch.argsort(isolation_score, descending=True)
-            sigma =  1 - margin 
-            sim = metric@metric.transpose(-1,-2) 
-            isolation_score = (2*(torch.exp(-(((1 - sim)/sigma)**2))) - 1).mean(-1) *  1/(sigma*torch.sqrt(torch.tensor(2*torch.pi)))
-            # isolation_score = (2*torch.exp(-(((1 - sim)/sigma)**2))-1).mean(-1) 
-
-            # print(isolation_score.shape)
-            indices =  torch.argsort(isolation_score , descending=True)
-        
-        def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
-            if class_token:
-                x_cls=x[:,0,:].unsqueeze(1)
-                x=x[:,1:,:]
-            else:
-                x_cls = None
-            B, T, C = x.shape
-            batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
-
-            if not prune:
-                a_idx, b_idx = indices[..., :r], indices[..., r:] 
-                scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, b_idx.shape[-1])) 
-                scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, a_idx.shape[-1], b_idx.shape[-1]))
-                _, dst_idx = scores.max(dim=-1) 
-                src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
-                dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
-   
-            if x_cls is not None:
-                return torch.cat([x_cls, dst], dim=1)
-            else:
-                return torch.cat([dst], dim=1)
-
-        if class_token:
-            return merge, None 
-        return merge, 1- F.softmax(isolation_score, dim=-1) 
-
-
-def pitome_vision_using_attn(
-    metric: torch.Tensor, 
-    attn:torch.Tensor=None,
-    use_cls_attn:bool=False,
-    r:int=0,
-    ratio:float=1.0,
-    margin:torch.Tensor=0.5,
-    class_token: bool = False,
-    prune:bool=False
-):
- 
-    if margin >=0.45 and not prune:
-        return bipartite_soft_matching(metric, ratio=ratio, class_token=class_token, a_idx=None, b_idx=None, scores=None)
-    else:
-        # print(metric.shape)
-        with torch.no_grad():
-            if class_token:
-                metric=metric[:,1:,:]
-            B,T,C = metric.shape
-            if r > 0:
-                r = min(r, T // 2)
-            elif ratio < 1.0:
-                r = math.floor(T- T*ratio)
-            else:
-                return do_nothing, do_nothing
-            metric = F.normalize(metric, p=2, dim=-1) 
-            # sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01)
-            # isolation_score = sim.mean(dim=-1) + sim.sum(-1)
-            # indices =  torch.argsort(isolation_score, descending=True)
-            sim = metric@metric.transpose(-1,-2) 
-            # isolation_score = (2*(torch.exp(-(((1 - sim)/sigma)**2))) - 1).mean(-1) *  1/(sigma*torch.sqrt(torch.tensor(2*torch.pi)))
-            # isolation_score = (2*torch.exp(-(((1 - sim)/sigma)**2))-1).mean(-1) 
-
-            score = attn[:, :, 1:, 1:].mean(1).mean(-1)
-            indices =  torch.argsort(score, descending=True)
-            merge_idx = indices[..., :2*r]
-            protected_idx = indices[..., 2*r:]
-        
-        def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
-            if class_token:
-                x_cls=x[:,0,:].unsqueeze(1)
-                x=x[:,1:,:]
-            else:
-                x_cls = None
-            B, T, C = x.shape
-            batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
-            protected = x[batch_idx, protected_idx, :]
-
-            if not prune:
-                a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2] 
-                scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
-                scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
-                _, dst_idx = scores.max(dim=-1) 
-                src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
-                dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
-            else:
-                dst_idx = merge_idx[...,  r:]
-                dst = x[batch_idx,  dst_idx, :]
-
-            if x_cls is not None:
-                return torch.cat([x_cls, protected, dst], dim=1)
-            else:
-                return torch.cat([protected, dst], dim=1)
-
-        if class_token:
-            return merge, None 
-        return merge, None 
-
-
 def pitome_text(
     metric: torch.Tensor, 
     ratio:float=1.0,
@@ -339,12 +164,10 @@ def pitome_text(
         sim = metric@metric.transpose(-1,-2)
         sigma = 1 - margin 
         isolation_score = (torch.exp(-(((1 - sim)/sigma)**2 * 0.5))).mean(-1) *  1/(sigma*torch.sqrt(torch.tensor(2*torch.pi))) 
-        # sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01, alpha=alpha)
-        # isolation_score = sim.mean(dim=-1) 
         indices =  torch.argsort(isolation_score, descending=True)
         merge_idx = indices[..., :2*r]
         protected_idx = indices[..., 2*r:]
-        a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2]
+        a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:]
         scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
         scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
         _, dst_idx = scores.max(dim=-1) 

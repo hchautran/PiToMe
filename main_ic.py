@@ -483,11 +483,11 @@ def main(args):
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     lr_scheduler = CosineLRScheduler(optimizer, t_initial=args.epochs, lr_min=args.min_lr) 
     # lr_scheduler = ReduceLROnPlateau(optimizer, mode='max', patience=2, min_lr=args.min_lr)
-    loss_scaler = ic.utils.NativeScalerWithGradNormCount()
+    loss_scaler = tasks.ic.utils.NativeScalerWithGradNormCount()
     optimizer, lr_scheduler, data_loader_train, data_loader_val = accelerator.prepare(optimizer, lr_scheduler, data_loader_train, data_loader_val)
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
     accelerator.print(f'number of params: {n_parameters}')
-    linear_scaled_lr = args.lr * args.batch_size * ic.utils.get_world_size() / 512.0
+    linear_scaled_lr = args.lr * args.batch_size * tasks.ic.utils.get_world_size() / 512.0
     args.lr = linear_scaled_lr
 
     if args.eval:
@@ -554,7 +554,7 @@ def main(args):
         if args.output_dir:
             checkpoint_paths = [output_dir / 'checkpoint.pth']
             for checkpoint_path in checkpoint_paths:
-                ic.utils.save_on_master({
+                tasks.ic.utils.save_on_master({
                     'model': model.state_dict(),
                     'optimizer': optimizer.state_dict(),
                     'lr_scheduler': lr_scheduler.state_dict(),
