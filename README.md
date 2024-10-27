@@ -38,7 +38,6 @@ In our paper we evaluate our method on 2 dataset - Flickr30k and MS-COCO.
 **Step 1**: Configure the data storage path in the `default.yml` file and change this to your preferred path. This file is located in the the folder where lavis is installed. you can find it quickly by using this command:
 ```
 import lavis;print(f"{'/'.join(lavis.__file__.split('/')[:-1])}/configs");
-
 ```
 
 Update the `cache_root`  entry to the path that you wanted.
@@ -74,20 +73,57 @@ You can also evaluate all other baselines with multiple ratio `r` by running:
 python scripts/eval_itr.sh
 ```
 
-The results will be printed and saved to the `itr_outputs` directory.
+The results will be printed and saved to the `itr_outputs` directory. 
+#### Using `pitome` with ITR models
+Currently, only checkpoints from [LAVIS](https://github.com/salesforce/LAVIS) are supported. You can directly download and directly apply `pitome` to pretrained weights
 
+```py
+from lavis.models import load_model_and_preprocess
+from algo import pitome
+
+# Load a pretrained model, can be blip/albef/blip2 .
+model, vis_processors, txt_processors = load_model_and_preprocess("blip_retrieval", "coco", is_eval=False)
+# Patch the blip's visual encoder with PiToMe.
+pitome.patch.blip(model.visual_encoder)
+# Set the number of ratio of remaining token per layer. See paper for details.
+model.visual_encoder.ratio = 0.9 
+```
+In the future, we are planning support checkpoints from HuggingFace.
 ### Image Classification 
-For image classification tasks, we are supporting  `deit` and `mae` models. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+For image classification tasks, we are currenty supporting  `deit` and `mae` models. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
 
+``` sh
+python main_ic.py \
+   --batch-size 256 \
+   --model ${ARCH}-${MODEL_SIZE}-${INPUT_SIZE}  \
+   --algo ${ALGO} \
+   --ratio ${RATIO} \
+   --eval
 ```
 
+You can also evaluate all models with all baselines using multiple ratio `r` by running:
+``` sh
+python scripts/eval_scripts/eval_ic_all.sh
 ```
+The results will be printed and saved to `outputs/ic_outputs` directory.
 
+#### Using `pitome` with ic model
+```py
+from timm.models import create_model
+from algo import pitome
 
+# Load a pretrained model, can be any vit / deit model.
+model = create_model("deit_base_patch16_224", pretrained=True)
+# Patch the model with ToMe.
+pitome.patch.deit(model)
+# pitome.patch.mae(model)
+# Set the ratio of remain token  per layer. See paper for details.
+model.ratio = 0.95 
+```
 ### Text Classification 
-
+# Set the number of ratio of remaining token per layer. See paper for details.
 Currently, we are supporting `bert`,  and `distilbert`. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
-```
+```sh
 python main_tc.py \
    --algo pitome \
    --ratio  0.65 \
@@ -96,16 +132,37 @@ python main_tc.py \
    --eval 
 ```
 
-You can also evaluate all other baselines with multiple ratio `r` by running:
+You can also evaluate all models with all baselines using multiple ratio `r` by running:
+```sh
+python scripts/eval_scripts/eval_tc_all.sh
 ```
-python scripts/eval_tc.sh
+The results will be printed and saved to `outputs/tc_outputs` directory.
+
+#### Using with text classification models
+
+```py
+from transformers import AutoModelForSequenceClassification
+
+# Load a pretrained model, can be bert or distilbert .
+model_ckt = 'JiaqiLee/imdb-finetuned-bert-base-uncased'
+# model_ckt = 'bert-base-uncased'
+# model_ckt = 'distilbert-base-uncased'
+model =  AutoModelForSequenceClassification.from_pretrained(model_ckt)
+
+# Patch the blip's visual encoder with PiToMe.
+pitome.patch.bert(model.bert.encoder)
+# pitome.patch.distilbert(model.distilbert.transformer)
+
+# Set the number of ratio of remaining token per layer. See paper for details.
+model.bert.encoder.ratio = 0.65 
+# model.distilbert.transformer.ratio = self.ratio 
 ```
-The results will be printed and saved to `tc_outputs` directory.
 
 ### Visual Question Answering
 Coming soon
 
 ---
+
 ## Citation
 
 ```

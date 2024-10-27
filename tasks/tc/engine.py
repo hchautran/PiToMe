@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 from transformers import (
     AutoTokenizer,
+    AutoModelForSequenceClassification,
     AlbertForSequenceClassification,
     BertForSequenceClassification,
     DistilBertForSequenceClassification,
