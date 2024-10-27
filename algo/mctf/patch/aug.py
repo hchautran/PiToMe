@@ -28,7 +28,7 @@ def make_tome_class(transformer_class):
 
         def forward_features(self, x):
             x = self.patch_embed(x)
-            x = self._pos_embed(x)
+            x = self.pos_embed(x)
             x = self.norm_pre(x)
             # if self.grad_checkpointing and not torch.jit.is_scripting():
                 # x = checkpoint_seq(self.blocks, x)

@@ -142,7 +142,7 @@ class LTPMVisionTransformer(VisionTransformer):
 
     def forward_features(self, x):
         x = self.patch_embed(x)
-        x = self._pos_embed(x)
+        x = self.pos_embed(x)
         x = self.norm_pre(x)
         b, t, _ = x.shape
         self.masks = []

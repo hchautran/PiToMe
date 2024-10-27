@@ -355,7 +355,7 @@ def main(args):
         drop_path_rate=args.drop_path,
         drop_block_rate=None,
     )
-    if args.algo != DIFFRATE: 
+    if args.algo == DIFFRATE: 
         get_diffrate_model(model, args)
     elif args.algo != NONE:
         get_model(model, args)
@@ -509,18 +509,18 @@ def main(args):
 if __name__ == '__main__':
     import pathlib
    
-    parser = argparse.ArgumentParser('DeiT training and evaluation script', parents=[get_args_parser()])
+    parser = argparse.ArgumentParser('Image classification training and evaluation script', parents=[get_args_parser()])
     args = parser.parse_args()
-    if args.output_dir:
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     
-    abs_path = os.getcwd()
+    abs_path = f'{os.getcwd()}/outputs/ic_outputs'
+    Path(abs_path).mkdir(parents=True, exist_ok=True)
     file_name = f'{"eval" if args.eval else "train"}_ic_{args.model}.csv'
-    path = f'{abs_path}/outputs/ic_outputs/{file_name}'
+    path = f'{abs_path}/{file_name}'
     if not pathlib.Path(path).is_file():
         head = "model, algo, gflops, ratio ,acc_1\n"
         if utils.is_main_process():
-            with open(file_name, "a") as myfile:
+
+            with open(path, "a") as myfile:
                 myfile.write(head)
         
     metrics = main(args)

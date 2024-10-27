@@ -26,17 +26,7 @@ def make_dct_class(transformer_class):
             else:
                 return x
 
-        # def forward_features(self, x):
-        #     x = self.patch_embed(x)
-        #     x = self._pos_embed(x)
-        #     x = self.norm_pre(x)
-        #     # if self.grad_checkpointing and not torch.jit.is_scripting():
-        #         # x = checkpoint_seq(self.blocks, x)
-        #     # else:
-        #     x = self.blocks(x)
-        #     x = self.norm(x)
-        #     return x
-        
+
         def forward_features(self, x):
             x = self.patch_embed(x)
             cls_token = self.cls_token.expand(x.shape[0], -1, -1)  # stole cls_tokens impl from Phil Wang, thanks

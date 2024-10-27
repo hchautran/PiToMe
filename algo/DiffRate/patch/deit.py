@@ -123,7 +123,7 @@ def apply_patch(
     """
     Applies DiffRate to this transformer.
     """
-    print('use', 'diffrate')
+    print('using', 'diffrate')
     DiffRateVisionTransformer = make_diffrate_class(model.__class__)
 
     model.__class__ = DiffRateVisionTransformer

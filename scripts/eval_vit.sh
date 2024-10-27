@@ -3,10 +3,9 @@
 for size in  'large'
 do
     # for algo in 'diffrate' 
-    # for algo in 'tome' 'pitome' 'dct' 'tofu' 
-    for algo in 'pitome' 
+    for algo in 'tome' 'pitome' 'dct' 'tofu' 'pitome' 
     do
-        for ratio in '0.925'  
+        for ratio in '0.9' '0.925' '0.95' '0.975' 
         do
         # Indented for loop body:
         echo "running vit $size $algo."

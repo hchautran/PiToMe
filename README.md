@@ -77,12 +77,16 @@ python scripts/eval_itr.sh
 The results will be printed and saved to the `itr_outputs` directory.
 
 ### Image Classification 
-Comming soon
+For image classification tasks, we are supporting  `deit` and `mae` models. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+
+```
+
+```
 
 
 ### Text Classification 
 
-Currently, we are supporting `bert`,  and `distilbert` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+Currently, we are supporting `bert`,  and `distilbert`. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
 ```
 python main_tc.py \
    --algo pitome \
