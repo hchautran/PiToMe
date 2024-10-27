@@ -2,6 +2,7 @@
 ![Example Image](/figures/overview.png)
 ---
 ### News
+- [27/10/2024] Release code for image classification task
 - [01/10/2024] Release code for text classification task
 - [29/09/2024] Release code for image-text retrieval task
 - [25/09/2024] Our paper has been accepted at NeurIPS 2024 as a Poster ([OpenReview](https://openreview.net/forum?id=PPdJPIO3mV&noteId=NUW4EoVirr))
