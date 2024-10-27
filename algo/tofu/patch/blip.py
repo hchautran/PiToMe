@@ -36,8 +36,8 @@ class ToFuBlock(Block):
         # x = self.compress_x(metric, x) 
         # x = x + self.drop_path(self.mlp(self.norm2(x)))
         # return x
-        x = self.compress_x(x, x) 
         x = x + self.drop_path(self.attn.forward_and_save_attn(self.norm1(x), register_hook=register_hook))
+        x = self.compress_x(x, x) 
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         # print(x.shape)
         return x

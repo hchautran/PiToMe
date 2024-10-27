@@ -13,7 +13,7 @@ class PiToMeBlock(ResidualAttentionBlock):
     def compress_x(self, metric, x, attn):
         ratio = self._pitome_info["ratio"].pop()
         if ratio < 1.0:
-            merge, isolated_score = pitome_vision(
+            merge = pitome_vision(
                 ratio=ratio,
                 metric=metric,
                 margin=self.margin,
@@ -25,12 +25,8 @@ class PiToMeBlock(ResidualAttentionBlock):
                 self._pitome_info["source"] = merge_source(
                     merge, x, self._pitome_info["source"]
                 )
-            if isolated_score is not None and self._pitome_info["size"] is not None:
-                weight = self._pitome_info["size"] + isolated_score
-                x, self._pitome_info["size"] = merge_wavg(merge, x, weight)
-            else:
-                weight = self._pitome_info["size"] 
-                x, self._pitome_info["size"] = merge_wavg(merge, x, weight)
+            weight = self._pitome_info["size"] 
+            x, self._pitome_info["size"] = merge_wavg(merge, x, weight)
         return x
 
     

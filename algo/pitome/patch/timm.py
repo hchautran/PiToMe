@@ -41,7 +41,7 @@ class PiToMeBlockUsingRatio(Block):
 
         ratio = self._tome_info["ratio"].pop(0)
         if ratio < 1.0:
-            merge, isolated_score = pitome_vision(
+            merge = pitome_vision(
                 ratio=ratio,
                 metric=metric,
                 margin=self.margin,
@@ -54,13 +54,8 @@ class PiToMeBlockUsingRatio(Block):
                     merge, x, self._tome_info["source"]
                 )
 
-            if isolated_score is not None and self._tome_info["size"] is not None:
-                # weight = self._tome_info["size"] + isolated_score
-                x, self._tome_info["size"] = merge_wavg(merge, x, None)
-                # x = merge_mean(merge, x)
-            else:
-                weight = self._tome_info["size"] 
-                x, self._tome_info["size"] = merge_wavg(merge, x, weight)
+            weight = self._tome_info["size"] 
+            x, self._tome_info["size"] = merge_wavg(merge, x, weight)
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
         # print(x.shape)

@@ -36,8 +36,8 @@ class CrossGetBlock(Block):
         return x
 
     def forward(self, x, register_hook=False):
-        x = self.compress_x(x, x)
         x = x + self.drop_path(self.attn.forward_and_save_attn(self.norm1(x), register_hook=register_hook))
+        x = self.compress_x(x, x)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
 

@@ -44,15 +44,14 @@ class PiToMeBertLayer(BertLayer):
 
     
         if ratio < 1.0:
-            merge, isolated_score = pitome_text(
+            merge = pitome_text(
                 ratio=ratio,
                 metric=key,
                 margin=self.margin,
                 class_token=self._pitome_info["class_token"],
             )
 
-            weight = isolated_score
-            x, self._pitome_info["size"] = merge_wavg(merge, x, weight)
+            x, self._pitome_info["size"] = merge_wavg(merge, x, self._pitome_info["size"])
             B, T, _ = x.shape
             attention_mask = torch.where(attention_mask.squeeze_(-2).squeeze_(-2) >= 0, 1, 0)
             attention_mask = merge_attention_mask(merge, attention_mask=attention_mask[..., None]).view(B, T)
@@ -164,7 +163,7 @@ class PiToMeBertSelfAttention(BertSelfAttention):
         return outputs, key_layer.sum(1), attention_probs
 
 
-def make_pipitome_class(transformer_class):
+def make_pitome_class(transformer_class):
     class PiToMeBertEncoder(transformer_class, ModuleUtilsMixin):
         """
         Modifications:
@@ -257,8 +256,8 @@ def apply_patch(
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
     """
-    PiToMeBertEncoder = make_pipitome_class(model.__class__)
-    print('using', 'pipitome')
+    PiToMeBertEncoder = make_pitome_class(model.__class__)
+    print('using', 'pitome')
 
     model.__class__ = PiToMeBertEncoder
     model.ratio = 1.0 

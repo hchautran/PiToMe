@@ -22,12 +22,10 @@ class PiToMeCLIPEncoder(CLIPEncoder):
     def compress_x(self, metric, x, attn, idx):
         ratio = self._pitome_info["ratio"].pop()
         if ratio < 1.0:
-            merge, isolated_score = pitome_vision(
+            merge = pitome_vision(
                 ratio=ratio,
                 metric=metric,
                 margin=self.margins[idx],
-                # prune=self.margins[idx] < 0.45,
-                # attn=attn if self.margins[idx] >= 0.45 else None,
                 class_token=self._pitome_info["class_token"]
             )
 

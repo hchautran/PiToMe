@@ -2,7 +2,7 @@
 # Loop through each element in the array
 for dataset in 'imdb' 'sst2' 'rotten' 
 do
-    for model in  'bert-base-uncased' 'istilbert-base-uncased' 
+    for model in  'bert-base-uncased' 'distilbert-base-uncased' 
     do 
         for algo in  'pitome' 'tome' 'tofu' 'mctf' 'crossget' 'dct'
         # for algo in  'pitome' 'tome' 'mctf' '

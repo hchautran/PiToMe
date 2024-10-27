@@ -1,6 +1,6 @@
 import torch
 from lavis.models.vit import VisionTransformer, Attention, Block
-from ..merge import merge_source, pitome_vision, merge_wavg
+from ..merge import merge_source, pitome_vision, merge_wavg, prune
 
 class PiToMeBlock(Block):
     """
@@ -15,12 +15,11 @@ class PiToMeBlock(Block):
     def compress_x(self, metric, x):
         ratio = self._pitome_info["ratio"].pop()
         if ratio < 1.0:
-            merge, isolated_score = pitome_vision(
+            merge = pitome_vision(
                 ratio=ratio,
                 metric=metric,
                 margin=self.margin,
                 class_token=self._pitome_info["class_token"],
-                alpha=self._pitome_info["alpha"]
             )
           
             if self._pitome_info["trace_source"]:
@@ -29,17 +28,13 @@ class PiToMeBlock(Block):
                 )
                 self._pitome_info["sources"].append(self._pitome_info["source"])
 
-            if isolated_score is not None and self._pitome_info["size"] is not None:
-                weight = self._pitome_info["size"] + isolated_score
-                x, self._pitome_info["size"] = merge_wavg(merge, x, weight)
-            else:
-                weight = self._pitome_info["size"] 
-                x, self._pitome_info["size"] = merge_wavg(merge, x, weight)
+            weight = self._pitome_info["size"] 
+            x, self._pitome_info["size"] = merge_wavg(merge, x, weight)
         return x
 
     def forward(self, x, register_hook=False):
-        x = self.compress_x(x, x)
         x = x + self.drop_path(self.attn.forward_and_save_attn(self.norm1(x), register_hook=register_hook))
+        x = self.compress_x(x, x)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
 
@@ -182,11 +177,7 @@ def apply_patch(
     }
     current_layer = 0
     num_layers = len(model.blocks)
-    # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
-    if margin is None:
-        margins = [0.9 - .9*(i/num_layers) for i in range(num_layers)]
-    else:
-        margins = [margin for i in range(num_layers)]
+    margins = [0.9 - 0.9*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._pitome_info["distill_token"] = True

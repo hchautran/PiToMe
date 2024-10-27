@@ -73,7 +73,6 @@ class DiffRateBlock(Block):
             
         else:
             # pruning
-            print(x.shape)
             prune_kept_num = self.prune_ddp.kept_token_number
             x = x[:, :prune_kept_num]
             self._diffrate_info["size"] = self._diffrate_info["size"][:, :prune_kept_num]

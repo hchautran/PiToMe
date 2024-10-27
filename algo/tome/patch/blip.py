@@ -28,14 +28,8 @@ class ToMeBlock(Block):
         return x
 
     def forward(self, x, register_hook=False):
-        # attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        # x_attn, metric, attn = self.attn(self.norm1(x), register_hook=register_hook)
-        # x = x + self.drop_path(x_attn)
-        # x = self.compress_x(metric, x) 
-        # x = x + self.drop_path(self.mlp(self.norm2(x)))
-        # return x
-        x = self.compress_x(x, x) 
         x = x + self.drop_path(self.attn.forward_and_save_attn(self.norm1(x), register_hook=register_hook))
+        x = self.compress_x(x, x) 
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
 

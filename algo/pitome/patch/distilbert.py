@@ -55,16 +55,15 @@ class PiToMeDistilBertBlock(TransformerBlock):
         sa_output = self.sa_layer_norm(sa_output + x)  # (bs, seq_length, dim)
 
         if ratio < 1.0:
-            merge, isolated_score = pitome_text(
+            merge = pitome_text(
                 ratio=ratio,
                 metric=metric,
                 attn=sa_weights if self._tome_info["use_attn"] else None,
                 margin=self.margin,
                 class_token=self._tome_info["class_token"]
             )
-            # weight = self._tome_info["size"] 
+
             sa_output, self._tome_info["size"] = merge_wavg(merge, sa_output, None)
-            # print(attention_mask.shape)
 
             # attn_mask = torch.where(attn_mask.squeeze_() >= 0, 1, 0)
             attn_mask = merge_attention_mask(merge, attention_mask=attn_mask[..., None]).squeeze_()
