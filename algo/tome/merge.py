@@ -17,10 +17,8 @@ def do_nothing(x, mode=None):
 
 def bipartite_soft_matching(
     metric: torch.Tensor,
-    r: int=0,
     ratio:float=1.0,    
     class_token: bool = False,
-    distill_token: bool = False,
 ) -> Tuple[Callable, Callable]:
     
     protected = 0
@@ -32,9 +30,7 @@ def bipartite_soft_matching(
     # We can only reduce by a maximum of 50% tokens
     T = metric.shape[1]
     
-    if r > 0:
-        r = min(r, (T-protected) // 2)
-    elif ratio < 1.0:
+    if ratio < 1.0:
         r = math.floor(T- T*ratio)
     else:
         return do_nothing, do_nothing

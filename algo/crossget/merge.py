@@ -21,7 +21,6 @@ def do_nothing(x, mode=None):
 
 def crossget(
     metric: torch.Tensor, 
-    r:int=0,
     ratio:float=1.0,
     class_token: bool = False,
 ):
@@ -29,9 +28,7 @@ def crossget(
             if class_token:
                 metric=metric[:,1:,:]
             B,T,C = metric.shape
-            if r > 0:
-                r = min(r, T // 2)
-            elif ratio < 1.0:
+            if ratio < 1.0:
                 r = math.floor(T- T*ratio)
             else:
                 return do_nothing, do_nothing

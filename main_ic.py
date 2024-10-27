@@ -89,12 +89,15 @@ def process_image(batch, transform):
 
 
 model_dict = {
-    'DEIT-T-16-224':'deit_tiny_patch16_224',
-    'DEIT-S-16-224':'deit_small_patch16_224',
-    'DEIT-B-16-224':'deit_base_patch16_224',
-    'MAE-B-16-224':'vit_base_patch16_mae',
-    'MAE-L-16-224':'vit_large_patch16_mae',
-    'MAE-H-14-224':'vit_huge_patch14_mae',
+    'DEIT-T-224':'deit_tiny_patch16_224',
+    'DEIT-S-224':'deit_small_patch16_224',
+    'DEIT-B-224':'deit_base_patch16_224',
+    'DEIT-T-384':'deit_tiny_patch16_384',
+    'DEIT-S-384':'deit_small_patch16_384',
+    'DEIT-B-384':'deit_base_patch16_384',
+    'MAE-B-224':'vit_base_patch16_mae',
+    'MAE-L-224':'vit_large_patch16_mae',
+    'MAE-H-224':'vit_huge_patch14_mae',
 }
 
 
@@ -340,7 +343,7 @@ def main(args):
     
     logger.info(f"Creating model: {args.model}")
     model = create_model(
-        args.model,
+        model_dict[args.model],
         pretrained=True,
         num_classes=args.nb_classes,
         drop_rate=args.drop,
@@ -518,5 +521,5 @@ if __name__ == '__main__':
     if metrics is not None:
         row = f'{args.model}, {args.algo}, {metrics["flops"]}, {args.ratio}, {metrics["best acc"]}\n'
         if utils.is_main_process():
-            with open(file_name, "a") as myfile:
+            with open(path, "a") as myfile:
                 myfile.write(row)

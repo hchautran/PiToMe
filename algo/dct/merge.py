@@ -73,7 +73,7 @@ def idct(X, norm=None):
 
 
 
-def dc_transform(x, ratio:float=None, k:int=None, class_token:bool=True ):
+def dc_transform(x, ratio:float=None,  class_token:bool=True ):
     if class_token:
         x_cls = x[:,0,:].unsqueeze_(1)
         x = x[:,1:,:]
