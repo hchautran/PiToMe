@@ -124,10 +124,10 @@ model.ratio = 0.95
 Currently, we are supporting `bert`,  and `distilbert`. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
 ```sh
 python main_tc.py \
-   --algo pitome \
-   --ratio  0.65 \
-   --task imdb \
-   --model bert-base-uncased \
+   --algo $ALGO \
+   --ratio $RATIO \
+   --task $TASK \
+   --model $MODEL \
    --eval 
 ```
 

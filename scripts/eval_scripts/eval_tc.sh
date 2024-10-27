@@ -1,6 +1,11 @@
+ALGO=$1
+RATIO=$2
+TASK=$3
+MODEL=$4
+
 python main_tc.py \
-   --algo $1 \
-   --ratio $2 \
-   --task $3 \
-   --model $4 \
+   --algo $ALGO \
+   --ratio $RATIO \
+   --task $TASK \
+   --model $MODEL \
    --eval 
