@@ -121,7 +121,6 @@ pitome.patch.deit(model)
 model.ratio = 0.95 
 ```
 ### Text Classification 
-# Set the number of ratio of remaining token per layer. See paper for details.
 Currently, we are supporting `bert`,  and `distilbert`. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
 ```sh
 python main_tc.py \
