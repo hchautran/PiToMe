@@ -58,11 +58,7 @@ warnings.filterwarnings('ignore')
 
 
 def process_image(example, transform):
-    # print(batch)
-    # print(batch)
     example['pixel_values'] = transform(example['image'])
-    # print(example['pixel_values'].shape)
-    # labels_tensor = torch.tensor([item['label'] for item in batch])
     return example
 
 gray_transform = transforms.Compose([
@@ -91,20 +87,16 @@ def process_image(batch, transform):
     labels_tensor = torch.tensor([item['label'] for item in batch])
     return images_tensor, labels_tensor
 
+
 model_dict = {
-    'deit_tiny_patch16_224': 'DEIT-T-16-224',
-    'deit_small_patch16_224': 'DEIT-S-16-224',
-    'deit_base_patch16_224': 'DEIT-B-16-224',
-    'vit_small_patch16_224': 'VIT-S-16-224',
-    'vit_base_patch16_224': 'VIT-B-16-224',
-    'vit_large_patch16_224': 'VIT-L-16-224',
-    'vit_large_patch16_384': 'VIT-L-16-384',
-    'vit_small_patch16_384': 'VIT-S-16-384',
-    'vit_base_patch16_384': 'VIT-B-16-384',
-    'vit_base_patch16_mae': 'MAE-B-16-224',
-    'vit_large_patch16_mae': 'MAE-L-16-224',
-    'vit_huge_patch14_mae': 'MAE-H-14-224',
+    'DEIT-T-16-224':'deit_tiny_patch16_224',
+    'DEIT-S-16-224':'deit_small_patch16_224',
+    'DEIT-B-16-224':'deit_base_patch16_224',
+    'MAE-B-16-224':'vit_base_patch16_mae',
+    'MAE-L-16-224':'vit_large_patch16_mae',
+    'MAE-H-14-224':'vit_huge_patch14_mae',
 }
+
 
 def get_args_parser():
     parser = argparse.ArgumentParser('ic training and evaluation script', add_help=False)
@@ -255,27 +247,22 @@ def get_args_parser():
     return parser
 
 def get_model(model, args):
-    if 'deit' in args.model:
+    if 'deit' in model_dict[args.model]:
         ALGO[args.algo].patch.deit(model)
         model.ratio=float(args.ratio)
-    elif 'mae' in args.model:
+    elif 'mae' in model_dict[args.model]:
         ALGO[args.algo].patch.mae(model)
         model.ratio=float(args.ratio)
-    elif 'vit' in args.model:
-        ALGO[args.algo].patch.aug(model)
-        model.ratio=float(args.ratio)
     else:
-        raise ValueError("only support deit, mae and caformer in this codebase")
+        raise ValueError("Only support DEIT and MAE models in this codebase")
 
 
 
 def get_diffrate_model(model, args):
-    if 'deit' in args.model:
+    if 'deit' in model_dict[args.model]:
         DiffRate.patch.deit(model, prune_granularity=args.granularity, merge_granularity=args.granularity)
-    elif 'mae' in args.model:
+    elif 'mae' in model_dict[args.model]:
         DiffRate.patch.mae(model, prune_granularity=args.granularity, merge_granularity=args.granularity)
-    elif 'vit' in args.model:
-        DiffRate.patch.aug(model, prune_granularity=args.granularity, merge_granularity=args.granularity)
     else:
         raise ValueError("only support deit, mae and caformer in this codebase")
     model.init_kept_num_using_ratio(args.ratio)
@@ -341,10 +328,15 @@ def main(args):
     mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
     if mixup_active:
         mixup_fn = Mixup(
-            mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
-            prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
-            label_smoothing=args.smoothing, num_classes=args.nb_classes)
-    
+            mixup_alpha=args.mixup, 
+            cutmix_alpha=args.cutmix, 
+            cutmix_minmax=args.cutmix_minmax,
+            prob=args.mixup_prob, 
+            switch_prob=args.mixup_switch_prob, 
+            mode=args.mixup_mode,
+            label_smoothing=args.smoothing, 
+            num_classes=args.nb_classes
+        )
     
     logger.info(f"Creating model: {args.model}")
     model = create_model(
@@ -419,11 +411,11 @@ def main(args):
         # pass
         if accelerator.is_main_process:
             wandb.init(
-                name=f'{model_dict[args.model]}-{args.algo}',
-                project=f'ic_{model_dict[args.model]}',
+                name=f'{args.model}-{args.algo}',
+                project=f'ic-{args.model}',
                 config={
                     'compress_method': args.algo,
-                    'model': model_dict[args.model],
+                    'model': args.model,
                     'ratio': args.ratio
                 }
             )
@@ -514,18 +506,17 @@ if __name__ == '__main__':
     
     abs_path = f'{os.getcwd()}/outputs/ic_outputs'
     Path(abs_path).mkdir(parents=True, exist_ok=True)
-    file_name = f'{"eval" if args.eval else "train"}_ic_{args.model}.csv'
+    file_name = f'{"eval" if args.eval else "train"}-{args.model}.csv'
     path = f'{abs_path}/{file_name}'
     if not pathlib.Path(path).is_file():
         head = "model, algo, gflops, ratio ,acc_1\n"
         if utils.is_main_process():
-
             with open(path, "a") as myfile:
                 myfile.write(head)
         
     metrics = main(args)
     if metrics is not None:
-        row = f'{model_dict[args.model]}, {args.algo}, {metrics["flops"]}, {args.ratio}, {metrics["best acc"]}\n'
+        row = f'{args.model}, {args.algo}, {metrics["flops"]}, {args.ratio}, {metrics["best acc"]}\n'
         if utils.is_main_process():
             with open(file_name, "a") as myfile:
                 myfile.write(row)

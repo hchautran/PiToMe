@@ -17,4 +17,9 @@ export ALGO=$3
 
 
 
-python main_ic.py --eval --batch-size 100 --model ${MODEL} --algo ${ALGO} --ratio ${RATIO} 
+python main_ic.py \
+   --batch-size 100 \
+   --model ${MODEL} \
+   --algo ${ALGO} \
+   --ratio ${RATIO} \
+   --eval
