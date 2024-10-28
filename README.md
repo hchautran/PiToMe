@@ -1,4 +1,38 @@
-# Accelerate Transformer With Spectrum Preserving Token Merging
+<br />
+<p align="center">
+
+  <h1 align="center">Accelerating Transformers with Spectrum-Preserving Token Merging</h1>
+
+  <p align="center">
+   ECCV, 2024
+    <br />
+    <a href="https://stevenlsw.github.io"><strong>Hoai-Chau Tran</strong></a>
+    ·
+    <a href="https://jason718.github.io/"><strong>Duy M. H. Nguyen</strong></a>
+    ·
+    <a href="https://saurabhg.web.illinois.edu/"><strong>Duy M. Nguyen</strong></a>
+    ·
+    <a href="https://shenlong.web.illinois.edu/"><strong>Shenlong Wang*</strong></a>
+    ·
+  </p>
+
+<p align="center"> 
+<img src="assets/demo.gif" alt="Demo GIF" />
+</p>
+
+  <p align="center">
+    <a href='https://arxiv.org/pdf/2409.18964'>
+      <img src='https://img.shields.io/badge/Paper-PDF-green?style=flat&logo=arXiv&logoColor=green' alt='Paper PDF'></a>
+    <a href='https://arxiv.org/abs/2409.18964'><img src='https://img.shields.io/badge/arXiv-2409.18964-b31b1b.svg'  alt='Arxiv'></a>
+    <a href='https://stevenlsw.github.io/physgen/' style='padding-left: 0.5rem;'>
+      <img src='https://img.shields.io/badge/Project-Page-blue?style=flat&logo=Google%20chrome&logoColor=blue' alt='Project Page'></a>
+    <a href='https://colab.research.google.com/drive/1imGIms3Y4RRtddA6IuxZ9bkP7N2gVVC_' style='padding-left: 0.5rem;'><img src='https://colab.research.google.com/assets/colab-badge.svg' alt='Google Colab'></a>
+    <a href='https://youtu.be/lCc1rHePEFQ' style='padding-left: 0.5rem;'>
+      <img src='https://img.shields.io/badge/Youtube-Video-red?style=flat&logo=youtube&logoColor=red' alt='Youtube Video'></a>
+  </p>
+
+</p>
+<br />
 
 This repository provides a PyTorch implementation of the paper [Accelerating Transformers with Spectrum-Preserving Token Merging](https://arxiv.org/abs/2405.16148), accepted at NeurIPS 2024. In this work, we introduce a new algorithm called pitome, designed to compress Vision Transformers (ViT) across various applications through token merging. After each layer, tokens are progressively merged, resulting in a remaining r percentage of tokens, as illustrated in the figure below.
 
