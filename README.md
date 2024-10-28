@@ -1,27 +1,71 @@
-# Accelerate Transformer With Spectrum Preserving Token Merging [(full PDF)](https://arxiv.org/abs/2405.16148)  
+<br />
+<p align="center">
+
+  <h1 align="center">Accelerating Transformers with Spectrum-Preserving Token Merging</h1>
+
+  <p align="center">
+   NeurIPS, 2024
+    <br />
+    <a href="https://stevenlsw.github.io"><strong>Hoai-Chau Tran*</strong></a>
+    ·
+    <a href="https://jason718.github.io/"><strong>Duy M. H. Nguyen*</strong></a>
+    ·
+    <a href="https://saurabhg.web.illinois.edu/"><strong>Duy M. Nguyen</strong></a>
+
+ 
+  </p>
+
+<p align="center"> 
+<img src="assets/demo.gif" alt="Demo GIF" />
+</p>
+
+  <p align="center">
+    <a href=''>
+      <img src='https://img.shields.io/badge/Paper-PDF-green?style=flat&logo=arXiv&logoColor=green' alt='Paper PDF'></a>
+    <a href=''><img src='https://img.shields.io/badge/arXiv-2409.18964-b31b1b.svg'  alt='Arxiv'></a>
+    <a href='' style='padding-left: 0.5rem;'>
+      <img src='https://img.shields.io/badge/Project-Page-blue?style=flat&logo=Google%20chrome&logoColor=blue' alt='Project Page'></a>
+    <a href='' style='padding-left: 0.5rem;'><img src='https://colab.research.google.com/assets/colab-badge.svg' alt='Google Colab'></a>
+    <a href='' style='padding-left: 0.5rem;'>
+      <img src='https://img.shields.io/badge/Youtube-Video-red?style=flat&logo=youtube&logoColor=red' alt='Youtube Video'></a>
+  </p>
+
+</p>
+<br />
+
+This repository provides a PyTorch implementation of the paper [Accelerating Transformers with Spectrum-Preserving Token Merging](https://arxiv.org/abs/2405.16148), accepted at NeurIPS 2024. In this work, we introduce a new algorithm called pitome, designed to compress Vision Transformers (ViT) across various applications through token merging. After each layer, tokens are progressively merged, resulting in a remaining r percentage of tokens, as illustrated in the figure below.
+
 ![Example Image](/figures/overview.png)
+
+News 
 ---
-### News
 - [27/10/2024] Release code for image classification task
 - [01/10/2024] Release code for text classification task
 - [29/09/2024] Release code for image-text retrieval task
 - [25/09/2024] Our paper has been accepted at NeurIPS 2024 as a Poster ([OpenReview](https://openreview.net/forum?id=PPdJPIO3mV&noteId=NUW4EoVirr))
 - [29/05/2024] Upload PrePrint on Arxiv
+
+Abstract
 --- 
-## Abstract
+
 
 Increasing the throughput of the Transformer architecture, a foundational component used in numerous state-of-the-art models for vision and language tasks (e.g., GPT, LLaVa), is an important problem in machine learning. One recent and effective strategy is to merge token representations within Transformer models, aiming to reduce computational and memory requirements while maintaining accuracy. Prior works have proposed algorithms based on Bipartite Soft Matching (BSM), which divides tokens into distinct sets and merges the top k similar tokens. However, these methods have significant drawbacks, such as sensitivity to token-splitting strategies and damage to informative tokens in later layers. This paper presents a novel paradigm called `PiToMe`, which prioritizes the preservation of informative tokens using an additional metric termed the energy score. This score identifies large clusters of similar tokens as high-energy, indicating potential candidates for merging, while smaller (unique and isolated) clusters are considered as low-energy and preserved. Experimental findings demonstrate that PiToMe saved from 40-60\% FLOPs of the base models while exhibiting superior off-the-shelf performance on image classification (0.5\% average performance drop of ViT-MAE-H compared to 2.6\% as baselines), image-text retrieval (0.3\% average performance drop of CLIP on Flickr30k compared to 4.5\% as others), and analogously in visual questions answering with LLaVa-7B. Furthermore, PiToMe is theoretically shown to preserve intrinsic spectral properties of the original token space under mild conditions.
 
+Method
 ---
-## Method
 ![Example Image](/figures/method.png)
 
 All implementations of PiToMe and baselines can be found in the [algo](algo) folder
 
+Installation 
 ---
-## Experiments 
-### Installation 
-First, you need to install the required packages using the commands below:  
+
+First, you need to clone this repository
+```
+git clone https://github.com/hchautran/PiToMe.git
+cd PiToMe
+```
+Next, you need to install the required packages using the commands below:  
 ```
 conda create -n pitome python=3.10
 conda activate pitome
@@ -29,9 +73,11 @@ conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvi
 pip install -r requirements.txt
 ```
 
-### Image-Text Retrieval 
 
-#### Data Preparation
+Image-Text Retrieval 
+---
+
+## Data Preparation
 
 In our paper we evaluate our method on 2 dataset - Flickr30k and MS-COCO. 
 
@@ -51,7 +97,7 @@ python itr/download_flickr.py
 ```
 
 
-#### Run 
+## Run 
 
 Currently, we are supporting `blip`, `blip2`, `clip`, and `albef` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
 
@@ -74,7 +120,7 @@ python scripts/eval_itr.sh
 ```
 
 The results will be printed and saved to the `itr_outputs` directory. 
-#### Using `pitome` with ITR models
+## Using `pitome` with ITR models
 Currently, only checkpoints from [LAVIS](https://github.com/salesforce/LAVIS) are supported. You can directly download and directly apply `pitome` to pretrained weights
 
 ```py
@@ -89,8 +135,9 @@ pitome.patch.blip(model.visual_encoder)
 model.visual_encoder.ratio = 0.9 
 ```
 In the future, we are planning support checkpoints from HuggingFace.
-### Image Classification 
-For image classification tasks, we are currenty supporting  `deit` and `mae` models. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+Image Classification 
+---
+We are currently supporting the `diet` and `Mae` models for image classification tasks. You can try directly compressing these models for off-the-shell performance or retraining them by omitting the `--eval` argument.
 
 ``` sh
 python main_ic.py \
@@ -120,8 +167,10 @@ pitome.patch.deit(model)
 # Set the ratio of remain token  per layer. See paper for details.
 model.ratio = 0.95 
 ```
-### Text Classification 
-We are supporting `bert` and `distilbert` for text classification tasks. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+
+Text Classification 
+---
+We support `bert` and `distilbert` for text classification tasks. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
 ```sh
 python main_tc.py \
    --algo $ALGO \
@@ -158,19 +207,24 @@ model.bert.encoder.ratio = 0.65
 # model.distilbert.transformer.ratio = self.ratio 
 ```
 
-### Visual Question Answering
+Visual Question Answering
+---
 Coming soon
 
-
+Visualization
 ---
 
+<<<<<<< HEAD
 ## Visualization
 
+=======
+Comming soon
+>>>>>>> 6e223ab64819a86e3c5eb4933e812b97abd5c097
 
-
+Citation
 ---
 
-## Citation
+
 
 ```
 @misc{https://doi.org/10.48550/arxiv.2405.16148,
