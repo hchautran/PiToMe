@@ -1,5 +1,9 @@
 # Accelerate Transformer With Spectrum Preserving Token Merging [(full PDF)](https://arxiv.org/abs/2405.16148)  
+This repository contains the pytorch implementation for the paper [Accelerating Transformers with Spectrum-Preserving Token Merging](https://arxiv.org/abs/2405.16148), NeurIPS 2024. In this paper, we propose a new algorithms called `pitome`, which is used to compress ViT for various applications by merging tokens.
+
 ![Example Image](/figures/overview.png)
+
+This 
 ---
 ### News
 - [27/10/2024] Release code for image classification task
@@ -21,7 +25,12 @@ All implementations of PiToMe and baselines can be found in the [algo](algo) fol
 ---
 ## Experiments 
 ### Installation 
-First, you need to install the required packages using the commands below:  
+First, you need to clone this repository
+```
+git clone https://github.com/hchautran/PiToMe.git
+cd PiToMe
+```
+Next, you need to install the required packages using the commands below:  
 ```
 conda create -n pitome python=3.10
 conda activate pitome
