@@ -11,9 +11,8 @@
     <a href="https://jason718.github.io/"><strong>Duy M. H. Nguyen</strong></a>
     ·
     <a href="https://saurabhg.web.illinois.edu/"><strong>Duy M. Nguyen</strong></a>
-    ·
-    <a href="https://shenlong.web.illinois.edu/"><strong>Shenlong Wang*</strong></a>
-    ·
+
+ 
   </p>
 
 <p align="center"> 
@@ -21,13 +20,13 @@
 </p>
 
   <p align="center">
-    <a href='https://arxiv.org/pdf/2409.18964'>
+    <a href=''>
       <img src='https://img.shields.io/badge/Paper-PDF-green?style=flat&logo=arXiv&logoColor=green' alt='Paper PDF'></a>
-    <a href='https://arxiv.org/abs/2409.18964'><img src='https://img.shields.io/badge/arXiv-2409.18964-b31b1b.svg'  alt='Arxiv'></a>
-    <a href='https://stevenlsw.github.io/physgen/' style='padding-left: 0.5rem;'>
+    <a href=''><img src='https://img.shields.io/badge/arXiv-2409.18964-b31b1b.svg'  alt='Arxiv'></a>
+    <a href='' style='padding-left: 0.5rem;'>
       <img src='https://img.shields.io/badge/Project-Page-blue?style=flat&logo=Google%20chrome&logoColor=blue' alt='Project Page'></a>
-    <a href='https://colab.research.google.com/drive/1imGIms3Y4RRtddA6IuxZ9bkP7N2gVVC_' style='padding-left: 0.5rem;'><img src='https://colab.research.google.com/assets/colab-badge.svg' alt='Google Colab'></a>
-    <a href='https://youtu.be/lCc1rHePEFQ' style='padding-left: 0.5rem;'>
+    <a href='' style='padding-left: 0.5rem;'><img src='https://colab.research.google.com/assets/colab-badge.svg' alt='Google Colab'></a>
+    <a href='' style='padding-left: 0.5rem;'>
       <img src='https://img.shields.io/badge/Youtube-Video-red?style=flat&logo=youtube&logoColor=red' alt='Youtube Video'></a>
   </p>
 
