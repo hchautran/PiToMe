@@ -84,7 +84,7 @@ pip install -r requirements.txt
 Image-Text Retrieval 
 ---
 
-#### Data Preparation
+### Data Preparation
 
 In our paper we evaluate our method on 2 dataset - Flickr30k and MS-COCO. 
 
