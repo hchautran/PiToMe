@@ -104,7 +104,7 @@ python itr/download_flickr.py
 ```
 
 
-#### Run 
+### Run 
 
 Currently, we are supporting `blip`, `blip2`, `clip`, and `albef` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
 
@@ -145,7 +145,7 @@ In the future, we are planning support checkpoints from HuggingFace.
 
 Image Classification 
 ---
-We are currently supporting the `diet` and `Mae` models for image classification tasks. You can try directly compressing these models for off-the-shell performance or retraining them by omitting the `--eval` argument.
+We are currently supporting the `DeiT` and `MAE` models for image classification tasks. You can try directly compressing these models for off-the-shell performance or retraining them by omitting the `--eval` argument.
 
 ``` sh
 python main_ic.py \
