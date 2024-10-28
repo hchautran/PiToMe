@@ -127,7 +127,7 @@ python scripts/eval_itr.sh
 ```
 
 The results will be printed and saved to the `itr_outputs` directory. 
-#### Using `pitome` with ITR models
+### Using `pitome` with ITR models
 Currently, only checkpoints from [LAVIS](https://github.com/salesforce/LAVIS) are supported. You can directly download and directly apply `pitome` to pretrained weights
 
 ```py
@@ -162,7 +162,7 @@ python scripts/eval_scripts/eval_ic_all.sh
 ```
 The results will be printed and saved to `outputs/ic_outputs` directory.
 
-#### Using `pitome` with ViT models for image classification
+### Using `pitome` with ViT models for image classification
 ```py
 from timm.models import create_model
 from algo import pitome
@@ -194,7 +194,7 @@ python scripts/eval_scripts/eval_tc_all.sh
 ```
 The results will be printed and saved to `outputs/tc_outputs` directory.
 
-#### Using `pitome` with text classification models
+### Using `pitome` with text classification models
 
 ```py
 from algo import pitome
@@ -222,12 +222,8 @@ Coming soon
 Visualization
 ---
 
-<<<<<<< HEAD
-## Visualization
 
-=======
 Comming soon
->>>>>>> 6e223ab64819a86e3c5eb4933e812b97abd5c097
 
 Citation
 ---
