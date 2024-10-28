@@ -5,8 +5,6 @@
   <h2 align="center">NeurIPS, 2024</h1> 
 
   <p align="center">
-   
-
     <a href="https://scholar.google.com/citations?user=FZH2vcEAAAAJ&hl=en"><strong>Hoai-Chau Tran*</strong></a>
     ·
     <a href="https://duyhominhnguyen.github.io/"><strong>Duy M. H. Nguyen*</strong></a>
