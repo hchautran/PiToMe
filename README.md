@@ -107,7 +107,7 @@ python scripts/eval_scripts/eval_ic_all.sh
 ```
 The results will be printed and saved to `outputs/ic_outputs` directory.
 
-#### Using `pitome` with ic model
+#### Using `pitome` with ViT models for image classification
 ```py
 from timm.models import create_model
 from algo import pitome
@@ -121,7 +121,7 @@ pitome.patch.deit(model)
 model.ratio = 0.95 
 ```
 ### Text Classification 
-Currently, we are supporting `bert`,  and `distilbert`. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+We are supporting `bert` and `distilbert` for text classification tasks. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
 ```sh
 python main_tc.py \
    --algo $ALGO \
@@ -137,7 +137,7 @@ python scripts/eval_scripts/eval_tc_all.sh
 ```
 The results will be printed and saved to `outputs/tc_outputs` directory.
 
-#### Using with text classification models
+#### Using `pitome` with text classification models
 
 ```py
 from algo import pitome
