@@ -23,9 +23,9 @@ Method
 
 All implementations of PiToMe and baselines can be found in the [algo](algo) folder
 
+Installation 
 ---
-## Experiments 
-### Installation 
+
 First, you need to clone this repository
 ```
 git clone https://github.com/hchautran/PiToMe.git
@@ -39,9 +39,11 @@ conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvi
 pip install -r requirements.txt
 ```
 
-### Image-Text Retrieval 
 
-#### Data Preparation
+Image-Text Retrieval 
+---
+
+## Data Preparation
 
 In our paper we evaluate our method on 2 dataset - Flickr30k and MS-COCO. 
 
@@ -61,7 +63,7 @@ python itr/download_flickr.py
 ```
 
 
-#### Run 
+## Run 
 
 Currently, we are supporting `blip`, `blip2`, `clip`, and `albef` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
 
@@ -84,7 +86,7 @@ python scripts/eval_itr.sh
 ```
 
 The results will be printed and saved to the `itr_outputs` directory. 
-#### Using `pitome` with ITR models
+## Using `pitome` with ITR models
 Currently, only checkpoints from [LAVIS](https://github.com/salesforce/LAVIS) are supported. You can directly download and directly apply `pitome` to pretrained weights
 
 ```py
@@ -99,8 +101,9 @@ pitome.patch.blip(model.visual_encoder)
 model.visual_encoder.ratio = 0.9 
 ```
 In the future, we are planning support checkpoints from HuggingFace.
-### Image Classification 
-For image classification tasks, we are currenty supporting  `deit` and `mae` models. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+Image Classification 
+---
+We are currently supporting the `diet` and `Mae` models for image classification tasks. You can try directly compressing these models for off-the-shell performance or retraining them by omitting the `--eval` argument.
 
 ``` sh
 python main_ic.py \
@@ -130,8 +133,10 @@ pitome.patch.deit(model)
 # Set the ratio of remain token  per layer. See paper for details.
 model.ratio = 0.95 
 ```
-### Text Classification 
-We are supporting `bert` and `distilbert` for text classification tasks. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+
+Text Classification 
+---
+We support `bert` and `distilbert` for text classification tasks. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
 ```sh
 python main_tc.py \
    --algo $ALGO \
@@ -168,7 +173,8 @@ model.bert.encoder.ratio = 0.65
 # model.distilbert.transformer.ratio = self.ratio 
 ```
 
-### Visual Question Answering
+Visual Question Answering
+---
 Coming soon
 
 Visualization
