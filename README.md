@@ -46,6 +46,7 @@ This repository provides a PyTorch implementation of the paper [Accelerating Tra
 
 News 
 ---
+- Code for VQA with LLaVA 1.5 is under refractoring. Comming soon. 
 - [27/10/2024] Release code for image classification task
 - [01/10/2024] Release code for text classification task
 - [29/09/2024] Release code for image-text retrieval task
@@ -149,8 +150,8 @@ We are currently supporting the `DeiT` and `MAE` models for image classification
 
 ``` sh
 python main_ic.py \
-   --batch-size 256 \
-   --model ${ARCH}-${MODEL_SIZE}-${INPUT_SIZE}  \
+   --batch-size 256 \ 
+   --model ${ARCH}-${MODEL_SIZE}-${INPUT_SIZE}  \ 
    --algo ${ALGO} \
    --ratio ${RATIO} \
    --eval
