@@ -40,7 +40,7 @@ import os
 from torch.utils.data import Dataset
 from PIL import Image
 import json
-DATA_PATH = f'{os.getcwd()}/data/ic'
+DATA_PATH = f'{os.getcwd()}/data/ic' #you can change this to the path you wanted 
 
 
 class ImageNetKaggle(Dataset):

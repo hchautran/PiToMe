@@ -87,7 +87,7 @@ Image-Text Retrieval
 
 ### Data Preparation
 
-In our paper we evaluate our method on 2 dataset - Flickr30k and MS-COCO. 
+In our paper we evaluate our method on 2 dataset - [Flickr30k](https://www.kaggle.com/datasets/hsankesara/flickr-image-dataset) and [MS-COCO](https://cocodataset.org/). 
 
 **Step 1**: Configure the data storage path in the `default.yml` file and change this to your preferred path. This file is located in the the folder where lavis is installed. you can find it quickly by using this command:
 ```
@@ -107,7 +107,8 @@ python itr/download_flickr.py
 
 ### Run 
 
-Currently, we are supporting `blip`, `blip2`, `clip`, and `albef` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+Currently, we are supporting `blip`, `blip2`, `clip`, and `albef` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument. 
+
 
 ```
 python -m torch.distributed.run \
@@ -148,6 +149,8 @@ Image Classification
 ---
 We are currently supporting the `DeiT` and `MAE` models for image classification tasks. You can try directly compressing these models for off-the-shell performance or retraining them by omitting the `--eval` argument.
 
+In this task all experiment are conducted on [ImageNet1K](https://huggingface.co/datasets/ILSVRC/imagenet-1k) dataset, which is a subset of ImageNet that contain 1000 classes. By default, all data and model checkpoints will be downloaded and saved into the folder specified by `DATA_PATH` variable located in `tasks/ic/utils.py`. You can change this to the path you wanted.
+
 ``` sh
 python main_ic.py \
    --batch-size 256 \ 
@@ -180,6 +183,11 @@ model.ratio = 0.95
 Text Classification 
 ---
 We support `bert` and `distilbert` for text classification tasks. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
+
+
+In this task, all experiments are conducted on the following datasets:  [IMBb](https://www.kaggle.com/datasets/lakshmi25npathi/imdb-dataset-of-50k-movie-reviews), [sst2](stanfordnlp/sst2) and [Rotten Tomatoes](cornell-movie-review-data/rotten_tomatoes) 
+
+By default, all data and model checkpoints are downloaded and saved to the folder specified by the `DATA_PATH` variable in `tasks/tc/config.py`. You can modify this variable to specify a different path as needed.
 ```sh
 python main_tc.py \
    --algo $ALGO \
