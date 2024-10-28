@@ -4,11 +4,11 @@
   <h1 align="center">Accelerating Transformers with Spectrum-Preserving Token Merging</h1>
 
   <p align="center">
-   ECCV, 2024
+   NeurIPS, 2024
     <br />
-    <a href="https://stevenlsw.github.io"><strong>Hoai-Chau Tran</strong></a>
+    <a href="https://stevenlsw.github.io"><strong>Hoai-Chau Tran*</strong></a>
     ·
-    <a href="https://jason718.github.io/"><strong>Duy M. H. Nguyen</strong></a>
+    <a href="https://jason718.github.io/"><strong>Duy M. H. Nguyen*</strong></a>
     ·
     <a href="https://saurabhg.web.illinois.edu/"><strong>Duy M. Nguyen</strong></a>
 
