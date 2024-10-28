@@ -6,25 +6,32 @@
   <p align="center">
    NeurIPS, 2024
     <br />
-    <a href="https://stevenlsw.github.io"><strong>Hoai-Chau Tran*</strong></a>
+    <a href="https://scholar.google.com/citations?user=FZH2vcEAAAAJ&hl=en"><strong>Hoai-Chau Tran*</strong></a>
     ·
-    <a href="https://jason718.github.io/"><strong>Duy M. H. Nguyen*</strong></a>
+    <a href="https://duyhominhnguyen.github.io/"><strong>Duy M. H. Nguyen*</strong></a>
     ·
-    <a href="https://saurabhg.web.illinois.edu/"><strong>Duy M. Nguyen</strong></a>
-
+    <a href="https://scholar.google.com/citations?user=wmuJBfcAAAAJ&hl=en"><strong>Duy M. Nguyen</strong></a>
+    ·
+    <a href="https://trung-tinnguyen.github.io/"><strong>Trung-Tin Nguyen</strong></a>
+    ·
+    <a href="https://uark-aicv.github.io/"><strong>Ngan Le</strong></a>
+    ·
+    <a href="https://pengtaoxie.github.io/"><strong>Pengtao Xie</strong></a>
+    ·
+    <a href="https://www.dfki.de/~sonntag/"><strong>Daniel Sonntag</strong></a>
+    ·
+    <a href="https://www.james-zou.com/"><strong>James Y. Zou</strong></a>
+    ·
+    <a href="https://scholar.google.com/citations?user=dXEb3PMAAAAJ&hl=en"><strong>Binh T. Nguyen</strong></a>
+    ·
+    <a href="https://www.matlog.net/"><strong>Mathias Niepert</strong></a>
  
   </p>
 
-<p align="center"> 
-<img src="assets/demo.gif" alt="Demo GIF" />
-</p>
-
   <p align="center">
-    <a href=''>
+    <a href='https://arxiv.org/abs/2405.16148'>
       <img src='https://img.shields.io/badge/Paper-PDF-green?style=flat&logo=arXiv&logoColor=green' alt='Paper PDF'></a>
-    <a href=''><img src='https://img.shields.io/badge/arXiv-2409.18964-b31b1b.svg'  alt='Arxiv'></a>
-    <a href='' style='padding-left: 0.5rem;'>
-      <img src='https://img.shields.io/badge/Project-Page-blue?style=flat&logo=Google%20chrome&logoColor=blue' alt='Project Page'></a>
+    <a href='https://arxiv.org/abs/2405.16148'><img src='https://img.shields.io/badge/arXiv-2409.18964-b31b1b.svg'  alt='Arxiv'></a>
     <a href='' style='padding-left: 0.5rem;'><img src='https://colab.research.google.com/assets/colab-badge.svg' alt='Google Colab'></a>
     <a href='' style='padding-left: 0.5rem;'>
       <img src='https://img.shields.io/badge/Youtube-Video-red?style=flat&logo=youtube&logoColor=red' alt='Youtube Video'></a>
