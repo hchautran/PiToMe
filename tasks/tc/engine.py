@@ -56,9 +56,9 @@ TASKS = {
     'sst2': ConfigDict(dict(dataset_fn=SST2Dataset, config_getter=get_text_classification_config)),
 }
 batch_sizes = {
-    'imdb': 24, 
-    'rotten': 256,
-    'sst2': 256,
+    'imdb': 2, 
+    'rotten': 2,
+    'sst2': 2,
 }
 BERT_BASE = 'bert-base-uncased'
 DISTILBERT_BASE = 'distilbert-base-uncased'
@@ -124,7 +124,7 @@ class Engine:
         self.ratio = ratio
         self.margin = margin
         self.alpha = alpha
-        self.config, self.model_config = task.config_getter()    
+        self.config, _ = task.config_getter()    
         self.train_dataset = task.dataset_fn(self.config, split='train')
         self.eval_dataset = task.dataset_fn(self.config, split='eval')    
         self.max_train_steps = int(np.ceil(self.config.total_train_samples / self.batch_size))

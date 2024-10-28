@@ -114,7 +114,7 @@ from algo import pitome
 
 # Load a pretrained model, can be any vit / deit model.
 model = create_model("deit_base_patch16_224", pretrained=True)
-# Patch the model with ToMe.
+# Patch the ViT model with ToMe.
 pitome.patch.deit(model)
 # pitome.patch.mae(model)
 # Set the ratio of remain token  per layer. See paper for details.
@@ -140,6 +140,7 @@ The results will be printed and saved to `outputs/tc_outputs` directory.
 #### Using with text classification models
 
 ```py
+from algo import pitome
 from transformers import AutoModelForSequenceClassification
 
 # Load a pretrained model, can be bert or distilbert .
@@ -148,7 +149,7 @@ model_ckt = 'JiaqiLee/imdb-finetuned-bert-base-uncased'
 # model_ckt = 'distilbert-base-uncased'
 model =  AutoModelForSequenceClassification.from_pretrained(model_ckt)
 
-# Patch the blip's visual encoder with PiToMe.
+# Patch the bert encoder with PiToMe.
 pitome.patch.bert(model.bert.encoder)
 # pitome.patch.distilbert(model.distilbert.transformer)
 

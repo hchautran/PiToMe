@@ -13,19 +13,20 @@ from .config import DATA_PATH
 
 class ImdbDataset:
 
-    def __init__(self, config, split='train'):       
+    def __init__(self, config, split='train', data_path=None):       
+        data_path = data_path if data_path is not None else DATA_PATH
 
-        if not os.path.exists(DATA_PATH):
-            os.makedirs(DATA_PATH, exist_ok=True)
-            os.chdir(DATA_PATH)
-            print('Saving data to', DATA_PATH)
+        if not os.path.exists(data_path):
+            os.makedirs(data_path, exist_ok=True)
+            os.chdir(data_path)
+            print('Saving data to', data_path)
             imdb_url = "https://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz"
             imdb_tar = "aclImdb_v1.tar.gz"
             subprocess.run(["wget", imdb_url])
             subprocess.run(["tar", "-xvf", imdb_tar])
             os.remove(imdb_tar)
 
-        paths = {'train': f"{DATA_PATH}/aclImdb/train", 'eval': f"{DATA_PATH}/aclImdb/test"}
+        paths = {'train': f"{data_path}/aclImdb/train", 'eval': f"{data_path}/aclImdb/test"}
         split_path = paths[split]
         neg_path = split_path + "/neg"
         pos_path = split_path + "/pos"
@@ -48,8 +49,9 @@ class ImdbDataset:
 
         
 class RottenTomatoes: 
-    def __init__(self, config ,split='train'):
-        cache_dir = f'{DATA_PATH}/.cache' 
+    def __init__(self, config ,split='train', data_path=None):
+        data_path = data_path if data_path is not None else DATA_PATH
+        cache_dir = f'{data_path}/.cache' 
         self.split = 'train' if split == 'train' else 'test'
         self.data = load_dataset('rotten_tomatoes', cache_dir=cache_dir)[self.split]
         
@@ -62,8 +64,9 @@ class RottenTomatoes:
 
         
 class SST2Dataset: 
-    def __init__(self, config ,split='train'):
-        cache_dir = f'{DATA_PATH}/.cache' 
+    def __init__(self, config ,split='train', data_path=None):
+        data_path = data_path if data_path is not None else DATA_PATH
+        cache_dir = f'{data_path}/.cache' 
         self.split = 'train' if split == 'train' else 'validation'
         self.data = load_dataset('stanfordnlp/sst2', cache_dir=cache_dir)[self.split]
         

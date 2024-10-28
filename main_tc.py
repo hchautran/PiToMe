@@ -42,9 +42,7 @@ if __name__ == "__main__":
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
     parser.add_argument("--alpha", default=1.0, type=float)
     parser.add_argument('--margin',default=None) 
-    parser.add_argument('--batch_size', default=8, help='Perform evaluation only')
     args = parser.parse_args()
-    batch_size = 16 
     avg_factor = 0.95
     task_name = args.task
     algo = args.algo

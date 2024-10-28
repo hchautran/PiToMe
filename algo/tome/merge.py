@@ -55,6 +55,8 @@ def bipartite_soft_matching(
             unm_idx = unm_idx.sort(dim=1)[0]
 
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
+        if len(x.shape) == 2:
+            x.unsqueeze_(0)
         src, dst = x[..., ::2, :], x[..., 1::2, :]
         n, t1, c = src.shape
         unm = src.gather(dim=-2, index=unm_idx.expand(n, t1 - r, c))
