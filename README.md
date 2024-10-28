@@ -1,5 +1,5 @@
 # Accelerate Transformer With Spectrum Preserving Token Merging [(full PDF)](https://arxiv.org/abs/2405.16148)  
-This repository contains the pytorch implementation for the paper [Accelerating Transformers with Spectrum-Preserving Token Merging](https://arxiv.org/abs/2405.16148), NeurIPS 2024. In this paper, we propose a new algorithms called `pitome`, which is used to compress ViT for various applications by merging tokens.
+This repository provides a PyTorch implementation of the paper [Accelerating Transformers with Spectrum-Preserving Token Merging](https://arxiv.org/abs/2405.16148), accepted at NeurIPS 2024. In this work, we introduce a new algorithm called pitome, designed to compress Vision Transformers (ViT) across various applications through token merging. After each layer, tokens are progressively merged, resulting in a remaining r percentage of tokens, as illustrated in the figure below.
 
 ![Example Image](/figures/overview.png)
 
