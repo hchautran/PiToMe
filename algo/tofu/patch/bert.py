@@ -280,7 +280,6 @@ def apply_patch(
             module.__class__ = ToFuBertLayer
             module.init_strategy('prune')
             module._info = model._info
-            current_layer +=1
         if isinstance(module, BertAttention):
             module.__class__ = ToFuBertAttention 
         if isinstance(module, BertSelfAttention):

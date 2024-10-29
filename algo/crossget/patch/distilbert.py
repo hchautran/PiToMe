@@ -53,7 +53,7 @@ class CrossGetDistilBertBlock(TransformerBlock):
         sa_output = self.sa_layer_norm(sa_output + x)  # (bs, seq_length, dim)
 
         if ratio < 1.0:
-            merge, _ = crossget(
+            merge = crossget(
                 ratio=ratio,
                 metric=metric,
                 class_token=self._info["class_token"]

@@ -7,6 +7,7 @@ do
     do
         for algo in pitome tome tofu crossget mctf dct 
         do
+            # for ratio in  '0.9' '0.925' '0.95' '0.975'
             for ratio in  '0.9' 
             do
                 echo "running $model $size $algo $ratio."

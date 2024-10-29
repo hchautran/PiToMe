@@ -58,7 +58,6 @@ class PiToMeDistilBertBlock(TransformerBlock):
             merge = pitome_text(
                 ratio=ratio,
                 metric=metric,
-                attn=sa_weights if self._info["use_attn"] else None,
                 margin=self.margin,
                 class_token=self._info["class_token"]
             )

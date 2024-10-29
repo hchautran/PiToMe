@@ -56,9 +56,9 @@ TASKS = {
     'sst2': ConfigDict(dict(dataset_fn=SST2Dataset, config_getter=get_text_classification_config)),
 }
 batch_sizes = {
-    'imdb': 2, 
-    'rotten': 2,
-    'sst2': 2,
+    'imdb': 32, 
+    'rotten': 32,
+    'sst2': 32,
 }
 BERT_BASE = 'bert-base-uncased'
 DISTILBERT_BASE = 'distilbert-base-uncased'
@@ -100,6 +100,7 @@ BERT_PATCHES = {
     DCT: dct.patch.bert, 
     MCTF: mctf.patch.bert, 
     CROSSGET: crossget.patch.bert, 
+    NONE: tome.patch.bert
 }
 DISTILBERT_PATCHES = {
     PITOME: pitome.patch.distilbert, 
@@ -108,6 +109,7 @@ DISTILBERT_PATCHES = {
     DCT: dct.patch.distilbert, 
     MCTF: mctf.patch.distilbert, 
     CROSSGET: crossget.patch.distilbert, 
+    NONE: tome.patch.bert
 }
 class Engine:
 
@@ -183,12 +185,7 @@ class Engine:
         self.algo = algo
 
 
-        if self.algo is not None:
-            BERT_PATCHES[self.algo](self.model.bert.encoder)
-        else:
-            pitome.patch.bert(self.model.bert.encoder)
-            self.set_ratio(1.0)
-
+        BERT_PATCHES[self.algo](self.model.bert.encoder)
         self.model.bert.encoder.ratio = self.ratio 
         self.tokenizer = AutoTokenizer.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
         self.model = self.accelerator.prepare(self.model)
@@ -199,12 +196,7 @@ class Engine:
         self.model = DistilBertForSequenceClassification.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
         self.algo = algo
 
-        if self.algo == PITOME:
-            DISTILBERT_PATCHES[self.algo](self.model.distilbert.transformer)
-        else:
-            tome.patch.distilbert(self.model.distilbert.transformer)
-            self.set_ratio(1.0)
-
+        DISTILBERT_PATCHES[self.algo](self.model.distilbert.transformer)
         self.model.distilbert.transformer.ratio = self.ratio 
         self.tokenizer = AutoTokenizer.from_pretrained(model_ckt, cache_dir=f'{DATA_PATH}/.cache')
         self.model = self.accelerator.prepare(self.model)

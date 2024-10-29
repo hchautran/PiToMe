@@ -243,7 +243,6 @@ def apply_patch(
         if isinstance(module, TransformerBlock):
             module.__class__ = ToMeDistilBertBlock 
             module._info = model._info
-            current_layer +=1
         if isinstance(module, MultiHeadSelfAttention):
             module.__class__ = ToMeDistilBertAttention 
 

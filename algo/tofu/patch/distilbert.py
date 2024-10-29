@@ -242,7 +242,6 @@ def apply_patch(
             module.__class__ = ToFuDistilBertBlock 
             module._info = model._info
             module.init_strategy('prune')
-            current_layer +=1
         if isinstance(module, MultiHeadSelfAttention):
             module.__class__ = ToFuDistilBertAttention 
 

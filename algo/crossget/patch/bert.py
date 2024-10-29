@@ -43,7 +43,7 @@ class CrossGetBertLayer(BertLayer):
 
     
         if ratio < 1.0:
-            merge, _ = crossget(
+            merge = crossget(
                 ratio=ratio,
                 metric=key,
                 class_token=self._info["class_token"],

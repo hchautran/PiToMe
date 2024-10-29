@@ -60,12 +60,24 @@ Increasing the throughput of the Transformer architecture, a foundational compon
 
 ## 📄 Table of Contents
 
+- [News](#news)
+- [Abstract](#abstract)
+- [📄 Table of Contents](#-table-of-contents)
+- [Method](#method)
 - [Installation](#installation)
 - [Image-Text Retrieval](#image-text-retrieval)
+  - [Data Preparation](#data-preparation)
+  - [Run](#run)
+  - [Using `pitome` with ITR models](#using-pitome-with-itr-models)
 - [Image Classification](#image-classification)
+  - [Using `pitome` with ViT models for image classification](#using-pitome-with-vit-models-for-image-classification)
+  - [Run](#run-1)
 - [Text Classification](#text-classification)
-- [Colab Notebook](#colab-notebook)
+  - [Using `pitome` with text classification models](#using-pitome-with-text-classification-models)
+  - [Run](#run-2)
+- [Notebook](#notebook)
 - [Citation](#citation)
+- [Acknowledgement](#acknowledgement)
 
 Method
 ---
@@ -107,7 +119,7 @@ Update the `cache_root`  entry to the path that you wanted.
 
 **Step 2**: Download the data
 You can download Flickr30k and MSCOCO by using avaiable scripts:
-```
+```sh
 python itr/download_coco.py
 python itr/download_flickr.py
 ```
@@ -115,10 +127,9 @@ python itr/download_flickr.py
 
 ### Run 
 
-Currently, we are supporting `blip`, `blip2`, `clip`, and `albef` you can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument. 
+Currently, we are supporting `blip`, `blip2`, `clip`, and `albef` you can try directly compressing these models for off-the-shell performance by running this command:
 
-
-```
+```sh
 python -m torch.distributed.run \
     --nproc_per_node=5 main_itr.py \
     --cfg-path scripts/eval_scripts/blip_itr_coco.yml \
@@ -128,11 +139,25 @@ python -m torch.distributed.run \
     --dataset flickr \
     --eval 
 ```
+Or retrain these model using this command:
 
-You can also evaluate all other baselines with multiple ratio `r` by running:
+```sh
+CUDA_VISIBLE_DEVICES=0 python -m accelerate.commands.launch --main_process_port 29500 main_ic.py \
+   --batch-size $BATCH_SIZE \
+   --model ${ARCH}_${SIZE}_patch16_${INPUT_SIZE}  \
+   --algo ${ALGO} \
+   --ratio ${RATIO} \
+   --input-size ${INPUT_SIZE} \
+   --epoch $EPOCH  \
+   --lr 0.00001
 
 ```
-python scripts/eval_itr.sh
+
+You can also evaluate/train all other baselines with multiple ratio `r` by running:
+
+```sh
+python scripts/eval_scripts/eval_itr_all.sh #off-the-shell evaluate 
+python scripts/train_scripts/train_itr_all.sh #retrain
 ```
 
 The results will be printed and saved to the `itr_outputs` directory. 
@@ -154,26 +179,8 @@ In the future, we are planning support checkpoints from HuggingFace.
 
 Image Classification 
 ---
-We are currently supporting the `DeiT` and `MAE` models for image classification tasks. You can try directly compressing these models for off-the-shell performance or retraining them by omitting the `--eval` argument.
-
-In this task all experiment are conducted on [ImageNet1K](https://huggingface.co/datasets/ILSVRC/imagenet-1k) dataset, which is a subset of ImageNet that contain 1000 classes. By default, all data and model checkpoints will be downloaded and saved into the folder specified by `DATA_PATH` variable located in `tasks/ic/utils.py`. You can change this to the path you wanted.
-
-``` sh
-python main_ic.py \
-   --batch-size 256 \ 
-   --model ${ARCH}-${MODEL_SIZE}-${INPUT_SIZE}  \ 
-   --algo ${ALGO} \
-   --ratio ${RATIO} \
-   --eval
-```
-
-You can also evaluate all models with all baselines using multiple ratio `r` by running:
-``` sh
-python scripts/eval_scripts/eval_ic_all.sh
-```
-The results will be printed and saved to `outputs/ic_outputs` directory.
-
 ### Using `pitome` with ViT models for image classification
+We are currently supporting the `DeiT` and `MAE` models for image classification tasks.
 ```py
 from timm.models import create_model
 from algo import pitome
@@ -187,31 +194,44 @@ pitome.patch.deit(model)
 model.ratio = 0.95 
 ```
 
+### Run
+In this task all experiment are conducted on [ImageNet1K](https://huggingface.co/datasets/ILSVRC/imagenet-1k) dataset, which is a subset of ImageNet that contain 1000 classes. By default, all data and model checkpoints will be downloaded and saved into the folder specified by `DATA_PATH` variable located in `tasks/ic/utils.py`. You can change this to the path you wanted.
+
+You can try directly compressing these models for off-the-shell performance
+``` sh
+python main_ic.py \
+   --batch-size 256 \ 
+   --model ${ARCH}-${MODEL_SIZE}-${INPUT_SIZE}  \ 
+   --algo ${ALGO} \
+   --ratio ${RATIO} \
+   --eval
+```
+Or retraining them by running this command: 
+``` sh
+CUDA_VISIBLE_DEVICES=0 python -m accelerate.commands.launch --main_process_port 29500 main_ic.py \
+   --batch-size $BATCH_SIZE \
+   --model ${ARCH}-${MODEL_SIZE}-${INPUT_SIZE}  \ 
+   --algo ${ALGO} \
+   --ratio ${RATIO} \
+   --epoch $EPOCH  \
+   --lr 0.00001
+
+```
+
+You can also evaluate/train all models with all baselines using multiple ratio `r` by running:
+``` sh
+python scripts/eval_scripts/eval_ic_all.sh #off-the-shell evaluate
+python scripts/train_scripts/train_ic_all.sh #retrain model
+```
+The results will be printed and saved to `outputs/ic_outputs` directory.
+
+
 Text Classification 
 ---
-We support `bert` and `distilbert` for text classification tasks. You can try directly compressing these models for off-the-shell performance or retrain them by omitting the `--eval` argument.
 
-
-In this task, all experiments are conducted on the following datasets:  [IMBb](https://www.kaggle.com/datasets/lakshmi25npathi/imdb-dataset-of-50k-movie-reviews), [sst2](stanfordnlp/sst2) and [Rotten Tomatoes](cornell-movie-review-data/rotten_tomatoes) 
-
-By default, all data and model checkpoints are downloaded and saved to the folder specified by the `DATA_PATH` variable in `tasks/tc/config.py`. You can modify this variable to specify a different path as needed.
-```sh
-python main_tc.py \
-   --algo $ALGO \
-   --ratio $RATIO \
-   --task $TASK \
-   --model $MODEL \
-   --eval 
-```
-
-You can also evaluate all models with all baselines using multiple ratio `r` by running:
-```sh
-python scripts/eval_scripts/eval_tc_all.sh
-```
-The results will be printed and saved to `outputs/tc_outputs` directory.
 
 ### Using `pitome` with text classification models
-
+We support `bert` and `distilbert` for text classification tasks. 
 ```py
 from algo import pitome
 from transformers import AutoModelForSequenceClassification
@@ -231,13 +251,42 @@ model.bert.encoder.ratio = 0.65
 # model.distilbert.transformer.ratio = self.ratio 
 ```
 
-Visual Question Answering
----
-Coming soon
+### Run
+In this task, all experiments are conducted on the following datasets:  [IMBb](https://www.kaggle.com/datasets/lakshmi25npathi/imdb-dataset-of-50k-movie-reviews), [sst2](stanfordnlp/sst2) and [Rotten Tomatoes](cornell-movie-review-data/rotten_tomatoes). 
+By default, all data and model checkpoints are downloaded and saved to the folder specified by the `DATA_PATH` variable in `tasks/tc/config.py`. You can modify this variable to specify a different path as needed.
 
-Colab Notebook
+You can directly can evaluate off-the-shell perfomance by running:
+```sh
+python main_tc.py \
+   --algo $ALGO \
+   --ratio $RATIO \
+   --task $TASK \
+   --model $MODEL \
+   --eval 
+```
+Or retrain the model by running:
+```sh
+CUDA_VISIBLE_DEVICES=$5 python -m accelerate.commands.launch main_tc.py \
+   --model $MODEL \
+   --algo $ALGO \
+   --ratio $RATIO \
+   --task $TASK 
+```
+
+You can also evaluate all models with all baselines using multiple ratio `r` by running:
+```sh
+python scripts/eval_scripts/eval_tc_all.sh #off-the-shell performance
+python scripts/train_scripts/train_tc_all.sh #retrain
+```
+The results will be printed and saved to `outputs/tc_outputs` directory.
+
+
+Notebook
 ---
-Comming soon
+You can refer to the [notebooks](notebooks) folder for example usages.
+
+
+
 
 Citation
 ---

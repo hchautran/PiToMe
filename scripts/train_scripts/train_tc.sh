@@ -1,1 +1,10 @@
-CUDA_VISIBLE_DEVICES=$5 python -m accelerate.commands.launch main_tc.py --model $1 --algo $2 --ratio $3   --task $4 
+MODEL=$1
+ALGO=$1
+RATIO=$1
+TASK=$1
+
+CUDA_VISIBLE_DEVICES=$5 python -m accelerate.commands.launch main_tc.py \
+   --model $MODEL \
+   --algo $ALGO \
+   --ratio $RATIO \
+   --task $TASK 

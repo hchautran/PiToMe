@@ -51,7 +51,7 @@ class PiToMeBertLayer(BertLayer):
                 class_token=self._info["class_token"],
             )
 
-            x, self._info["size"] = merge_wavg(merge, x, self._info["size"])
+            x, self._info["size"] = merge_wavg(merge, x, None)
             B, T, _ = x.shape
             attention_mask = torch.where(attention_mask.squeeze_(-2).squeeze_(-2) >= 0, 1, 0)
             attention_mask = merge_attention_mask(merge, attention_mask=attention_mask[..., None]).view(B, T)
