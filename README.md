@@ -286,8 +286,6 @@ Notebook
 You can refer to the [notebooks](notebooks) folder for example usages.
 
 
-
-
 Citation
 ---
 
