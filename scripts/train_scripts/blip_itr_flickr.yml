@@ -58,7 +58,7 @@ run:
 
   # misc
   seed: 42
-  output_dir: "output/Retrieval_Flickr30k"
+  output_dir: "outputs/Retrieval_Flickr30k"
 
   amp: False
   resume_ckpt_path: null
