@@ -66,9 +66,8 @@ Increasing the throughput of the Transformer architecture, a foundational compon
 - [Method](#method)
 - [Installation](#installation)
 - [Image-Text Retrieval](#image-text-retrieval)
-  - [Data Preparation](#data-preparation)
-  - [Run](#run)
   - [Using `pitome` with ITR models](#using-pitome-with-itr-models)
+  - [Run](#run)
 - [Image Classification](#image-classification)
   - [Using `pitome` with ViT models for image classification](#using-pitome-with-vit-models-for-image-classification)
   - [Run](#run-1)
@@ -104,8 +103,24 @@ pip install -r requirements.txt
 
 Image-Text Retrieval 
 ---
+### Using `pitome` with ITR models
+Currently, only checkpoints from [LAVIS](https://github.com/salesforce/LAVIS) are supported. You can directly download and directly apply `pitome` to pretrained weights
 
-### Data Preparation
+```py
+from lavis.models import load_model_and_preprocess
+from algo import pitome
+
+# Load a pretrained model, can be blip/albef/blip2 .
+model, vis_processors, txt_processors = load_model_and_preprocess("blip_retrieval", "coco", is_eval=False)
+# Patch the blip's visual encoder with PiToMe.
+pitome.patch.blip(model.visual_encoder)
+# Set the number of ratio of remaining token per layer. See paper for details.
+model.visual_encoder.ratio = 0.9 
+```
+In the future, we are planning support checkpoints from HuggingFace.
+
+
+### Run 
 
 In our paper we evaluate our method on 2 dataset - [Flickr30k](https://www.kaggle.com/datasets/hsankesara/flickr-image-dataset) and [MS-COCO](https://cocodataset.org/). 
 
@@ -125,7 +140,6 @@ python itr/download_flickr.py
 ```
 
 
-### Run 
 
 Currently, we are supporting `blip`, `blip2`, `clip`, and `albef` you can try directly compressing these models for off-the-shell performance by running this command:
 
@@ -161,21 +175,7 @@ python scripts/train_scripts/train_itr_all.sh #retrain
 ```
 
 The results will be printed and saved to the `itr_outputs` directory. 
-### Using `pitome` with ITR models
-Currently, only checkpoints from [LAVIS](https://github.com/salesforce/LAVIS) are supported. You can directly download and directly apply `pitome` to pretrained weights
 
-```py
-from lavis.models import load_model_and_preprocess
-from algo import pitome
-
-# Load a pretrained model, can be blip/albef/blip2 .
-model, vis_processors, txt_processors = load_model_and_preprocess("blip_retrieval", "coco", is_eval=False)
-# Patch the blip's visual encoder with PiToMe.
-pitome.patch.blip(model.visual_encoder)
-# Set the number of ratio of remaining token per layer. See paper for details.
-model.visual_encoder.ratio = 0.9 
-```
-In the future, we are planning support checkpoints from HuggingFace.
 
 Image Classification 
 ---
