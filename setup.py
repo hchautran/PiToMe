@@ -10,16 +10,23 @@ from setuptools import find_packages, setup
 setup(
     name="pitome",
     version="0.1",
-    author="Meta",
+    author="Hoai-Chau Tran",
     url="https://github.com/hchautran/PiToMe",
     description="Token Merging with Spectrum Preservation",
     install_requires=[
         "salesforce-lavis",
         "datasets",
         "accelerate",
-        # "timm==0.6.13",
         "tokenizers==0.15.1",
         "transformers==4.37.0",
+        "timm==0.4.12",
+        "ml-collections",
+        "numpy==1.26.4",
+        "pandas==2.2.1",
+        "wandb"
     ],
-    packages=find_packages(exclude=("examples", "build")),
+    packages=find_packages(exclude=("data", "log", "notebooks", "tasks", "scripts", "build")),
+    long_description=open("README.md", "r", encoding="utf-8").read(),
+    long_description_content_type="text/markdown",
+    license = 'MIT',
 )
