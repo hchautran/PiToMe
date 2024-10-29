@@ -21,8 +21,6 @@ from transformers.modeling_utils import ModuleUtilsMixin
 
 
 class DCTDistilBertBlock(TransformerBlock):
-    def init_margin(self, margin):
-        self.margin = margin
    
     def forward(
         self,
@@ -49,7 +47,7 @@ class DCTDistilBertBlock(TransformerBlock):
             head_mask=head_mask,
             output_attentions=output_attentions,
         )
-        ratio = self._dct_info["ratio"].pop()
+        ratio = self._info["ratio"].pop()
         if output_attentions:
             sa_output, sa_weights = sa_output  # (bs, seq_length, dim), (bs, n_heads, seq_length, seq_length)
         else:  # To handle these `output_attentions` or `output_hidden_states` cases returning tuples
@@ -62,7 +60,7 @@ class DCTDistilBertBlock(TransformerBlock):
         ffn_output: torch.Tensor = self.output_layer_norm(ffn_output + sa_output)  # (bs, seq_length, dim)
 
         if ratio < 1.0:
-            output  = dc_transform(ffn_output, ratio=ratio, class_token=self._dct_info['class_token'])
+            output  = dc_transform(ffn_output, ratio=ratio, class_token=self._info['class_token'])
             attn_mask = torch.ones((output.shape[0], output.shape[1])).to(output.device)
         else:
             output = ffn_output
@@ -156,14 +154,14 @@ def make_dct_class(transformer_class):
         ): 
 
             len_layers = len(self.layer)
-            self._dct_info["ratio"] = [self.ratio if i in [
+            self._info["ratio"] = [self.ratio if i in [
                 len_layers - 1, 
                 len_layers - 2,
                 len_layers - 3,
                 # len_layers - 6,
                 # len_layers - 9,
             ] else 1.0 for i in range(len_layers) ]
-            # self._dct_info["ratio"] = [self.ratio for i in range(len(self.layer))]
+            # self._info["ratio"] = [self.ratio for i in range(len(self.layer))]
             all_hidden_states = () if output_hidden_states else None
             all_attentions = () if output_attentions else None
 
@@ -206,27 +204,17 @@ def make_dct_class(transformer_class):
 
 
 def apply_patch(
-   model: Transformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
-    """
-    Applies DCT to this transformer. Afterward, set r using model.r.
+   model: Transformer, trace_source: bool = False, prop_attn: bool = True):
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._dct_info["source"] afterward.
-
-    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
-    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
-    """
     DCTTransformers = make_dct_class(model.__class__)
     print('using', 'dct')
 
     model.__class__ = DCTTransformers
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'dct' 
-    model._dct_info = {
+    model._info = {
         "ratio": model.ratio,
-        "margin":  [],
         "size": None,
         "source": None,
         "trace_source": trace_source,
@@ -235,15 +223,10 @@ def apply_patch(
         "distill_token": False,
     }
     current_layer = 0
-    margin = margin 
-    num_layers = len(model.layer)
-    margins = [0.75 - 0.25*(i/num_layers) for i in range(num_layers)]
 
 
     for module in model.modules():
         if isinstance(module, TransformerBlock):
             module.__class__ = DCTDistilBertBlock 
-            module.init_margin(margins[current_layer])
-            module._dct_info = model._dct_info
-            current_layer +=1
+            module._info = model._info
 

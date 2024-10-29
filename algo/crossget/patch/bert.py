@@ -20,8 +20,6 @@ import math
 
 
 class CrossGetBertLayer(BertLayer):
-    def init_margin(self, margin):
-        self.margin = margin
    
     def forward(
         self,
@@ -30,7 +28,7 @@ class CrossGetBertLayer(BertLayer):
         head_mask: Optional[torch.FloatTensor] = None,
         output_attentions: Optional[bool] = False,
     ) -> Tuple[torch.Tensor]:
-        # attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
+        # attn_size = self._info["size"] if self._info["prop_attn"] else None
 
         self_attention_outputs = self.attention(
             hidden_states,
@@ -38,21 +36,20 @@ class CrossGetBertLayer(BertLayer):
             head_mask,
             output_attentions=output_attentions,
         )
-        ratio = self._tome_info["ratio"].pop()
+        ratio = self._info["ratio"].pop()
         x = self_attention_outputs[0]
         key = self_attention_outputs[1]
         attn = self_attention_outputs[2]
 
     
         if ratio < 1.0:
-            merge, isolated_score = crossget(
+            merge, _ = crossget(
                 ratio=ratio,
                 metric=key,
-                class_token=self._tome_info["class_token"],
+                class_token=self._info["class_token"],
             )
 
-            weight = isolated_score
-            x, self._tome_info["size"] = merge_wavg(merge, x, weight)
+            x, self._info["size"] = merge_wavg(merge, x, self._info["size"] )
             B, T, _ = x.shape
             attention_mask = torch.where(attention_mask.squeeze_(-2).squeeze_(-2) >= 0, 1, 0)
             attention_mask = merge_attention_mask(merge, attention_mask=attention_mask[..., None]).view(B, T)
@@ -185,9 +182,9 @@ def make_cross_get_class(transformer_class):
             output_hidden_states: Optional[bool] = False,
         ): 
             len_layers = len(self.layer)
-            # self._tome_info["ratio"] = [self.ratio if i in [len_layers-1,len_layers-6] else 1.0 for i in range(len_layers) ]
-            # self._tome_info["ratio"] = [self.ratio for _ in range(len_layers) ]
-            self._tome_info["ratio"] = [self.ratio if i in [
+            # self._info["ratio"] = [self.ratio if i in [len_layers-1,len_layers-6] else 1.0 for i in range(len_layers) ]
+            # self._info["ratio"] = [self.ratio for _ in range(len_layers) ]
+            self._info["ratio"] = [self.ratio if i in [
                 len_layers - 1, 
                 len_layers - 2,
                 len_layers - 3,
@@ -247,27 +244,17 @@ def make_cross_get_class(transformer_class):
 
 
 def apply_patch(
-   model: BertEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_attn=False):
-    """
-    Applies ToMe to this transformer. Afterward, set r using model.r.
+   model: BertEncoder, trace_source: bool = False, prop_attn: bool = True, use_attn=False):
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tome_info["source"] afterward.
-
-    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
-    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
-    """
     CrossGetBertEncoder = make_cross_get_class(model.__class__)
     print('using', 'cross_get')
 
     model.__class__ = CrossGetBertEncoder
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'tome' 
-    model._tome_info = {
+    model._info = {
         "ratio": model.ratio,
-        "margin":  [],
         "size": None,
         "source": None,
         "use_attn": use_attn,
@@ -276,18 +263,12 @@ def apply_patch(
         "class_token": True,
         "distill_token": False,
     }
-    current_layer = 0
-    margin = margin 
-    num_layers = len(model.layer)
-    margins = [0.9 - 0.25*(i/num_layers) for i in range(num_layers)]
 
 
     for module in model.modules():
         if isinstance(module, BertLayer):
             module.__class__ = CrossGetBertLayer
-            module.init_margin(margins[current_layer])
-            module._tome_info = model._tome_info
-            current_layer +=1
+            module._info = model._info
         if isinstance(module, BertAttention):
             module.__class__ = CrossGetBertAttention 
         if isinstance(module, BertSelfAttention):

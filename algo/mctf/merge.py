@@ -52,12 +52,11 @@ def bipartite_soft_matching(
 
     T = metric.shape[1]
 
-    if r > 0:
-        r = min(r, (T-protected) // 2)
-    elif ratio < 1.0:
+   
+    if ratio < 1.0:
         r = math.floor(T- T*ratio)
     else:
-        return do_nothing, do_nothing
+        return do_nothing
 
     if bidirection:
         r1, r2 = r // 2, r - r // 2
@@ -151,7 +150,7 @@ def bipartite_soft_matching(
         x = torch.cat([dst2, unm2], dim=-2)  # (12(B), 2(T_1) + 3(T_2), 384(D))
         return x
 
-    return merge, None 
+    return merge
 
 
 def merge_wavg(

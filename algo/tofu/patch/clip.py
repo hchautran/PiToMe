@@ -8,25 +8,24 @@ from ..merge import merge_source, bipartite_soft_matching, merge_wavg
 class ToFuBlock(ResidualAttentionBlock):
 
     def init_strategy(self, strategy='mean'):
-        # self.margin = nn.Parameter(torch.tensor(margin)) 
         self.strategy = strategy 
 
     def compress_x(self, metric, x):
-        ratio = self._tofu_info["ratio"].pop()
+        ratio = self._info["ratio"].pop()
         if ratio < 1.0:
-            merge, isolated_score = bipartite_soft_matching(
+            merge = bipartite_soft_matching(
                 ratio=ratio,
                 metric=metric,
-                class_token=self._tofu_info["class_token"]
+                class_token=self._info["class_token"]
             )
 
-            if self._tofu_info["trace_source"]:
-                self._tofu_info["source"] = merge_source(
-                    merge, x, self._tofu_info["source"]
+            if self._info["trace_source"]:
+                self._info["source"] = merge_source(
+                    merge, x, self._info["source"]
                 )
 
-
-            x = merge(x, mode=self.strategy)
+            weight = self._info["size"] 
+            x, self._info["size"] = merge_wavg(merge, x, weight)
 
         return x
 
@@ -54,10 +53,9 @@ class ToFuTransformer(Transformer):
         )
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
-        self._tofu_info["r"] = [self.r]* len(self.resblocks) 
-        self._tofu_info["ratio"] = [self.ratio] * len(self.resblocks) 
-        self._tofu_info["size"] = None
-        self._tofu_info["source"] = None
+        self._info["ratio"] = [self.ratio] * len(self.resblocks) 
+        self._info["size"] = None
+        self._info["source"] = None
         self.total_flop = 0
 
         for r in self.resblocks:
@@ -79,26 +77,16 @@ class ToFuTransformer(Transformer):
 
 
 def apply_patch(
-   model: Transformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
-    """
-    Applies ToFu to this transformer. Afterward, set r using model.r.
+   model: Transformer, trace_source: bool = False, prop_attn: bool = True ):
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tofu_info["source"] afterward.
-
-    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
-    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
-    """
     print('using', 'tofu')
 
     model.__class__ = ToFuTransformer 
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'tofu' 
-    model._tofu_info = {
+    model._info = {
         "ratio": model.ratio,
-        "margin":  [],
         "size": None,
         "source": None,
         "trace_source": trace_source,
@@ -107,20 +95,17 @@ def apply_patch(
         "distill_token": False,
     }
     current_layer = 0
-    margin = margin 
     num_layers = len(model.resblocks)
-    # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
-    # margins = [.9 - .9*(i/num_layers) for i in range(num_layers)]
     strategies = ['tofu' if i > num_layers//2 else 'prune' for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._tofu_info["distill_token"] = True
+        model._info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, ResidualAttentionBlock):
             # module.__class__ = ToFuBlock if compress_method == 'tofu' else ToFuBlock 
             module.__class__ = ToFuBlock
-            module._tofu_info = model._tofu_info
+            module._info = model._info
             module.init_strategy(strategies[current_layer])
             current_layer +=1
         # elif isinstance(module, Attention):

@@ -31,7 +31,7 @@ class ToFuBertLayer(BertLayer):
         head_mask: Optional[torch.FloatTensor] = None,
         output_attentions: Optional[bool] = False,
     ) -> Tuple[torch.Tensor]:
-        # attn_size = self._tofu_info["size"] if self._tofu_info["prop_attn"] else None
+        # attn_size = self._info["size"] if self._info["prop_attn"] else None
 
         self_attention_outputs = self.attention(
             hidden_states,
@@ -39,17 +39,17 @@ class ToFuBertLayer(BertLayer):
             head_mask,
             output_attentions=output_attentions,
         )
-        ratio = self._tofu_info["ratio"].pop()
+        ratio = self._info["ratio"].pop()
         x = self_attention_outputs[0]
         key = self_attention_outputs[1]
 
     
 
         if ratio < 1.0:
-            merge, _ = bipartite_soft_matching(
+            merge = bipartite_soft_matching(
                 ratio=ratio,
                 metric=key,
-                class_token=self._tofu_info["class_token"]
+                class_token=self._info["class_token"]
             )
             x = merge(x, mode=self.strategy)
 
@@ -185,14 +185,14 @@ def make_tofu_class(transformer_class):
             output_hidden_states: Optional[bool] = False,
         ): 
             len_layers = len(self.layer)
-            self._tofu_info["ratio"] = [self.ratio if i in [
+            self._info["ratio"] = [self.ratio if i in [
                 len_layers - 1, 
                 len_layers - 2,
                 len_layers - 3,
                 # len_layers - 6,
                 # len_layers - 9,
             ] else 1.0 for i in range(len_layers) ]
-            # self._tofu_info["ratio"] = [self.ratio for i in range(len(self.layer))]
+            # self._info["ratio"] = [self.ratio for i in range(len(self.layer))]
             all_hidden_states = () if output_hidden_states else None
             all_self_attentions = () if output_attentions else None
             flops = 0
@@ -247,12 +247,12 @@ def make_tofu_class(transformer_class):
 
 
 def apply_patch(
-   model: BertEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
+   model: BertEncoder, trace_source: bool = False, prop_attn: bool = True):
     """
     Applies ToFu to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tofu_info["source"] afterward.
+    The sources will be available at model._info["source"] afterward.
 
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
@@ -262,12 +262,10 @@ def apply_patch(
 
     model.__class__ = ToFuBertEncoder
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'tofu' 
-    model._tofu_info = {
+    model._info = {
         "ratio": model.ratio,
-        "margin":  [],
         "size": None,
         "source": None,
         "trace_source": trace_source,
@@ -275,18 +273,13 @@ def apply_patch(
         "class_token": True,
         "distill_token": False,
     }
-    current_layer = 0
-    margin = margin 
-    num_layers = len(model.layer)
-    # margins = [0.75 - 0.25*(i/num_layers) for i in range(num_layers)]
-    # strategies = ['tofu' for i in range(num_layers)]
 
 
     for module in model.modules():
         if isinstance(module, BertLayer):
             module.__class__ = ToFuBertLayer
             module.init_strategy('prune')
-            module._tofu_info = model._tofu_info
+            module._info = model._info
             current_layer +=1
         if isinstance(module, BertAttention):
             module.__class__ = ToFuBertAttention 

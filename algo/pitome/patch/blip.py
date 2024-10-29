@@ -13,23 +13,23 @@ class PiToMeBlock(Block):
         self.margin = margin
     
     def compress_x(self, metric, x):
-        ratio = self._pitome_info["ratio"].pop()
+        ratio = self._info["ratio"].pop()
         if ratio < 1.0:
             merge = pitome_vision(
                 ratio=ratio,
                 metric=metric,
                 margin=self.margin,
-                class_token=self._pitome_info["class_token"],
+                class_token=self._info["class_token"],
             )
           
-            if self._pitome_info["trace_source"]:
-                self._pitome_info["source"] = merge_source(
-                    merge, x, self._pitome_info["source"]
+            if self._info["trace_source"]:
+                self._info["source"] = merge_source(
+                    merge, x, self._info["source"]
                 )
-                self._pitome_info["sources"].append(self._pitome_info["source"])
+                self._info["sources"].append(self._info["source"])
 
-            weight = self._pitome_info["size"] 
-            x, self._pitome_info["size"] = merge_wavg(merge, x, weight)
+            weight = self._info["size"] 
+            x, self._info["size"] = merge_wavg(merge, x, weight)
         return x
 
     def forward(self, x, register_hook=False):
@@ -76,12 +76,11 @@ def make_pitome_class(transformer_class):
         """
 
         def forward(self,x, register_blk=-1):
-            self._pitome_info["k"] = [self.k]* len(self.blocks) 
-            self._pitome_info["ratio"] =[1.0] + [self.ratio] * (len(self.blocks)-1)
-            self._pitome_info["size"] = None
-            self._pitome_info["source"] = None
-            self._pitome_info["attn"] = []
-            self._pitome_info["sources"] = []
+            self._info["ratio"] =[1.0] + [self.ratio] * (len(self.blocks)-1)
+            self._info["size"] = None
+            self._info["source"] = None
+            self._info["attn"] = []
+            self._info["sources"] = []
             self.total_flop = 0
             self.final_shape = 0
             B = x.shape[0]
@@ -104,10 +103,9 @@ def make_pitome_class(transformer_class):
 
         def forward_features(self, x, register_blk=-1) -> torch.Tensor:
       
-            self._pitome_info["k"] = [self.k]* len(self.blocks) 
-            self._pitome_info["ratio"] = [self.ratio] * len(self.blocks) 
-            self._pitome_info["size"] = None
-            self._pitome_info["source"] = None
+            self._info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._info["size"] = None
+            self._info["source"] = None
             self.total_flop = 0
             self.final_shape= None 
 
@@ -145,24 +143,15 @@ def make_pitome_class(transformer_class):
 
 def apply_patch(
    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=None, output_attn=False, alpha=1.0):
-    """
-    Applies ToMe to this transformer. Afterward, set r using model.r.
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._pitome_info["source"] afterward.
-
-    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
-    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
-    """
     PiToMeVisionTransformer = make_pitome_class(model.__class__)
     print('using', 'pitome')
 
     model.__class__ = PiToMeVisionTransformer
     model.ratio = 1.0 
-    model.k=0.0
     
     # model.compress_method = 'tome' 
-    model._pitome_info = {
+    model._info = {
         "ratio": model.ratio,
         "margin": [],
         "size": None,
@@ -180,13 +169,13 @@ def apply_patch(
     margins = [0.9 - 0.9*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._pitome_info["distill_token"] = True
+        model._info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, Block):
             module.__class__ = PiToMeBlock
             module.init_margin(margins[current_layer])
-            module._pitome_info = model._pitome_info
+            module._info = model._info
             current_layer +=1
         elif isinstance(module, Attention):
             module.__class__ = PiToMeAttention

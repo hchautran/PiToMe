@@ -21,8 +21,6 @@ from transformers.modeling_utils import ModuleUtilsMixin
 
 
 class MCTFDistilBertBlock(TransformerBlock):
-    def init_margin(self, margin):
-        self.margin = margin
    
     def forward(
         self,
@@ -49,24 +47,24 @@ class MCTFDistilBertBlock(TransformerBlock):
             head_mask=head_mask,
             output_attentions=True,
         )
-        ratio = self._mctf_info["ratio"].pop()
+        ratio = self._info["ratio"].pop()
         sa_output, metric ,sa_weights = sa_output  # (bs, seq_length, dim), (bs, n_heads, seq_length, seq_length)
     
         sa_output = self.sa_layer_norm(sa_output + x)  # (bs, seq_length, dim)
    
 
         if ratio < 1.0:
-            merge, _ = bipartite_soft_matching(
+            merge  = bipartite_soft_matching(
                 ratio=ratio,
                 metric=metric,
-                class_token   = self._mctf_info["class_token"],
-                tau_sim       = self._mctf_info["tau_sim"],
-                tau_info      = self._mctf_info["tau_info"],
-                tau_size      = self._mctf_info["tau_size"],
-                size          = self._mctf_info["size"],
-                bidirection   = self._mctf_info["bidirection"]
+                class_token   = self._info["class_token"],
+                tau_sim       = self._info["tau_sim"],
+                tau_info      = self._info["tau_info"],
+                tau_size      = self._info["tau_size"],
+                size          = self._info["size"],
+                bidirection   = self._info["bidirection"]
             )
-            sa_output, self._mctf_info["size"] = merge_wavg(merge, sa_output, sa_weights, None)
+            sa_output, self._info["size"] = merge_wavg(merge, sa_output, sa_weights, None)
 
             attn_mask = merge_attention_mask(merge, attention_mask=attn_mask[..., None]).squeeze_()
         else:
@@ -168,14 +166,14 @@ def make_mctf_class(transformer_class):
         ): 
 
             len_layers = len(self.layer)
-            self._mctf_info["ratio"] = [self.ratio if i in [
+            self._info["ratio"] = [self.ratio if i in [
                 len_layers - 1, 
                 len_layers - 2,
                 len_layers - 3,
                 # len_layers - 6,
                 # len_layers - 9,
             ] else 1.0 for i in range(len_layers) ]
-            # self._mctf_info["ratio"] = [self.ratio for i in range(len(self.layer))]
+            # self._info["ratio"] = [self.ratio for i in range(len(self.layer))]
             all_hidden_states = () if output_hidden_states else None
             all_attentions = () if output_attentions else None
 
@@ -219,27 +217,17 @@ def make_mctf_class(transformer_class):
 
 
 def apply_patch(
-   model: Transformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
-    """
-    Applies MCTF to this transformer. Afterward, set r using model.r.
+   model: Transformer, trace_source: bool = False, prop_attn: bool = True) :
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._mctf_info["source"] afterward.
-
-    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
-    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
-    """
     MCTFTransformers = make_mctf_class(model.__class__)
     print('using', 'mctf')
 
     model.__class__ = MCTFTransformers
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'mctf' 
-    model._mctf_info = {
+    model._info = {
         "ratio": model.ratio,
-        "margin":  [],
         "size": None,
         "source": None,
         "trace_source": trace_source,
@@ -247,18 +235,12 @@ def apply_patch(
         "class_token": True,
         "distill_token": False,
     }
-    current_layer = 0
-    margin = margin 
-    num_layers = len(model.layer)
-    margins = [0.75 - 0.25*(i/num_layers) for i in range(num_layers)]
 
 
     for module in model.modules():
         if isinstance(module, TransformerBlock):
             module.__class__ = MCTFDistilBertBlock 
-            module.init_margin(margins[current_layer])
-            module._mctf_info = model._mctf_info
-            current_layer +=1
+            module._info = model._info
         if isinstance(module, MultiHeadSelfAttention):
             module.__class__ = MCTFDistilBertAttention 
 

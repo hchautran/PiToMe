@@ -15,6 +15,9 @@ from timm.models.vision_transformer import Attention, Block, VisionTransformer
 from ..merge import bipartite_soft_matching, merge_source
 
 
+
+
+
 class ToFuBlock(Block):
     """
     Modifications:
@@ -22,7 +25,6 @@ class ToFuBlock(Block):
      - Compute and propogate token size and potentially the token sources.
     """
     def init_strategy(self, strategy='mean'):
-        # self.margin = nn.Parameter(torch.tensor(margin)) 
         self.strategy = strategy 
 
 
@@ -34,64 +36,22 @@ class ToFuBlock(Block):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Note: this is copied from timm.models.vision_transformer.Block with modifications.
-        attn_size = self._tofu_info["size"] if self._tofu_info["prop_attn"] else None
+        attn_size = self._info["size"] if self._info["prop_attn"] else None
         x_attn, metric = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
-
-        r = self._tofu_info["r"].pop(0)
-        if r > 0:
-            # Apply ToFu here
-            merge, _ = bipartite_soft_matching(
-                metric=metric,
-                r=r,
-                class_token=self._tofu_info["class_token"],
-                # distill_token=self._tofu_info["distill_token"],
-            )
-            if self._tofu_info["trace_source"]:
-                self._tofu_info["source"] = merge_source(
-                    merge, x, self._tofu_info["source"]
-                )
-            x, self._tofu_info["size"] = merge(x, mode=self.strategy)
-
-        x = x + self._drop_path2(self.mlp(self.norm2(x)))
-        return x
-
-
-class ToFuBlockUsingRatio(Block):
-    """
-    Modifications:
-     - Apply ToFu between the attention and mlp blocks
-     - Compute and propogate token size and potentially the token sources.
-    """
-    def init_strategy(self, strategy='mean'):
-        # self.margin = nn.Parameter(torch.tensor(margin)) 
-        self.strategy = strategy 
-
-
-    def _drop_path1(self, x):
-        return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
-
-    def _drop_path2(self, x):
-        return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Note: this is copied from timm.models.vision_transformer.Block with modifications.
-        attn_size = self._tofu_info["size"] if self._tofu_info["prop_attn"] else None
-        x_attn, metric = self.attn(self.norm1(x), attn_size)
-        x = x + self._drop_path1(x_attn)
-        ratio = self._tofu_info["ratio"].pop(0)
+        ratio = self._info["ratio"].pop(0)
         if ratio < 1.0:
             # Apply ToFu here
-            merge, _ = bipartite_soft_matching(
+            merge = bipartite_soft_matching(
                 metric=metric,
                 ratio=ratio,
-                class_token=self._tofu_info["class_token"],
-                distill_token=self._tofu_info["distill_token"],
+                class_token=self._info["class_token"],
+                distill_token=self._info["distill_token"],
             )
 
-            if self._tofu_info["trace_source"]:
-                self._tofu_info["source"] = merge_source(
-                    merge, x, self._tofu_info["source"]
+            if self._info["trace_source"]:
+                self._info["source"] = merge_source(
+                    merge, x, self._info["source"]
                 )
 
             x = merge(x, mode=self.strategy)

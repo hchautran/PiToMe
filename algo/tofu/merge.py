@@ -73,7 +73,7 @@ def bipartite_soft_matching(
 
         return torch.cat([unm, dst], dim=1)
 
-    return merge, None
+    return merge
 
 
 def kth_bipartite_soft_matching(

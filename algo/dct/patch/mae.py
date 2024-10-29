@@ -13,7 +13,7 @@
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 
-from .timm import  DCTBlockUsingRatio, DCTBlock
+from .timm import  DCTBlock, DCTBlock
 
 
 def make_dct_class(transformer_class):
@@ -25,11 +25,9 @@ def make_dct_class(transformer_class):
         """
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
-            margin = 0.95
-            self._dct_info["r"] = [self.r]* len(self.blocks) 
-            self._dct_info["ratio"] = [self.ratio] * len(self.blocks) 
-            self._dct_info["size"] = None
-            self._dct_info["source"] = None
+            self._info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._info["size"] = None
+            self._info["source"] = None
             self.total_flop = 0
             x = super().forward(x)
             if return_flop:
@@ -90,13 +88,13 @@ def make_dct_class(transformer_class):
 
 
 def apply_patch(
-    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False, use_k=True
+    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False
 ):
     """
     Applies DCT to this MAE transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._dct_info["source"] afterward.
+    The sources will be available at model._info["source"] afterward.
 
     For MAE models, prop_attn should be set to false.
     """
@@ -104,10 +102,9 @@ def apply_patch(
     print('using', 'dct')
 
     model.__class__ = DCTVisionTransformer
-    model.r = 0
     model.ratio = 1.0
-    model._dct_info = {
-        "r": model.r,
+
+    model._info = {
         "ratio": model.ratio,
         "size": None,
         "source": None,
@@ -118,10 +115,10 @@ def apply_patch(
     }
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._dct_info["distill_token"] = True
+        model._info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, Block):
-            module.__class__ = DCTBlockUsingRatio if not use_k else DCTBlock
+            module.__class__ = DCTBlock
             # module.__class__ = DCTBlock if compress_method == 'dct' else PiDCTBlock 
-            module._dct_info = model._dct_info
+            module._info = model._info

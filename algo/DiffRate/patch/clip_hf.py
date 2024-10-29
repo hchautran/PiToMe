@@ -22,28 +22,28 @@ class DiffRateCLIPEncoder(CLIPEncoder):
 
     def compress_x(self, metric, x, attn, i):
         B, _, _ = x.shape
-        size = self._diffrate_info["size"]
-        mask = self._diffrate_info["mask"]
+        size = self._info["size"]
+        mask = self._info["mask"]
         cls_attn = attn[:, :, 0, 1:].mean(1)
         _, idx = torch.sort(cls_attn, descending=True)
         cls_index = torch.zeros((B,1), device=idx.device).long()
         idx = torch.cat((cls_index, idx+1), dim=1)
         x = torch.gather(x, dim=1, index=idx.unsqueeze(-1).expand(-1, -1, x.shape[-1]))
-        if self._diffrate_info["trace_source"]:
-            self._diffrate_info["source"] = torch.gather(self._diffrate_info["source"], dim=1, index=idx.unsqueeze(-1).expand(-1, -1, self._diffrate_info["source"].shape[-1]))
+        if self._info["trace_source"]:
+            self._info["source"] = torch.gather(self._info["source"], dim=1, index=idx.unsqueeze(-1).expand(-1, -1, self._info["source"].shape[-1]))
 
              # pruning
         prune_kept_num = self.prune_ddp[i].kept_token_number
         x = x[:, :prune_kept_num]
-        if self._diffrate_info["trace_source"]:
-            self._diffrate_info["source"] = self._diffrate_info["source"][:, :prune_kept_num]
+        if self._info["trace_source"]:
+            self._info["source"] = self._info["source"][:, :prune_kept_num]
         # merging
         merge_kept_num = self.merge_ddp[i].kept_token_number
         if merge_kept_num < prune_kept_num:
             merge, _ = get_merge_func(x.detach(), kept_number=merge_kept_num)
             x = merge(x,mode='mean')
-            if self._diffrate_info["trace_source"]:
-                self._diffrate_info["source"] = merge(self._diffrate_info["source"], mode="amax")
+            if self._info["trace_source"]:
+                self._info["source"] = merge(self._info["source"], mode="amax")
         return x
 
     def forward(
@@ -86,12 +86,12 @@ class DiffRateCLIPEncoder(CLIPEncoder):
         """
         B = inputs_embeds.shape[0]
         N = inputs_embeds.shape[1]
-        self._diffrate_info["size"] = torch.ones([B,N +1,1], device=inputs_embeds.device)
-        self._diffrate_info["mask"] =  torch.ones((B,N+1),device=inputs_embeds.device)
-        self._diffrate_info["prune_kept_num"] = []
-        self._diffrate_info["merge_kept_num"] = []
-        if self._diffrate_info["trace_source"]:
-            self._diffrate_info["source"] = torch.eye(self.patch_embed.num_patches+1, device=inputs_embeds.device)[None, ...].expand(B, self.patch_embed.num_patches+1, self.patch_embed.num_patches+1)
+        self._info["size"] = torch.ones([B,N +1,1], device=inputs_embeds.device)
+        self._info["mask"] =  torch.ones((B,N+1),device=inputs_embeds.device)
+        self._info["prune_kept_num"] = []
+        self._info["merge_kept_num"] = []
+        if self._info["trace_source"]:
+            self._info["source"] = torch.eye(self.patch_embed.num_patches+1, device=inputs_embeds.device)[None, ...].expand(B, self.patch_embed.num_patches+1, self.patch_embed.num_patches+1)
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -200,27 +200,17 @@ class DiffRateCLIPEncoder(CLIPEncoder):
 
 
 def apply_patch(
-   model: CLIPEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
-    """
-    Applies DiffRate to this transformer. Afterward, set r using model.r.
+   model: CLIPEncoder, trace_source: bool = False, prop_attn: bool = True):
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._diffrate_info["source"] afterward.
-
-    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
-    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
-    """
     print('using', 'diffrate')
 
     model.__class__ =  DiffRateCLIPEncoder 
     model.introduce_diffrate()
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'diffrate' 
-    model._diffrate_info = {
+    model._info = {
         "ratio": model.ratio,
-        "margin":  [],
         "size": None,
         "source": None,
         "trace_source": trace_source,
@@ -228,4 +218,3 @@ def apply_patch(
         "class_token": True,
         "distill_token": False,
     }
-    margin = margin 

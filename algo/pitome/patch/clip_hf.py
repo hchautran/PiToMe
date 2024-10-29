@@ -20,18 +20,18 @@ class PiToMeCLIPEncoder(CLIPEncoder):
         self.margins = margins 
 
     def compress_x(self, metric, x, attn, idx):
-        ratio = self._pitome_info["ratio"].pop()
+        ratio = self._info["ratio"].pop()
         if ratio < 1.0:
             merge = pitome_vision(
                 ratio=ratio,
                 metric=metric,
                 margin=self.margins[idx],
-                class_token=self._pitome_info["class_token"]
+                class_token=self._info["class_token"]
             )
 
-            if self._pitome_info["trace_source"]:
-                self._pitome_info["source"] = merge_source(
-                    merge, x, self._pitome_info["source"]
+            if self._info["trace_source"]:
+                self._info["source"] = merge_source(
+                    merge, x, self._info["source"]
                 )
             x = merge_mean(merge, x)
         return x
@@ -77,11 +77,11 @@ class PiToMeCLIPEncoder(CLIPEncoder):
                 Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
         """
         len_layers = len(self.layers)
-        # self._pitome_info["ratio"] = [self.ratio if i%2==0 else 1.0 for i in range(len_layers)]
-        # self._tome_info["ratio"] = [self.ratio for i in range(len_layers) ]
-        self._pitome_info["ratio"] = [self.ratio] * len(self.layers) 
-        self._pitome_info["size"] = None
-        self._pitome_info["source"] = None
+        # self._info["ratio"] = [self.ratio if i%2==0 else 1.0 for i in range(len_layers)]
+        # self._info["ratio"] = [self.ratio for i in range(len_layers) ]
+        self._info["ratio"] = [self.ratio] * len(self.layers) 
+        self._info["size"] = None
+        self._info["source"] = None
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -140,24 +140,15 @@ class PiToMeCLIPEncoder(CLIPEncoder):
 
 
 def apply_patch(
-   model: CLIPEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False, output_attn=False):
-    """
-    Applies ToMe to this transformer. Afterward, set r using model.r.
+   model: CLIPEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, output_attn=False):
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._pitome_info["source"] afterward.
-
-    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
-    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
-    """
     print('using', 'pitome')
 
     model.__class__ =  PiToMeCLIPEncoder 
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'pitome' 
-    model._pitome_info = {
+    model._info = {
         "ratio": model.ratio,
         "margin":  [],
         "size": None,

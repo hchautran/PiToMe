@@ -111,7 +111,7 @@ DISTILBERT_PATCHES = {
 }
 class Engine:
 
-    def __init__(self, task_name, model_ckt, ratio=1.0, algo=NONE, batch_size=None, enable_log=False, trained=False, margin=None, alpha=1.0):
+    def __init__(self, task_name, model_ckt, ratio=1.0, algo=NONE, batch_size=None, enable_log=False, trained=False, alpha=1.0):
 
         self.accelerator = Accelerator(
             mixed_precision='fp16',
@@ -122,7 +122,6 @@ class Engine:
         if task_name == 'imdb' and algo==NONE: self.batch_size = 12
         else: self.batch_size = batch_sizes[task_name] if batch_size is None else batch_size
         self.ratio = ratio
-        self.margin = margin
         self.alpha = alpha
         self.config, _ = task.config_getter()    
         self.train_dataset = task.dataset_fn(self.config, split='train')

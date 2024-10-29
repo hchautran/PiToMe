@@ -23,10 +23,10 @@ def make_diffrate_class(transformer_class):
     class DiffRateVisionTransformer(transformer_class):
         def forward(self, x, return_flop=True) -> torch.Tensor:
             B = x.shape[0]
-            self._diffrate_info["size"] = torch.ones([B,self.patch_embed.num_patches+1,1], device=x.device)
-            self._diffrate_info["mask"] =  torch.ones((B,self.patch_embed.num_patches+1),device=x.device)
-            self._diffrate_info["prune_kept_num"] = []
-            self._diffrate_info["merge_kept_num"] = []
+            self._info["size"] = torch.ones([B,self.patch_embed.num_patches+1,1], device=x.device)
+            self._info["mask"] =  torch.ones((B,self.patch_embed.num_patches+1),device=x.device)
+            self._info["prune_kept_num"] = []
+            self._info["merge_kept_num"] = []
             x = super().forward(x)
             if return_flop:
                 if self.training:
@@ -54,14 +54,14 @@ def make_diffrate_class(transformer_class):
 
             if self.global_pool:
                 if self.training:
-                    mask = self._diffrate_info["mask"][...,None]  # [B, N, 1]
-                    num = (self._diffrate_info["size"] * mask)[:, 1:, :].sum(dim=1) # [B,1]
-                    x = (x * self._diffrate_info["size"] * mask)[:, 1:, :].sum(dim=1) / num.detach()
+                    mask = self._info["mask"][...,None]  # [B, N, 1]
+                    num = (self._info["size"] * mask)[:, 1:, :].sum(dim=1) # [B,1]
+                    x = (x * self._info["size"] * mask)[:, 1:, :].sum(dim=1) / num.detach()
                     outcome = self.fc_norm(x)
                 else:
-                    T = self._diffrate_info["size"][:, 1:, :].sum(dim=1)
-                    if self._diffrate_info["size"] is not None:
-                        x = (x * (self._diffrate_info["size"]))[:, 1:, :].sum(dim=1) / T
+                    T = self._info["size"][:, 1:, :].sum(dim=1)
+                    if self._info["size"] is not None:
+                        x = (x * (self._info["size"]))[:, 1:, :].sum(dim=1) / T
                     else:
                         x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
                     outcome = self.fc_norm(x)
@@ -128,7 +128,7 @@ def make_diffrate_class(transformer_class):
             patch_embedding_flops = N*C*(self.patch_embed.patch_size[0]*self.patch_embed.patch_size[1]*3)
             classifier_flops = C*self.num_classes
             with torch.cuda.amp.autocast(enabled=False):
-                for prune_kept_number, merge_kept_number in zip(self._diffrate_info["prune_kept_num"],self._diffrate_info["merge_kept_num"]):
+                for prune_kept_number, merge_kept_number in zip(self._info["prune_kept_num"],self._info["merge_kept_num"]):
                     # translate fp16 to fp32 for stable training
                     prune_kept_number = prune_kept_number.float()     
                     merge_kept_number = merge_kept_number.float()
@@ -175,7 +175,7 @@ def apply_patch(
 
     print('use', 'diffrate')
     model.__class__ = DiffRateVisionTransformer
-    model._diffrate_info = {
+    model._info = {
         "size": None,
         "mask": None,           # only for training
         "source": None,
@@ -194,6 +194,6 @@ def apply_patch(
             else:
                 module.introduce_diffrate(model.patch_embed.num_patches, prune_granularity, merge_granularity)
             block_index += 1
-            module._diffrate_info = model._diffrate_info
+            module._info = model._info
         elif isinstance(module, Attention):
             module.__class__ = DiffRateAttention

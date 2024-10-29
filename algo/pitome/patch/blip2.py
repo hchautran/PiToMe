@@ -15,27 +15,27 @@ class PiToMeBlock(Block):
         self.margin = margin
     
     def compress_x(self, metric, x):
-        ratio = self._pitome_info["ratio"]
+        ratio = self._info["ratio"]
         if ratio < 1.0:
             merge = pitome_vision(
                 ratio=ratio,
                 metric=metric,
                 margin=self.margin,
-                class_token=self._pitome_info["class_token"]
+                class_token=self._info["class_token"]
             )
 
-            if self._pitome_info["trace_source"]:
-                self._pitome_info["source"] = merge_source(
-                    merge, x, self._pitome_info["source"]
+            if self._info["trace_source"]:
+                self._info["source"] = merge_source(
+                    merge, x, self._info["source"]
                 )
 
-            weight = self._pitome_info["size"] 
-            x, self._pitome_info["size"] = merge_wavg(merge, x, weight )
+            weight = self._info["size"] 
+            x, self._info["size"] = merge_wavg(merge, x, weight )
         return x
 
 
     def forward(self, x, rel_pos_bias=None):
-        attn_size = self._pitome_info["size"] if self._pitome_info["prop_attn"] else None
+        attn_size = self._info["size"] if self._info["prop_attn"] else None
         if self.gamma_1 is None:
             x_attn, metric, _ = self.attn(self.norm1(x), attn_size, rel_pos_bias=rel_pos_bias)
             x = x + self.drop_path(x_attn)
@@ -101,10 +101,9 @@ def make_pitome_class(transformer_class):
 
         def forward(self, x) -> torch.Tensor:
       
-            self._pitome_info["r"] = [self.r]* len(self.blocks) 
-            self._pitome_info["ratio"] = self.ratio
-            self._pitome_info["size"] = None
-            self._pitome_info["source"] = None
+            self._info["ratio"] = self.ratio
+            self._info["size"] = None
+            self._info["source"] = None
             self.total_flop = 0
             self.final_shape = 0
 
@@ -145,25 +144,16 @@ def make_pitome_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
-    """
-    Applies ToMe to this transformer. Afterward, set r using model.r.
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9):
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._pitome_info["source"] afterward.
-
-    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
-    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
-    """
     PiToMeVisionTransformer = make_pitome_class(model.__class__)
     print('using', 'pitome')
 
     model.__class__ = PiToMeVisionTransformer
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'tome' 
-    model._pitome_info = {
+    model._info = {
         "ratio": model.ratio,
         "margin":  [],
         "size": None,
@@ -179,14 +169,14 @@ def apply_patch(
     margins = [0.75 - 0.4*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._pitome_info["distill_token"] = True
+        model._info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, Block):
             # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
             module.__class__ = PiToMeBlock
             module.init_margin(margins[current_layer])
-            module._pitome_info = model._pitome_info
+            module._info = model._info
             current_layer +=1
         elif isinstance(module, Attention):
             module.__class__ = PiToMeAttention

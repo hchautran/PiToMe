@@ -104,13 +104,18 @@ def pitome_vision(
         else:
             return do_nothing, do_nothing
 
+        # calculate energy score  
         metric = F.normalize(metric, p=2, dim=-1) 
         sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01, alpha=alpha)
         energy_score = sim.mean(dim=-1) 
         indices =  torch.argsort(energy_score, descending=True)
+        # seperate protected token and mergeable tokens  
         merge_idx = indices[..., :2*r]
         protected_idx = indices[..., 2*r:]
+        # divide based on odd and even indices
         a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2] 
+
+        # get similarity scores between mergeable tokens
         scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
         scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
         _, dst_idx = scores.max(dim=-1) 
@@ -125,6 +130,7 @@ def pitome_vision(
         protected = x[batch_idx, protected_idx, :]
         src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
 
+        # if mode == 'mean' we merge token else prune tokens
         if mode == 'mean':
             dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
 
@@ -173,7 +179,6 @@ def pitome_text(
         protected = x[batch_idx, protected_idx, :]
         src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
         dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
-        # dst = x[batch_idx,  b_idx, :]
 
         if class_token:
             return torch.cat([x_cls, protected, dst], dim=1)
@@ -217,7 +222,7 @@ def merge_wavg(
     size = merge(size, mode="sum")
     x = x / size
 
-    return x, None 
+    return x, size 
 
 
 def merge_source(

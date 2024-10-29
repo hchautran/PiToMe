@@ -18,6 +18,7 @@ from copy import copy
 from ..merge import bipartite_soft_matching, merge_source, merge_wavg
 
 
+
 class ToMeBlock(Block):
     """
     Modifications:
@@ -32,62 +33,24 @@ class ToMeBlock(Block):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Note: this is copied from timm.models.vision_transformer.Block with modifications.
-        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
+        attn_size = self._info["size"] if self._info["prop_attn"] else None
         x_attn, metric = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
 
-        r = self._tome_info["r"].pop(0)
-        if r > 0:
-            # Apply ToMe here
-            merge, _ = bipartite_soft_matching(
-                metric,
-                r=r,
-                class_token=self._tome_info["class_token"],
-                # distill_token=self._tome_info["distill_token"],
-            )
-            if self._tome_info["trace_source"]:
-                self._tome_info["source"] = merge_source(
-                    merge, x, self._tome_info["source"]
-                )
-            x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
-
-        x = x + self._drop_path2(self.mlp(self.norm2(x)))
-        return x
-
-
-class ToMeBlockUsingRatio(Block):
-    """
-    Modifications:
-     - Apply ToMe between the attention and mlp blocks
-     - Compute and propogate token size and potentially the token sources.
-    """
-
-    def _drop_path1(self, x):
-        return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
-
-    def _drop_path2(self, x):
-        return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        x_attn, metric = self.attn(self.norm1(x), attn_size)
-        x = x + self._drop_path1(x_attn)
-
-        ratio = self._tome_info["ratio"].pop(0)
+        ratio = self._info["ratio"].pop(0)
         if ratio < 1.0:
             merge, _ = bipartite_soft_matching(
                 metric=metric,
                 ratio=ratio,
-                class_token=self._tome_info["class_token"],
-                distill_token=self._tome_info["distill_token"],
+                class_token=self._info["class_token"],
+                distill_token=self._info["distill_token"],
             )
 
-            if self._tome_info["trace_source"]:
-                self._tome_info["source"] = merge_source(
-                    merge, x, self._tome_info["source"]
+            if self._info["trace_source"]:
+                self._info["source"] = merge_source(
+                    merge, x, self._info["source"]
                 )
-            x, self._tome_info["size"] = merge_wavg(merge, x, self._tome_info["size"])
+            x, self._info["size"] = merge_wavg(merge, x, self._info["size"])
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
         return x

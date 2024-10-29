@@ -14,7 +14,7 @@ import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 
 
-from .timm import MCTFAttention, MCTFBlockUsingRatio, MCTFBlock
+from .timm import MCTFAttention, MCTFBlock, MCTFBlock
 
 
 def make_tome_class(transformer_class):
@@ -26,10 +26,9 @@ def make_tome_class(transformer_class):
         """
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
-            self._tome_info["r"] = [self.r]* len(self.blocks) 
-            self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
-            self._tome_info["size"] = None
-            self._tome_info["source"] = None
+            self._info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._info["size"] = None
+            self._info["source"] = None
             self.total_flop = 0
             x = super().forward(x)
             if return_flop:
@@ -56,8 +55,8 @@ def make_tome_class(transformer_class):
             if self.global_pool:
                 # ---- MCTF changes this ----
                 # Global average pool proportional to token size
-                if self._tome_info["size"] is not None:
-                    x = (x * self._tome_info["size"])[:, 1:, :].sum(dim=1) / T
+                if self._info["size"] is not None:
+                    x = (x * self._info["size"])[:, 1:, :].sum(dim=1) / T
                 else:
                     x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
                 # ---- End of change ----
@@ -96,24 +95,15 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False, use_k=True
+    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False
 ):
-    """
-    Applies MCTF to this MAE transformer. Afterward, set r using model.r.
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tome_info["source"] afterward.
-
-    For MAE models, prop_attn should be set to false.
-    """
     MCTFVisionTransformer = make_tome_class(model.__class__)
     print('using', 'tome')
 
     model.__class__ = MCTFVisionTransformer
-    model.r = 0
     model.ratio = 1.0
-    model._tome_info = {
-        "r": model.r,
+    model._info = {
         "ratio": model.ratio,
         "size": None,
         "source": None,
@@ -124,12 +114,12 @@ def apply_patch(
     }
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._tome_info["distill_token"] = True
+        model._info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, Block):
-            module.__class__ = MCTFBlockUsingRatio if not use_k else MCTFBlock
+            module.__class__ = MCTFBlock
             # module.__class__ = MCTFBlock if compress_method == 'tome' else PiMCTFBlock 
-            module._tome_info = model._tome_info
+            module._info = model._info
         elif isinstance(module, Attention):
             module.__class__ = MCTFAttention

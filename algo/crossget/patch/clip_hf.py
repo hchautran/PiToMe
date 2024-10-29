@@ -15,22 +15,19 @@ class CrossGetCLIPEncoder(CLIPEncoder):
     Args:
         config: CLIPConfig
     """
-    def init_margin(self, margins):
-        # self.margin = nn.Parameter(torch.tensor(margin)) 
-        self.margins = margins 
 
     def compress_x(self, metric, x, attn, idx):
-        ratio = self._cross_get_info["ratio"].pop()
+        ratio = self._info["ratio"].pop()
         if ratio < 1.0:
-            merge, isolated_score = crossget(
+            merge = crossget(
                 ratio=ratio,
                 metric=metric,
-                class_token=self._cross_get_info["class_token"]
+                class_token=self._info["class_token"]
             )
 
-            if self._cross_get_info["trace_source"]:
-                self._cross_get_info["source"] = merge_source(
-                    merge, x, self._cross_get_info["source"]
+            if self._info["trace_source"]:
+                self._info["source"] = merge_source(
+                    merge, x, self._info["source"]
                 )
             x = merge_mean(merge, x)
         return x
@@ -76,10 +73,10 @@ class CrossGetCLIPEncoder(CLIPEncoder):
                 Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
         """
         len_layers = len(self.layers)
-        self._cross_get_info["ratio"] = [self.ratio if i%2==0 else 1.0 for i in range(len_layers)]
-        # self._cross_get_info["ratio"] = [self.ratio] * len(self.layers) 
-        self._cross_get_info["size"] = None
-        self._cross_get_info["source"] = None
+        self._info["ratio"] = [self.ratio if i%2==0 else 1.0 for i in range(len_layers)]
+        # self._info["ratio"] = [self.ratio] * len(self.layers) 
+        self._info["size"] = None
+        self._info["source"] = None
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -138,26 +135,16 @@ class CrossGetCLIPEncoder(CLIPEncoder):
 
 
 def apply_patch(
-   model: CLIPEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False, output_attn=False):
-    """
-    Applies ToMe to this transformer. Afterward, set r using model.r.
+   model: CLIPEncoder, trace_source: bool = False, prop_attn: bool = True, output_attn=False):
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._cross_get_info["source"] afterward.
-
-    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
-    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
-    """
     print('using', 'cross_get')
 
     model.__class__ =  CrossGetCLIPEncoder 
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'cross_get' 
-    model._cross_get_info = {
+    model._info = {
         "ratio": model.ratio,
-        "margin":  [],
         "size": None,
         "source": None,
         "trace_source": trace_source,
@@ -167,9 +154,3 @@ def apply_patch(
         "attn": [],
         "output_attn": output_attn 
     }
-    current_layer = 0
-    margin = margin 
-    num_layers = len(model.layers)
-    # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
-    margins = [.9 - .9*(i/num_layers) for i in range(num_layers)]
-    model.init_margin(margins)

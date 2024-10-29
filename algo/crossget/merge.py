@@ -69,9 +69,7 @@ def crossget(
             else:
                 return torch.cat([dst], dim=1)
 
-        if class_token:
-            return merge, None 
-        return merge, None 
+        return merge
 
 
 

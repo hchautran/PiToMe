@@ -10,36 +10,29 @@ class CrossGetBlock(Block):
      - Apply ToMe between the attention and mlp blocks
      - Compute and propogate token size and potentially the token sources.
     """
-    def init_margin(self, margin=0.5):
-        # self.margin = nn.Parameter(torch.tensor(margin)) 
-        self.margin = margin
     
     def compress_x(self, metric, x, attn):
-        ratio = self._tome_info["ratio"]
+        ratio = self._info["ratio"]
         if ratio < 1.0:
-            merge, isolated_score = crossget(
+            merge = crossget(
                 ratio=ratio,
                 metric=metric,
-                class_token=self._cross_get_info["class_token"]
+                class_token=self._info["class_token"]
             )
 
-            if self._tome_info["trace_source"]:
-                self._tome_info["source"] = merge_source(
-                    merge, x, self._tome_info["source"]
+            if self._info["trace_source"]:
+                self._info["source"] = merge_source(
+                    merge, x, self._info["source"]
                 )
 
-            # if isolated_score is not None and self._tome_info["size"] is not None:
-            #     weight = self._tome_info["size"] + isolated_score
-            #     x, self._tome_info["size"] = merge_wavg(merge, x, weight)
-            # else:
-            weight = self._tome_info["size"] 
-            x, self._tome_info["size"] = merge_wavg(merge, x, weight )
-            # print(x.shape)
-        return x, isolated_score
+    
+            weight = self._info["size"] 
+            x, self._info["size"] = merge_wavg(merge, x, weight )
+        return x 
 
 
     def forward(self, x, rel_pos_bias=None):
-        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
+        attn_size = self._info["size"] if self._info["prop_attn"] else None
         if self.gamma_1 is None:
             x_attn, metric, attn = self.attn(self.norm1(x), attn_size, rel_pos_bias=rel_pos_bias)
             x = x + self.drop_path(x_attn)
@@ -105,10 +98,9 @@ def make_cross_get_class(transformer_class):
 
         def forward(self, x) -> torch.Tensor:
       
-            self._tome_info["r"] = [self.r]* len(self.blocks) 
-            self._tome_info["ratio"] = self.ratio
-            self._tome_info["size"] = None
-            self._tome_info["source"] = None
+            self._info["ratio"] = self.ratio
+            self._info["size"] = None
+            self._info["source"] = None
             self.total_flop = 0
             self.final_shape = 0
 
@@ -149,27 +141,17 @@ def make_cross_get_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
-    """
-    Applies ToMe to this transformer. Afterward, set r using model.r.
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True):
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tome_info["source"] afterward.
-
-    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
-    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
-    """
     CrossGetVisionTransformer = make_cross_get_class(model.__class__)
     print('using', 'cross_get')
 
     model.__class__ = CrossGetVisionTransformer
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'tome' 
-    model._tome_info = {
+    model._info = {
         "ratio": model.ratio,
-        "margin":  [],
         "size": None,
         "source": None,
         "trace_source": trace_source,
@@ -178,19 +160,15 @@ def apply_patch(
         "distill_token": False,
     }
     current_layer = 0
-    margin = margin 
-    num_layers = len(model.blocks)
-    margins = [0.75 - 0.4*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._tome_info["distill_token"] = True
+        model._info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, Block):
             # module.__class__ = ToMeBlock if compress_method == 'tome' else CrossGetBlock 
             module.__class__ = CrossGetBlock
-            module.init_margin(margins[current_layer])
-            module._tome_info = model._tome_info
+            module._info = model._info
             current_layer +=1
         elif isinstance(module, Attention):
             module.__class__ = CrossGetAttention

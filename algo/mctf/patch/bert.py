@@ -29,7 +29,7 @@ class MCTFBertLayer(BertLayer):
         head_mask: Optional[torch.FloatTensor] = None,
         output_attentions: Optional[bool] = False,
     ) -> Tuple[torch.Tensor]:
-        # attn_size = self._mctf_info["size"] if self._mctf_info["prop_attn"] else None
+        # attn_size = self._info["size"] if self._info["prop_attn"] else None
 
         self_attention_outputs = self.attention(
             hidden_states,
@@ -37,7 +37,7 @@ class MCTFBertLayer(BertLayer):
             head_mask,
             output_attentions=output_attentions,
         )
-        ratio = self._mctf_info["ratio"].pop()
+        ratio = self._info["ratio"].pop()
         x = self_attention_outputs[0]
         key = self_attention_outputs[1]
         attn = self_attention_outputs[2]
@@ -45,21 +45,22 @@ class MCTFBertLayer(BertLayer):
     
 
         if ratio < 1.0:
-            merge, _ = bipartite_soft_matching(
+            merge = bipartite_soft_matching(
                 ratio=ratio,
                 metric=key,
-                class_token   = self._mctf_info["class_token"],
-                tau_sim       = self._mctf_info["tau_sim"],
-                tau_info      = self._mctf_info["tau_info"],
-                tau_size      = self._mctf_info["tau_size"],
-                size          = self._mctf_info["size"],
-                bidirection   = self._mctf_info["bidirection"]
+                class_token   = self._info["class_token"],
+                tau_sim       = self._info["tau_sim"],
+                tau_info      = self._info["tau_info"],
+                tau_size      = self._info["tau_size"],
+                size          = self._info["size"],
+                bidirection   = self._info["bidirection"]
                 
             )
-            x, self._mctf_info["size"], _ = merge_wavg(
+            x, self._info["size"], _ = merge_wavg(
                 merge, 
                 x, 
                 attn, 
+                size=self._info["size"]
             )
 
             attention_mask = torch.where(attention_mask.squeeze_() >= 0, 1, 0)
@@ -191,13 +192,13 @@ def make_mctf_class(transformer_class):
         ): 
             len_layers = len(self.layer)
             
-            self._mctf_info["size"] = None 
-            self._mctf_info["ratio"] = [self.ratio if i in [
+            self._info["size"] = None 
+            self._info["ratio"] = [self.ratio if i in [
                 len_layers - 1, 
                 len_layers - 2,
                 len_layers - 3,
             ] else 1.0 for i in range(len_layers) ]
-            # self._mctf_info["ratio"] = [self.ratio for i in range(len(self.layer))]
+            # self._info["ratio"] = [self.ratio for i in range(len(self.layer))]
             all_hidden_states = () if output_hidden_states else None
             all_self_attentions = () if output_attentions else None
             flops = 0
@@ -251,25 +252,16 @@ def make_mctf_class(transformer_class):
 
 
 def apply_patch(
-   model: BertEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False,output_attn=False):
-    """
-    Applies MCTF to this transformer. Afterward, set r using model.r.
+   model: BertEncoder, trace_source: bool = False, prop_attn: bool = True, output_attn=False):
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._mctf_info["source"] afterward.
-
-    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
-    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
-    """
     MCTFBertEncoder = make_mctf_class(model.__class__)
     print('using', 'mctf')
 
     model.__class__ = MCTFBertEncoder
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'mctf' 
-    model._mctf_info = {
+    model._info = {
         "trace_source"   : False,
         "prop_attn"      : 1,
         "one_step_ahead" : 1,
@@ -287,7 +279,7 @@ def apply_patch(
     for module in model.modules():
         if isinstance(module, BertLayer):
             module.__class__ = MCTFBertLayer
-            module._mctf_info = model._mctf_info
+            module._info = model._info
             current_layer +=1
         if isinstance(module, BertAttention):
             module.__class__ = MCTFBertAttention 

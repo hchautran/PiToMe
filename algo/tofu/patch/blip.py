@@ -9,28 +9,27 @@ class ToFuBlock(Block):
      - Compute and propogate token size and potentially the token sources.
     """
     def init_strategy(self, strategy='mean'):
-        # self.margin = nn.Parameter(torch.tensor(margin)) 
         self.strategy = strategy 
 
     
     def compress_x(self, metric, x):
-        ratio = self._tofu_info["ratio"].pop()
+        ratio = self._info["ratio"].pop()
         if ratio < 1.0:
-            merge, _ = bipartite_soft_matching(
+            merge = bipartite_soft_matching(
                 ratio=ratio,
                 metric=metric,
-                class_token=self._tofu_info["class_token"]
+                class_token=self._info["class_token"]
             )
 
-            if self._tofu_info["trace_source"]:
-                self._tofu_info["source"] = merge_source(
-                    merge, x, self._tofu_info["source"], mode='amax' if self.strategy != 'prune' else 'prune'
+            if self._info["trace_source"]:
+                self._info["source"] = merge_source(
+                    merge, x, self._info["source"], mode='amax' if self.strategy != 'prune' else 'prune'
                 )
             x = merge(x, mode=self.strategy)
         return x
 
     def forward(self, x, register_hook=False):
-        # attn_size = self._tofu_info["size"] if self._tofu_info["prop_attn"] else None
+        # attn_size = self._info["size"] if self._info["prop_attn"] else None
         # x_attn, metric, attn = self.attn(self.norm1(x), register_hook=register_hook)
         # x = x + self.drop_path(x_attn)
         # x = self.compress_x(metric, x) 
@@ -83,10 +82,9 @@ def make_tofu_class(transformer_class):
         - Initialize r, token size, and token sources.
         """
         def forward(self,x, register_blk=-1):
-            self._tofu_info["r"] = [self.r]* len(self.blocks) 
-            self._tofu_info["ratio"] = [1.0] + [self.ratio] * (len(self.blocks) - 1)
-            self._tofu_info["size"] = None
-            self._tofu_info["source"] = None
+            self._info["ratio"] = [1.0] + [self.ratio] * (len(self.blocks) - 1)
+            self._info["size"] = None
+            self._info["source"] = None
             self.total_flop = 0
             B = x.shape[0]
             x = self.patch_embed(x)
@@ -101,17 +99,16 @@ def make_tofu_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, self._tofu_info['output_attn'])
+                x = blk(x, self._info['output_attn'])
             x = self.norm(x)
             self.final_shape = x.shape
             return x
 
         def forward_features(self, x, register_blk=-1) -> torch.Tensor:
       
-            self._tofu_info["r"] = [self.r]* len(self.blocks) 
-            self._tofu_info["ratio"] = [1.0] + [self.ratio] * (len(self.blocks) - 1)
-            self._tofu_info["size"] = None
-            self._tofu_info["source"] = None
+            self._info["ratio"] = [1.0] + [self.ratio] * (len(self.blocks) - 1)
+            self._info["size"] = None
+            self._info["source"] = None
             self.total_flop = 0
 
             B = x.shape[0]
@@ -127,7 +124,7 @@ def make_tofu_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, self._tofu_info['output_attn'])
+                x = blk(x, self._info['output_attn'])
             x = self.norm(x)
             self.final_shape = x.shape
             return x
@@ -146,27 +143,17 @@ def make_tofu_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False, output_attn=False):
-    """
-    Applies ToFu to this transformer. Afterward, set r using model.r.
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, output_attn=False):
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tofu_info["source"] afterward.
-
-    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
-    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
-    """
     ToFuVisionTransformer = make_tofu_class(model.__class__)
     print('using', 'tofu')
 
     model.__class__ = ToFuVisionTransformer
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'tofu' 
-    model._tofu_info = {
+    model._info = {
         "ratio": model.ratio,
-        "margin":  [],
         "size": None,
         "source": None,
         "trace_source": trace_source,
@@ -177,16 +164,15 @@ def apply_patch(
     }
     current_layer = 0
     num_layers = len(model.blocks)
-    # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
     strategies = ['tofu' if i > 3 else 'prune' for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._tofu_info["distill_token"] = True
+        model._info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, Block):
             module.__class__ = ToFuBlock
-            module._tofu_info = model._tofu_info
+            module._info = model._info
             module.init_strategy(strategies[current_layer])
             current_layer +=1
         elif isinstance(module, Attention):

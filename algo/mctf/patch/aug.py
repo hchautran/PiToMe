@@ -3,7 +3,7 @@ from typing import Tuple
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 # from timm.models.helpers import checkpoint_seq 
-from .timm import MCTFBlock, MCTFBlockUsingRatio, MCTFAttention 
+from .timm import MCTFBlock, MCTFBlock, MCTFAttention 
 
 def make_tome_class(transformer_class):
     class MCTFVisionTransformer(transformer_class):
@@ -14,10 +14,9 @@ def make_tome_class(transformer_class):
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
 
-            self._tome_info["r"] = [self.r] * len(self.blocks) 
-            self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
-            self._tome_info["size"] = None
-            self._tome_info["source"] = None
+            self._info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._info["size"] = None
+            self._info["source"] = None
             self.total_flop = 0
 
             x = super().forward(x)
@@ -54,13 +53,13 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, use_k=False
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True
 ):
     """
     Applies MCTF to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tome_info["source"] afterward.
+    The sources will be available at model._info["source"] afterward.
 
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
@@ -69,14 +68,11 @@ def apply_patch(
     print('using', 'tome')
 
     model.__class__ = MCTFVisionTransformer
-    model.r = 0
     model.ratio = 1.0 
-    model.use_k = use_k
     
     # model.compress_method = 'tome' 
-    model._tome_info = {
+    model._info = {
         "ratio": model.ratio,
-        "margin":  [],
         "size": None,
         "source": None,
         "trace_source": trace_source,
@@ -86,12 +82,12 @@ def apply_patch(
     }
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._tome_info["distill_token"] = True
+        model._info["distill_token"] = True
 
     for module in model.modules():
 
         if isinstance(module, Block):
-            module.__class__ = MCTFBlock if use_k  else MCTFBlockUsingRatio
-            module._tome_info = model._tome_info
+            module.__class__ = MCTFBlock
+            module._info = model._info
         elif isinstance(module, Attention):
             module.__class__ = MCTFAttention

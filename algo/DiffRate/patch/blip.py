@@ -19,9 +19,9 @@ class DiffRateBlock(Block):
     def forward(self, x: torch.Tensor, register_hook=True) -> torch.Tensor:
         B, _, _ = x.shape
         # Note: this is copied from timm.models.vision_transformer.Block with modifications.
-        size = self._diffrate_info["size"]
-        mask = self._diffrate_info["mask"]
-        # x_attn, attn = self.attn(x=self.norm1(x), size=size, mask=self._diffrate_info["mask"], register_hook=register_hook)
+        size = self._info["size"]
+        mask = self._info["mask"]
+        # x_attn, attn = self.attn(x=self.norm1(x), size=size, mask=self._info["mask"], register_hook=register_hook)
         x_attn = self.attn.forward_and_save_attn(x=self.norm1(x), register_hook=True)
         attn = self.attn.get_attention_map()
         x = x + self.drop_path(x_attn)
@@ -35,16 +35,16 @@ class DiffRateBlock(Block):
         
         # sorting
         x = torch.gather(x, dim=1, index=idx.unsqueeze(-1).expand(-1, -1, x.shape[-1]))
-        self._diffrate_info["size"] = torch.gather(self._diffrate_info["size"], dim=1, index=idx.unsqueeze(-1))
+        self._info["size"] = torch.gather(self._info["size"], dim=1, index=idx.unsqueeze(-1))
         mask = torch.gather( mask, dim=1, index=idx)
-        if self._diffrate_info["trace_source"]:
-            self._diffrate_info["source"] = torch.gather(self._diffrate_info["source"], dim=1, index=idx.unsqueeze(-1).expand(-1, -1, self._diffrate_info["source"].shape[-1]))
+        if self._info["trace_source"]:
+            self._info["source"] = torch.gather(self._info["source"], dim=1, index=idx.unsqueeze(-1).expand(-1, -1, self._info["source"].shape[-1]))
 
         if self.training:
             # pruning, pruning only needs to generate masks during training
             last_token_number = mask[0].sum().int()
             prune_kept_num = self.prune_ddp.update_kept_token_number()      # expected prune compression rate, has gradiet
-            self._diffrate_info["prune_kept_num"].append(prune_kept_num)
+            self._info["prune_kept_num"].append(prune_kept_num)
             if prune_kept_num < last_token_number:        # make sure the kept token number is a decreasing sequence
                 prune_mask = self.prune_ddp.get_token_mask(last_token_number)
                 mask = mask * prune_mask.expand(B, -1)
@@ -53,31 +53,31 @@ class DiffRateBlock(Block):
                 
             # merging
             merge_kept_num = self.merge_ddp.update_kept_token_number()
-            self._diffrate_info["merge_kept_num"].append(merge_kept_num)
+            self._info["merge_kept_num"].append(merge_kept_num)
 
             if merge_kept_num < mid_token_number:
                 merge_mask = self.merge_ddp.get_token_mask(mid_token_number)
-                x_compressed, size_compressed = x[:, mid_token_number:], self._diffrate_info["size"][:,mid_token_number:]
+                x_compressed, size_compressed = x[:, mid_token_number:], self._info["size"][:,mid_token_number:]
                 merge_func, node_max = get_merge_func(metric=x[:, :mid_token_number].detach(), kept_number=int(merge_kept_num))
                 x = merge_func(x[:,:mid_token_number],  mode="mean", training=True)
                 # optimize proportional attention in ToMe by considering similarity
-                size = torch.cat((self._diffrate_info["size"][:, :int(merge_kept_num)],self._diffrate_info["size"][:, int(merge_kept_num):mid_token_number]*node_max[..., None]),dim=1)
+                size = torch.cat((self._info["size"][:, :int(merge_kept_num)],self._info["size"][:, int(merge_kept_num):mid_token_number]*node_max[..., None]),dim=1)
                 size = size.clamp(1)
                 size = merge_func(size,  mode="sum", training=True)
                 x = torch.cat([x, x_compressed], dim=1)
-                self._diffrate_info["size"] = torch.cat([size, size_compressed], dim=1)
+                self._info["size"] = torch.cat([size, size_compressed], dim=1)
                 mask = mask * merge_mask
 
-            self._diffrate_info["mask"] = mask
+            self._info["mask"] = mask
             x = x + self.drop_path(self.mlp(self.norm2(x)))
             
         else:
             # pruning
             prune_kept_num = self.prune_ddp.kept_token_number
             x = x[:, :prune_kept_num]
-            self._diffrate_info["size"] = self._diffrate_info["size"][:, :prune_kept_num]
-            if self._diffrate_info["trace_source"]:
-                self._diffrate_info["source"] = self._diffrate_info["source"][:, :prune_kept_num]
+            self._info["size"] = self._info["size"][:, :prune_kept_num]
+            if self._info["trace_source"]:
+                self._info["source"] = self._info["source"][:, :prune_kept_num]
                 
             
             # merging
@@ -86,10 +86,10 @@ class DiffRateBlock(Block):
                 merge,node_max = get_merge_func(x.detach(), kept_number=merge_kept_num)
                 x = merge(x,mode='mean')
                 # optimize proportional attention in ToMe by considering similarity, this is benefit to the accuracy of off-the-shelf model.
-                self._diffrate_info["size"] = torch.cat((self._diffrate_info["size"][:, :merge_kept_num],self._diffrate_info["size"][:, merge_kept_num:]*node_max[..., None] ),dim=1)
-                self._diffrate_info["size"] = merge(self._diffrate_info["size"], mode='sum')
-                if self._diffrate_info["trace_source"]:
-                    self._diffrate_info["source"] = merge(self._diffrate_info["source"], mode="amax")
+                self._info["size"] = torch.cat((self._info["size"][:, :merge_kept_num],self._info["size"][:, merge_kept_num:]*node_max[..., None] ),dim=1)
+                self._info["size"] = merge(self._info["size"], mode='sum')
+                if self._info["trace_source"]:
+                    self._info["source"] = merge(self._info["source"], mode="amax")
 
             x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
@@ -160,15 +160,13 @@ def make_diffrate_class(transformer_class):
         - Initialize r, token size, and token sources.
         """
         def forward(self,x, register_blk=-1):
-            # self._diffrate_info["r"] = [self.r]* len(self.blocks) 
-            # self._diffrate_info["ratio"] = [1.0]  + [self.ratio] * (len(self.blocks) - 1.0)
             B = x.shape[0]
-            self._diffrate_info["size"] = torch.ones([B,self.patch_embed.num_patches+1,1], device=x.device)
-            self._diffrate_info["mask"] =  torch.ones((B,self.patch_embed.num_patches+1),device=x.device)
-            self._diffrate_info["prune_kept_num"] = []
-            self._diffrate_info["merge_kept_num"] = []
-            if self._diffrate_info["trace_source"]:
-                self._diffrate_info["source"] = torch.eye(self.patch_embed.num_patches+1, device=x.device)[None, ...].expand(B, self.patch_embed.num_patches+1, self.patch_embed.num_patches+1)
+            self._info["size"] = torch.ones([B,self.patch_embed.num_patches+1,1], device=x.device)
+            self._info["mask"] =  torch.ones((B,self.patch_embed.num_patches+1),device=x.device)
+            self._info["prune_kept_num"] = []
+            self._info["merge_kept_num"] = []
+            if self._info["trace_source"]:
+                self._info["source"] = torch.eye(self.patch_embed.num_patches+1, device=x.device)[None, ...].expand(B, self.patch_embed.num_patches+1, self.patch_embed.num_patches+1)
             self.total_flop = 0
             x = self.patch_embed(x)
 
@@ -182,7 +180,7 @@ def make_diffrate_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, self._diffrate_info["output_attn"])
+                x = blk(x, self._info["output_attn"])
             self.final_shape = x.shape
             x = self.norm(x)
             return x
@@ -191,12 +189,12 @@ def make_diffrate_class(transformer_class):
         def forward_features(self, x, register_blk=-1) -> torch.Tensor:
       
             B = x.shape[0]
-            self._diffrate_info["size"] = torch.ones([B,self.patch_embed.num_patches+1,1], device=x.device)
-            self._diffrate_info["mask"] =  torch.ones((B,self.patch_embed.num_patches+1),device=x.device)
-            self._diffrate_info["prune_kept_num"] = []
-            self._diffrate_info["merge_kept_num"] = []
-            if self._diffrate_info["trace_source"]:
-                self._diffrate_info["source"] = torch.eye(self.patch_embed.num_patches+1, device=x.device)[None, ...].expand(B, self.patch_embed.num_patches+1, self.patch_embed.num_patches+1)
+            self._info["size"] = torch.ones([B,self.patch_embed.num_patches+1,1], device=x.device)
+            self._info["mask"] =  torch.ones((B,self.patch_embed.num_patches+1),device=x.device)
+            self._info["prune_kept_num"] = []
+            self._info["merge_kept_num"] = []
+            if self._info["trace_source"]:
+                self._info["source"] = torch.eye(self.patch_embed.num_patches+1, device=x.device)[None, ...].expand(B, self.patch_embed.num_patches+1, self.patch_embed.num_patches+1)
             self.total_flop = 0
 
             x = self.patch_embed(x)
@@ -211,7 +209,7 @@ def make_diffrate_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, self._diffrate_info["output_attn"])
+                x = blk(x, self._info["output_attn"])
             self.final_shape = x.shape
             x = self.norm(x)
             return x
@@ -291,7 +289,7 @@ def apply_patch(
     DiffRateVisionTransformer = make_diffrate_class(model.__class__)
 
     model.__class__ = DiffRateVisionTransformer
-    model._diffrate_info = {
+    model._info = {
         "size": None,
         "mask": None,           # only for training
         "source": None,
@@ -310,6 +308,6 @@ def apply_patch(
             else:
                 module.introduce_diffrate(model.patch_embed.num_patches, prune_granularity, merge_granularity)
             block_index += 1
-            module._diffrate_info = model._diffrate_info
+            module._info = model._info
         elif isinstance(module, Attention):
             module.__class__ = DiffRateAttention

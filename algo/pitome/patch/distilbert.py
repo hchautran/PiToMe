@@ -49,7 +49,7 @@ class PiToMeDistilBertBlock(TransformerBlock):
             head_mask=head_mask,
             output_attentions=True,
         )
-        ratio = self._tome_info["ratio"].pop()
+        ratio = self._info["ratio"].pop()
         sa_output, metric ,sa_weights = sa_output  # (bs, seq_length, dim), (bs, n_heads, seq_length, seq_length)
     
         sa_output = self.sa_layer_norm(sa_output + x)  # (bs, seq_length, dim)
@@ -58,12 +58,12 @@ class PiToMeDistilBertBlock(TransformerBlock):
             merge = pitome_text(
                 ratio=ratio,
                 metric=metric,
-                attn=sa_weights if self._tome_info["use_attn"] else None,
+                attn=sa_weights if self._info["use_attn"] else None,
                 margin=self.margin,
-                class_token=self._tome_info["class_token"]
+                class_token=self._info["class_token"]
             )
 
-            sa_output, self._tome_info["size"] = merge_wavg(merge, sa_output, None)
+            sa_output, self._info["size"] = merge_wavg(merge, sa_output, None)
 
             # attn_mask = torch.where(attn_mask.squeeze_() >= 0, 1, 0)
             attn_mask = merge_attention_mask(merge, attention_mask=attn_mask[..., None]).squeeze_()
@@ -166,14 +166,14 @@ def make_tome_class(transformer_class):
         ): 
 
             len_layers = len(self.layer)
-            self._tome_info["ratio"] = [self.ratio if i in [
+            self._info["ratio"] = [self.ratio if i in [
                 len_layers - 1, 
                 len_layers - 2,
                 len_layers - 3,
                 # len_layers - 6,
                 # len_layers - 9,
             ] else 1.0 for i in range(len_layers) ]
-            # self._tome_info["ratio"] = [self.ratio for i in range(len(self.layer))]
+            # self._info["ratio"] = [self.ratio for i in range(len(self.layer))]
             all_hidden_states = () if output_hidden_states else None
             all_attentions = () if output_attentions else None
 
@@ -218,24 +218,15 @@ def make_tome_class(transformer_class):
 
 def apply_patch(
    model: Transformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_attn=False):
-    """
-    Applies PiToMe to this transformer. Afterward, set r using model.r.
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tome_info["source"] afterward.
-
-    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
-    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
-    """
     PiToMeTransformers = make_tome_class(model.__class__)
     print('using', 'pitome')
 
     model.__class__ = PiToMeTransformers
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'tome' 
-    model._tome_info = {
+    model._info = {
         "ratio": model.ratio,
         "margin":  [],
         "size": None,
@@ -256,7 +247,7 @@ def apply_patch(
         if isinstance(module, TransformerBlock):
             module.__class__ = PiToMeDistilBertBlock 
             module.init_margin(margins[current_layer])
-            module._tome_info = model._tome_info
+            module._info = model._info
             current_layer +=1
         if isinstance(module, MultiHeadSelfAttention):
             module.__class__ = PiToMeDistilBertAttention 

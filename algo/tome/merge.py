@@ -200,11 +200,11 @@ def merge_wavg(
     if size is None:
         size = torch.ones_like(x[..., 0, None])
 
-    x = merge(x, mode="sum")
+    x = merge(x * size, mode="sum")
     size = merge(size, mode="sum")
     x = x / size
 
-    return x, None 
+    return x, size 
 
 
 

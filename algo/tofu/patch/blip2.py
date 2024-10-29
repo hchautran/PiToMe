@@ -11,21 +11,20 @@ class ToFuBlock(Block):
      - Compute and propogate token size and potentially the token sources.
     """
     def init_strategy(self, strategy='mean'):
-        # self.margin = nn.Parameter(torch.tensor(margin)) 
         self.strategy = strategy 
 
     def compress_x(self, metric, x):
-        ratio = self._tofu_info["ratio"].pop(0)
+        ratio = self._info["ratio"].pop(0)
         if ratio < 1.0:
-            merge, isolated_score = bipartite_soft_matching(
+            merge = bipartite_soft_matching(
                 ratio=ratio,
                 metric=metric,
-                class_token=self._tofu_info["class_token"]
+                class_token=self._info["class_token"]
             )
 
-            if self._tofu_info["trace_source"]:
-                self._tofu_info["source"] = merge_source(
-                    merge, x, self._tofu_info["source"]
+            if self._info["trace_source"]:
+                self._info["source"] = merge_source(
+                    merge, x, self._info["source"]
                 )
 
             x = merge(x, mode=self.strategy)
@@ -33,7 +32,7 @@ class ToFuBlock(Block):
 
 
     def forward(self, x, rel_pos_bias=None):
-        attn_size = self._tofu_info["size"] if self._tofu_info["prop_attn"] else None
+        attn_size = self._info["size"] if self._info["prop_attn"] else None
         if self.gamma_1 is None:
             x_attn, metric, attn = self.attn(self.norm1(x), attn_size, rel_pos_bias=rel_pos_bias)
             x = x + self.drop_path(x_attn)
@@ -97,10 +96,9 @@ def make_pitofu_class(transformer_class):
 
         def forward(self, x) -> torch.Tensor:
       
-            self._tofu_info["r"] = [self.r]* len(self.blocks) 
-            self._tofu_info["ratio"] = [self.ratio] * len(self.blocks) 
-            self._tofu_info["size"] = None
-            self._tofu_info["source"] = None
+            self._info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._info["size"] = None
+            self._info["source"] = None
             self.total_flop = 0
 
             x = super().forward(x)
@@ -139,48 +137,36 @@ def make_pitofu_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
-    """
-    Applies ToFu to this transformer. Afterward, set r using model.r.
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True):
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tofu_info["source"] afterward.
-
-    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
-    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
-    """
     ToFuVisionTransformer = make_pitofu_class(model.__class__)
     print('using', 'tofu')
 
     model.__class__ = ToFuVisionTransformer
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'tofu' 
-    model._tofu_info = {
+    model._info = {
         "ratio": model.ratio,
-        "margin":  [],
         "size": None,
         "source": None,
         "trace_source": trace_source,
-        "prop_attn": False,
+        "prop_attn": prop_attn,
         "class_token": model.cls_token is not None,
         "distill_token": False,
     }
     current_layer = 0
-    margin = margin 
     num_layers = len(model.blocks)
-    # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
     strategies = ['tofu' if i > num_layers //2 else 'prune' for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._tofu_info["distill_token"] = True
+        model._info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, Block):
             # module.__class__ = ToFuBlock if compress_method == 'tofu' else ToFuBlock 
             module.__class__ = ToFuBlock
-            module._tofu_info = model._tofu_info
+            module._info = model._info
             module.init_strategy(strategies[current_layer])
             current_layer +=1
         elif isinstance(module, Attention):

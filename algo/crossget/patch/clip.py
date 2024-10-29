@@ -6,24 +6,21 @@ from ..merge import merge_source, crossget, merge_wavg
 
 
 class CrossGetBlock(ResidualAttentionBlock):
-    def init_margin(self, margin=0.5):
-        # self.margin = nn.Parameter(torch.tensor(margin)) 
-        self.margin = margin
 
     def compress_x(self, metric, x, attn):
-        ratio = self._cross_get_info["ratio"].pop()
+        ratio = self._info["ratio"].pop()
         if ratio < 1.0:
             merge, _ = crossget(
                 ratio=ratio,
                 metric=metric,
-                class_token=self._cross_get_info["class_token"]
+                class_token=self._info["class_token"]
             )
 
-            if self._cross_get_info["trace_source"]:
-                self._cross_get_info["source"] = merge_source(
-                    merge, x, self._cross_get_info["source"]
+            if self._info["trace_source"]:
+                self._info["source"] = merge_source(
+                    merge, x, self._info["source"]
                 )
-            x, self._cross_get_info["size"] = merge_wavg(merge, x, size=self._cross_get_info["size"])
+            x, self._info["size"] = merge_wavg(merge, x, size=self._info["size"])
         return x
 
     
@@ -46,10 +43,9 @@ class CrossGetTransformer(Transformer):
 
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
-        self._cross_get_info["r"] = [self.r]* len(self.resblocks) 
-        self._cross_get_info["ratio"] = [self.ratio] * len(self.resblocks) 
-        self._cross_get_info["size"] = None
-        self._cross_get_info["source"] = None
+        self._info["ratio"] = [self.ratio] * len(self.resblocks) 
+        self._info["size"] = None
+        self._info["source"] = None
         self.total_flop = 0
 
         for r in self.resblocks:
@@ -68,12 +64,12 @@ class CrossGetTransformer(Transformer):
 
 
 def apply_patch(
-   model: Transformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
+   model: Transformer, trace_source: bool = False, prop_attn: bool = True) :
     """
     Applies ToMe to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._cross_get_info["source"] afterward.
+    The sources will be available at model._info["source"] afterward.
 
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
@@ -82,12 +78,10 @@ def apply_patch(
 
     model.__class__ = CrossGetTransformer 
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'cross_get' 
-    model._cross_get_info = {
+    model._info = {
         "ratio": model.ratio,
-        "margin":  [],
         "size": None,
         "source": None,
         "trace_source": trace_source,
@@ -98,10 +92,10 @@ def apply_patch(
     current_layer = 0
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._cross_get_info["distill_token"] = True
+        model._info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, ResidualAttentionBlock):
             module.__class__ = CrossGetBlock
-            module._cross_get_info = model._cross_get_info
+            module._info = model._info
             current_layer +=1

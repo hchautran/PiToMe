@@ -13,7 +13,7 @@
 import torch
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
 from copy import copy
-from .timm import CrossGetBlock, CrossGetAttention, CrossGetBlockUsingRatio
+from .timm import CrossGetAttention, CrossGetBlock
 import torch.nn as nn
 
 
@@ -26,11 +26,10 @@ def make_cross_get_class(transformer_class):
         """
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
-            self._tome_info["r"] = [self.r]* len(self.blocks) 
-            self._tome_info["ratio"] = [self.ratio] * len(self.blocks) 
-            self._tome_info["size"] = None
-            self._tome_info["source"] = None
-            self._tome_info["isolate_score"] = None
+            self._info["ratio"] = [self.ratio] * len(self.blocks) 
+            self._info["size"] = None
+            self._info["source"] = None
+            self._info["isolate_score"] = None
             self.total_flop = 0
 
             x = super().forward(x)
@@ -58,8 +57,8 @@ def make_cross_get_class(transformer_class):
             if self.global_pool:
                 # ---- ToMe changes this ----
                 # Global average pool proportional to token size
-                if self._tome_info["size"] is not None:
-                    x = (x * self._tome_info["size"])[:, 1:, :].sum(dim=1) / T
+                if self._info["size"] is not None:
+                    x = (x * self._info["size"])[:, 1:, :].sum(dim=1) / T
                 else:
                     x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
                 # ---- End of change ----
@@ -95,16 +94,9 @@ def make_cross_get_class(transformer_class):
 
 
 def apply_patch(
-    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False, margin=0.9, use_k=False
+    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False 
 ):
-    """
-    Applies ToMe to this MAE transformer. Afterward, set r using model.r.
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._tome_info["source"] afterward.
-
-    For MAE models, prop_attn should be set to false.
-    """
 
     CrossGetVisionTransformer = make_cross_get_class(model.__class__)
     print('using', 'cross_get')
@@ -112,8 +104,8 @@ def apply_patch(
     current_layer = 0
     model.__class__ = CrossGetVisionTransformer
     model.ratio = 1.0
-    model.r = 0 
-    model._tome_info = {
+
+    model._info = {
         "ratio": model.ratio,
         "size": None,
         "source": None,
@@ -124,18 +116,14 @@ def apply_patch(
     }
     current_layer = 0
     num_layers = len(model.blocks)
-    # margins = [0.9- 0.9*(i/num_layers) for i in range(num_layers)]
-    margins = [.9 - 0.9*(i/num_layers) for i in range(num_layers)]
-    print(margins)
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._tome_info["distill_token"] = True
+        model._info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, Block):
-            module.__class__ = CrossGetBlockUsingRatio if not use_k else CrossGetBlock
-            module.init_margin(margins[current_layer])
-            module._tome_info = model._tome_info
+            module.__class__ = CrossGetBlock
+            module._info = model._info
             current_layer +=1
         elif isinstance(module, Attention):
             module.__class__ = CrossGetAttention

@@ -9,12 +9,12 @@ def make_diffrate_class(transformer_class):
     class DiffRateVisionTransformer(transformer_class):
         def forward(self, x, return_flop=True) -> torch.Tensor:
             B = x.shape[0]
-            self._diffrate_info["size"] = torch.ones([B,self.patch_embed.num_patches+1,1], device=x.device)
-            self._diffrate_info["mask"] =  torch.ones((B,self.patch_embed.num_patches+1),device=x.device)
-            self._diffrate_info["prune_kept_num"] = []
-            self._diffrate_info["merge_kept_num"] = []
-            if self._diffrate_info["trace_source"]:
-                self._diffrate_info["source"] = torch.eye(self.patch_embed.num_patches+1, device=x.device)[None, ...].expand(B, self.patch_embed.num_patches+1, self.patch_embed.num_patches+1)
+            self._info["size"] = torch.ones([B,self.patch_embed.num_patches+1,1], device=x.device)
+            self._info["mask"] =  torch.ones((B,self.patch_embed.num_patches+1),device=x.device)
+            self._info["prune_kept_num"] = []
+            self._info["merge_kept_num"] = []
+            if self._info["trace_source"]:
+                self._info["source"] = torch.eye(self.patch_embed.num_patches+1, device=x.device)[None, ...].expand(B, self.patch_embed.num_patches+1, self.patch_embed.num_patches+1)
             x = super().forward(x)
             if return_flop:
                 if self.training:
@@ -81,7 +81,7 @@ def make_diffrate_class(transformer_class):
             patch_embedding_flops = N*C*(self.patch_embed.patch_size[0]*self.patch_embed.patch_size[1]*3)
             classifier_flops = C*self.num_classes
             with torch.cuda.amp.autocast(enabled=False):
-                for prune_kept_number, merge_kept_number in zip(self._diffrate_info["prune_kept_num"],self._diffrate_info["merge_kept_num"]):
+                for prune_kept_number, merge_kept_number in zip(self._info["prune_kept_num"],self._info["merge_kept_num"]):
                     prune_kept_number = prune_kept_number.float()     
                     merge_kept_number = merge_kept_number.float()
                     mhsa_flops = 4*N*C*C + 2*N*N*C
@@ -127,7 +127,7 @@ def apply_patch(
     DiffRateVisionTransformer = make_diffrate_class(model.__class__)
 
     model.__class__ = DiffRateVisionTransformer
-    model._diffrate_info = {
+    model._info = {
         "size": None,
         "mask": None,           # only for training
         "source": None,
@@ -145,6 +145,6 @@ def apply_patch(
             else:
                 module.introduce_diffrate(model.patch_embed.num_patches, prune_granularity, merge_granularity)
             block_index += 1
-            module._diffrate_info = model._diffrate_info
+            module._info = model._info
         elif isinstance(module, Attention):
             module.__class__ = DiffRateAttention

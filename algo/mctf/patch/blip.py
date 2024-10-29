@@ -10,28 +10,28 @@ class MCTFBlock(Block):
     """
     
     def compress_x(self, metric, x):
-        ratio = self._mctf_info["ratio"].pop()
-        merge, _ = bipartite_soft_matching(
+        ratio = self._info["ratio"].pop()
+        merge = bipartite_soft_matching(
             ratio=ratio,
             metric=metric,
-            class_token   = self._mctf_info["class_token"],
-            tau_sim       = self._mctf_info["tau_sim"],
-            tau_info      = self._mctf_info["tau_info"],
-            tau_size      = self._mctf_info["tau_size"],
-            size          = self._mctf_info["size"],
-            bidirection   = self._mctf_info["bidirection"]
+            class_token   = self._info["class_token"],
+            tau_sim       = self._info["tau_sim"],
+            tau_info      = self._info["tau_info"],
+            tau_size      = self._info["tau_size"],
+            size          = self._info["size"],
+            bidirection   = self._info["bidirection"]
         )
 
-        if self._mctf_info["trace_source"]:
-            self._mctf_info["source"] = merge_source(
-                merge, x, self._mctf_info["source"]
+        if self._info["trace_source"]:
+            self._info["source"] = merge_source(
+                merge, x, self._info["source"]
             )
 
-        x, self._mctf_info["size"], _ = merge_wavg(
+        x, self._info["size"], _ = merge_wavg(
             merge=merge, 
             x=x, 
             attn=self.attn.attention_map,
-            size=self._mctf_info["size"]
+            size=self._info["size"]
         )
         return x
 
@@ -85,10 +85,9 @@ def make_mctf_class(transformer_class):
         - Initialize r, token size, and token sources.
         """
         def forward(self,x, register_blk=-1):
-            self._mctf_info["r"] = [self.r]* len(self.blocks) 
-            self._mctf_info["ratio"] = [1.0] + [self.ratio] * (len(self.blocks)-1)
-            self._mctf_info["size"] = None
-            self._mctf_info["source"] = None
+            self._info["ratio"] = [1.0] + [self.ratio] * (len(self.blocks)-1)
+            self._info["size"] = None
+            self._info["source"] = None
             self.total_flop = 0
             self.final_shape = None
             B = x.shape[0]
@@ -104,7 +103,7 @@ def make_mctf_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, self._mctf_info["output_attn"])
+                x = blk(x, self._info["output_attn"])
             x = self.norm(x)
             self.final_shape = x.shape 
             return x
@@ -112,10 +111,9 @@ def make_mctf_class(transformer_class):
 
         def forward_features(self, x, register_blk=-1) -> torch.Tensor:
       
-            self._mctf_info["r"] = [self.r]* len(self.blocks) 
-            self._mctf_info["ratio"] = [1.0] + [self.ratio] * (len(self.blocks) -1)
-            self._mctf_info["size"] = None
-            self._mctf_info["source"] = None
+            self._info["ratio"] = [1.0] + [self.ratio] * (len(self.blocks) -1)
+            self._info["size"] = None
+            self._info["source"] = None
             self.total_flop = 0
             self.final_shape= 0
 
@@ -132,7 +130,7 @@ def make_mctf_class(transformer_class):
 
             for i, blk in enumerate(self.blocks):
                 self.total_flop += self.calculate_block_flop(x.shape)
-                x = blk(x, self._mctf_info["output_attn"])
+                x = blk(x, self._info["output_attn"])
             self.final_shape = x.shape 
             x = self.norm(x)
             return x
@@ -151,24 +149,15 @@ def make_mctf_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False, output_attn=False):
-    """
-    Applies MCTF to this transformer. Afterward, set r using model.r.
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, output_attn=False):
 
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._mctf_info["source"] afterward.
-
-    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
-    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
-    """
     MCTFVisionTransformer = make_mctf_class(model.__class__)
     print('using', 'mctf')
 
     model.__class__ = MCTFVisionTransformer
     model.ratio = 1.0 
-    model.r=0.0
     default=[0.35, 0.15, 0, 1, 1, 1, 20, 40, 1, 1, 0]
-    model._mctf_info = {
+    model._info = {
         "trace_source"   : False,
         "prop_attn"      : 1,
         "one_step_ahead" : 1,
@@ -186,12 +175,12 @@ def apply_patch(
     current_layer = 0
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._mctf_info["distill_token"] = True
+        model._info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, Block):
             module.__class__ = MCTFBlock
-            module._mctf_info = model._mctf_info
+            module._info = model._info
             current_layer +=1
         elif isinstance(module, Attention):
             module.__class__ = MCTFAttention 

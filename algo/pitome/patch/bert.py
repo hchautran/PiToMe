@@ -37,7 +37,7 @@ class PiToMeBertLayer(BertLayer):
             head_mask,
             output_attentions=output_attentions,
         )
-        ratio = self._pitome_info["ratio"].pop()
+        ratio = self._info["ratio"].pop()
         x = self_attention_outputs[0]
         key = self_attention_outputs[1]
         attn = self_attention_outputs[2]
@@ -48,10 +48,10 @@ class PiToMeBertLayer(BertLayer):
                 ratio=ratio,
                 metric=key,
                 margin=self.margin,
-                class_token=self._pitome_info["class_token"],
+                class_token=self._info["class_token"],
             )
 
-            x, self._pitome_info["size"] = merge_wavg(merge, x, self._pitome_info["size"])
+            x, self._info["size"] = merge_wavg(merge, x, self._info["size"])
             B, T, _ = x.shape
             attention_mask = torch.where(attention_mask.squeeze_(-2).squeeze_(-2) >= 0, 1, 0)
             attention_mask = merge_attention_mask(merge, attention_mask=attention_mask[..., None]).view(B, T)
@@ -184,9 +184,9 @@ def make_pitome_class(transformer_class):
             output_hidden_states: Optional[bool] = False,
         ): 
             len_layers = len(self.layer)
-            # self._pitome_info["ratio"] = [self.ratio if i in [len_layers-1,len_layers-6] else 1.0 for i in range(len_layers) ]
-            # self._pitome_info["ratio"] = [self.ratio for _ in range(len_layers) ]
-            self._pitome_info["ratio"] = [self.ratio if i in [
+            # self._info["ratio"] = [self.ratio if i in [len_layers-1,len_layers-6] else 1.0 for i in range(len_layers) ]
+            # self._info["ratio"] = [self.ratio for _ in range(len_layers) ]
+            self._info["ratio"] = [self.ratio if i in [
                 len_layers - 1, 
                 len_layers - 2,
                 len_layers - 3,
@@ -247,24 +247,15 @@ def make_pitome_class(transformer_class):
 
 def apply_patch(
    model: BertEncoder, trace_source: bool = False, prop_attn: bool = True, margin=None, alpha=1.0, use_attn=False):
-    """
-    Applies ToMe to this transformer. Afterward, set r using model.r.
-
-    If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._pitome_info["source"] afterward.
-
-    For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
-    the shelf. For trianing and for evaluating MAE models off the self set this to be False.
-    """
+   
     PiToMeBertEncoder = make_pitome_class(model.__class__)
     print('using', 'pitome')
 
     model.__class__ = PiToMeBertEncoder
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'pitome' 
-    model._pitome_info = {
+    model._info = {
         "ratio": model.ratio,
         "margin":  [],
         "size": None,
@@ -289,7 +280,7 @@ def apply_patch(
         if isinstance(module, BertLayer):
             module.__class__ = PiToMeBertLayer
             module.init_margin(margins[current_layer])
-            module._pitome_info = model._pitome_info
+            module._info = model._info
             current_layer +=1
         if isinstance(module, BertAttention):
             module.__class__ = PiToMeBertAttention 

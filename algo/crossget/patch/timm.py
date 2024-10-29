@@ -18,15 +18,12 @@ from ..merge import merge_source, crossget, merge_wavg, merge_mean
 
 
 
-class CrossGetBlockUsingRatio(Block):
+class CrossGetBlock(Block):
     """
     Modifications:
      - Apply ToMe between the attention and mlp blocks
      - Compute and propogate token size and potentially the token sources.
     """
-    def init_margin(self, margin=0.5):
-        # self.margin = nn.Parameter(torch.tensor(margin)) 
-        self.margin = margin
 
     def _drop_path1(self, x):
         return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
@@ -35,83 +32,29 @@ class CrossGetBlockUsingRatio(Block):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
+        attn_size = self._info["size"] if self._info["prop_attn"] else None
         x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
 
-        ratio = self._tome_info["ratio"].pop(0)
+        ratio = self._info["ratio"].pop(0)
         if ratio < 1.0:
-            merge, isolated_score = crossget(
+            merge = crossget(
                 ratio=ratio,
                 metric=metric,
-                class_token=self._tome_info["class_token"]
+                class_token=self._info["class_token"]
             )
 
-            if self._tome_info["trace_source"]:
-                self._tome_info["source"] = merge_source(
-                    merge, x, self._tome_info["source"]
+            if self._info["trace_source"]:
+                self._info["source"] = merge_source(
+                    merge, x, self._info["source"]
                 )
 
-            if isolated_score is not None and self._tome_info["size"] is not None:
-                # weight = self._tome_info["size"] + isolated_score
-                x, self._tome_info["size"] = merge_wavg(merge, x, None)
-                # x = merge_mean(merge, x)
-            else:
-                weight = self._tome_info["size"] 
-                x, self._tome_info["size"] = merge_wavg(merge, x, weight)
+            weight = self._info["size"] 
+            x, self._info["size"] = merge_wavg(merge, x, weight)
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
-        # print(x.shape)
         return x 
 
-
-class CrossGetBlock(Block):
-    """
-    Modifications:
-     - Apply CrossGet between the attention and mlp blocks
-     - Compute and propogate token size and potentially the token sources.
-    """
-    def init_margin(self, margin=0.5):
-        # self.margin = nn.Parameter(torch.tensor(margin))
-        self.margin = margin
-        self.merge_dropout = nn.Dropout1d(p=0.2)
-
-    def _drop_path1(self, x):
-        return self.drop_path1(x) if hasattr(self, "drop_path1") else self.drop_path(x)
-
-    def _drop_path2(self, x):
-        return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        r = self._tome_info["r"].pop(0)
-        attn_size = self._tome_info["size"] if self._tome_info["prop_attn"] else None
-        x_attn, metric = self.attn(self.norm1(x), attn_size)
-        x = x + self._drop_path1(x_attn)
-        x = x + self._drop_path2(self.mlp(self.norm2(x)))
-        if r > 0:
-            merge, isolated_score = crossget(
-                r=r,
-                metric=metric,
-                class_token=self._tome_info["class_token"],
-            )
-
-            if self._tome_info["trace_source"]:
-                self._tome_info["source"] = merge_source(
-                    merge, x, self._tome_info["source"]
-                )
-
-            
-            if isolated_score is not None and self._tome_info["size"] is not None:
-                weight = isolated_score
-                x, self._tome_info["size"] = merge_wavg(merge, x, weight)
-                # x = merge_mean(merge, x)
-            else:
-                weight = self._tome_info["size"] 
-                x, self._tome_info["size"] = merge_wavg(merge, x, weight)
-
-            
-
-            return x
 
 class CrossGetAttention(Attention):
     """

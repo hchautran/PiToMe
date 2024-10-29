@@ -49,8 +49,6 @@ def train_one_epoch(model: torch.nn.Module, criterion,
             
             metric_logger.update(loss_cls=loss.item())
             metric_logger.update(flops=flops/1e9)
-            # metric_logger.update(loss_cls=0.0)
-            # metric_logger.update(flops=0.0)
 
     metric_logger.synchronize_between_processes()
     accelerator.print(f"Averaged stats:{metric_logger}")

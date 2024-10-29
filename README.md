@@ -114,7 +114,6 @@ python -m torch.distributed.run \
     --nproc_per_node=5 main_itr.py \
     --cfg-path scripts/eval_scripts/blip_itr_coco.yml \
     --algo pitome \
-    --use_k False \
     --ratio 0.95 \
     --model blip \
     --dataset flickr \
@@ -237,7 +236,6 @@ Citation
 ---
 
 
-
 ```
 @misc{https://doi.org/10.48550/arxiv.2405.16148,
   doi = {10.48550/ARXIV.2405.16148},
@@ -250,4 +248,11 @@ Citation
   copyright = {Creative Commons Attribution 4.0 International}
 }
 ```
+
 If you have any issues, feel free to contact me at tranhoaichau.00@gmail.com
+
+
+Acknowledgement
+---
+
+Thanks [Token Merging: Your ViT But Faster](https://arxiv.org/abs/2210.09461) for providing open-source code. This repository is built based on the original ToMe structure.

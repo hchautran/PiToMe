@@ -6,17 +6,14 @@ from ..merge import dc_transform
 
 
 class DCTBlock(ResidualAttentionBlock):
-    def init_margin(self, margin=0.5):
-        # self.margin = nn.Parameter(torch.tensor(margin)) 
-        self.margin = margin
 
     def compress_x(self, x):
-        ratio = self._dct_info["ratio"].pop()
+        ratio = self._info["ratio"].pop()
         if ratio < 1.0:
             x= dc_transform(
                 x=x,
                 ratio=ratio,
-                class_token=self._dct_info["class_token"]
+                class_token=self._info["class_token"]
             )
             # print(x.shape)
         return x 
@@ -45,10 +42,9 @@ class DCTTransformer(Transformer):
         )
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
-        self._dct_info["r"] = [self.r]* len(self.resblocks) 
-        self._dct_info["ratio"] = [self.ratio] * len(self.resblocks) 
-        self._dct_info["size"] = None
-        self._dct_info["source"] = None
+        self._info["ratio"] = [self.ratio] * len(self.resblocks) 
+        self._info["size"] = None
+        self._info["source"] = None
         self.total_flop = 0
 
         for r in self.resblocks:
@@ -70,12 +66,12 @@ class DCTTransformer(Transformer):
 
 
 def apply_patch(
-   model: Transformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9, use_k=False):
+   model: Transformer, trace_source: bool = False, prop_attn: bool = True):
     """
     Applies DCT to this transformer. Afterward, set r using model.r.
 
     If you want to know the source of each token (e.g., for visualization), set trace_source = true.
-    The sources will be available at model._dct_info["source"] afterward.
+    The sources will be available at model._info["source"] afterward.
 
     For proportional attention, set prop_attn to True. This is only necessary when evaluating models off
     the shelf. For trianing and for evaluating MAE models off the self set this to be False.
@@ -84,12 +80,10 @@ def apply_patch(
 
     model.__class__ = DCTTransformer 
     model.ratio = 1.0 
-    model.r=0.0
     
     # model.compress_method = 'dct' 
-    model._dct_info = {
+    model._info = {
         "ratio": model.ratio,
-        "margin":  [],
         "size": None,
         "source": None,
         "trace_source": trace_source,
@@ -98,17 +92,15 @@ def apply_patch(
         "distill_token": False,
     }
     current_layer = 0
-    margin = margin 
-    # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
-        model._dct_info["distill_token"] = True
+        model._info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, ResidualAttentionBlock):
             # module.__class__ = DCTBlock if compress_method == 'dct' else DCTBlock 
             module.__class__ = DCTBlock
-            module._dct_info = model._dct_info
+            module._info = model._info
             current_layer +=1
         # elif isinstance(module, Attention):
         #     module.__class__ = DCTAttention

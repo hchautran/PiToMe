@@ -73,14 +73,11 @@ def parse_args():
     parser.add_argument("--cfg-path", required=True, help="path to configuration file.")
     parser.add_argument("--algo", default=PITOME, required=True, help="compress method")
     parser.add_argument("--model", default='blip', required=True, help="model_type")
-    parser.add_argument("--use_k", default=False)
     parser.add_argument("--ratio", default=0.9, type=float)
     parser.add_argument("--reduced_token", default=12, type=int)
     parser.add_argument('--granularity', type=int, default=4, help='the token number gap between each compression rate candidate')
     parser.add_argument('--dataset', default='flickr', help='dataset')
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
-    parser.add_argument("--margin", default=None)
-    parser.add_argument("--alpha", default=1.0, type=float)
     parser.add_argument(
         "--options",
         nargs="+",
