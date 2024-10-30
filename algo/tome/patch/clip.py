@@ -10,7 +10,7 @@ class ToMeBlock(ResidualAttentionBlock):
     def compress_x(self, metric, x):
         ratio = self._info["ratio"].pop()
         if ratio < 1.0:
-            merge = bipartite_soft_matching(
+            merge, _ = bipartite_soft_matching(
                 ratio=ratio,
                 metric=metric,
                 class_token=self._info["class_token"]
@@ -96,6 +96,5 @@ def apply_patch(
             # module.__class__ = ToMeBlock if compress_method == 'tome' else ToMeBlock 
             module.__class__ = ToMeBlock
             module._info = model._info
-            current_layer +=1
         # elif isinstance(module, Attention):
         #     module.__class__ = ToMeAttention

@@ -12,7 +12,6 @@ import torch
 from timm.data import Mixup
 from .utils import *
 from timm.utils import accuracy
-import time
 import wandb
 from tqdm.auto import tqdm
 from accelerate import Accelerator

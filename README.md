@@ -41,7 +41,7 @@
 </p>
 <br />
 
-This repository provides a PyTorch implementation of the paper [Accelerating Transformers with Spectrum-Preserving Token Merging](https://arxiv.org/abs/2405.16148), accepted at NeurIPS 2024. In this work, we introduce a new algorithm called pitome, designed to compress Vision Transformers (ViT) across various applications through token merging. After each layer, tokens are progressively merged, resulting in a remaining r percentage of tokens, as illustrated in the figure below.
+This repository provides a PyTorch implementation of the paper [Accelerating Transformers with Spectrum-Preserving Token Merging](https://arxiv.org/abs/2405.16148), accepted at NeurIPS 2024. In this work, we introduce a new algorithm called `pitome`, designed to compress Vision Transformers (ViT) across various applications through token merging. After each layer, tokens are progressively merged, resulting in a remaining r percentage of tokens, as illustrated in the figure below.
 
 ![Example Image](/figures/overview.png)
 
@@ -197,7 +197,7 @@ model.ratio = 0.95
 ```
 
 ### Run
-In this task all experiment are conducted on [ImageNet1K](https://huggingface.co/datasets/ILSVRC/imagenet-1k) dataset, which is a subset of ImageNet that contain 1000 classes. By default, all data and model checkpoints will be downloaded and saved into the folder specified by `DATA_PATH` variable located in `tasks/ic/utils.py`. You can change this to the path you wanted.
+In this task all experiment are conducted on [ImageNet1K](https://huggingface.co/datasets/ILSVRC/imagenet-1k) dataset, which is a subset of ImageNet that contain 1000 classes. By default, all data and model checkpoints will be downloaded and saved into the folder specified by `DATA_PATH` variable located in [tasks/ic/utils.py](tasks/ic/utils.py). You can change this to the path you wanted.
 
 You can try directly compressing these models for off-the-shell performance
 ``` sh
@@ -255,7 +255,7 @@ model.bert.encoder.ratio = 0.65
 
 ### Run
 In this task, all experiments are conducted on the following datasets:  [IMBb](https://www.kaggle.com/datasets/lakshmi25npathi/imdb-dataset-of-50k-movie-reviews), [sst2](stanfordnlp/sst2) and [Rotten Tomatoes](cornell-movie-review-data/rotten_tomatoes). 
-By default, all data and model checkpoints are downloaded and saved to the folder specified by the `DATA_PATH` variable in `tasks/tc/config.py`. You can modify this variable to specify a different path as needed.
+By default, all data and model checkpoints are downloaded and saved to the folder specified by the `DATA_PATH` variable in [tasks/tc/config.py](tasks/tc/config.py). You can modify this variable to specify a different path as needed.
 
 You can directly can evaluate off-the-shell perfomance by running:
 ```sh

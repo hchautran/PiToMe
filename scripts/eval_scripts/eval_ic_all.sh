@@ -1,11 +1,11 @@
 
 # Loop through each element in the array
-for model in  'MAE' 
+for model in 'DEIT' 'MAE' 
 do 
     for input_size in 224 
     do
-        # for model_size in 'T' 'S' 'B' # for deit
-        for model_size in 'L' 'H' #for mae
+        for model_size in 'T' 'S' 'B' # for deit
+        # for model_size in 'L' 'H' #for mae
         do
             # for algo in  'pitome' 
             for ratio in '0.9' '0.925' '0.95' '0.975'  

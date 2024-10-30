@@ -10,7 +10,7 @@ class CrossGetBlock(ResidualAttentionBlock):
     def compress_x(self, metric, x, attn):
         ratio = self._info["ratio"].pop()
         if ratio < 1.0:
-            merge, _ = crossget(
+            merge = crossget(
                 ratio=ratio,
                 metric=metric,
                 class_token=self._info["class_token"]

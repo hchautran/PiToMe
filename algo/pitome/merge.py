@@ -17,69 +17,39 @@ def do_nothing(x, mode=None):
     return x
 
 def bipartite_soft_matching(
-    metric: torch.Tensor,
+    metric=None,
     ratio:float=1.0,    
     class_token: bool = False,
-    a_idx=None, 
-    b_idx=None,
-    scores=None,
+    a_idx:torch.Tensor=None, 
+    b_idx:torch.Tensor=None,
+    scores:torch.Tensor=None,
+    r:int=None
 ) -> Tuple[Callable, Callable]:
-    
 
-    
-    if a_idx is not None and b_idx is not None and scores is not None:
-
-        B,T,_ = metric.shape
+    with torch.no_grad():
+        B, T, T = scores.shape
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
-        a, b = metric[batch_idx, a_idx, :], metric[batch_idx, b_idx, :]
+        scores = scores.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, b_idx.shape[-1])) 
+        scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, a_idx.shape[-1], b_idx.shape[-1]))
         node_max, node_idx = scores.max(dim=-1)
-
         edge_idx = node_max.argsort(dim=-1, descending=True)[..., None]
         unm_idx = edge_idx[..., r:, :]  # Unmerged Tokens
         src_idx = edge_idx[..., :r, :]  # Merged Tokens
         dst_idx = node_idx[..., None].gather(dim=-2, index=src_idx)
-    else:
-        protected = 0
-        if class_token:
-            protected += 1
-        if len(metric.shape) == 2:
-            metric = metric[None,...]
-
-        # We can only reduce by a maximum of 50% tokens
-        B,T,_ = metric.shape
-        
-        if ratio < 1.0:
-            r = math.floor(T- T*ratio)
-        else:
-            return do_nothing, do_nothing
-        with torch.no_grad():
-            metric = metric / metric.norm(dim=-1, keepdim=True)
-            a, b = metric[..., ::2, :], metric[..., 1::2, :]
-            scores = a @ b.transpose(-1, -2)
-
-            if class_token:
-                scores[..., 0, :] = -math.inf
-
-            node_max, node_idx = scores.max(dim=-1)
-            edge_idx = node_max.argsort(dim=-1, descending=True)[..., None]
-
-            unm_idx = edge_idx[..., r:, :]  # Unmerged Tokens
-            src_idx = edge_idx[..., :r, :]  # Merged Tokens
-            dst_idx = node_idx[..., None].gather(dim=-2, index=src_idx)
-
-            if class_token:
-                unm_idx = unm_idx.sort(dim=1)[0]
 
     def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
-        if a_idx is not None and b_idx is not None and scores is not None:
-            src, dst = x[batch_idx, a_idx, :], x[batch_idx, b_idx, :]
-        else:
-            src, dst = x[..., ::2, :], x[..., 1::2, :]
+        if class_token:
+            x_cls=x[:,0,:].unsqueeze(1)
+            x=x[:,1:,:]
+
+        src, dst = x[batch_idx, a_idx, :], x[batch_idx, b_idx, :]
         n, t1, c = src.shape
         unm = src.gather(dim=-2, index=unm_idx.expand(n, t1 - r, c))
         src = src.gather(dim=-2, index=src_idx.expand(n, r, c))
         dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce=mode)
 
+        if class_token:
+            return torch.cat([x_cls, unm, dst], dim=1)
         return torch.cat([unm, dst], dim=1)
     return merge
 
@@ -90,8 +60,7 @@ def pitome_vision(
     class_token: bool = False,
     alpha=1.0
 ):
-    # if margin >= 0.45:
-        # return bipartite_soft_matching(metric=metric, ratio=ratio, class_token=class_token)
+
    
     with torch.no_grad():
         if class_token:
@@ -104,13 +73,16 @@ def pitome_vision(
 
         # calculate energy score  
         metric = F.normalize(metric, p=2, dim=-1) 
-        sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01, alpha=alpha)
-        energy_score = sim.mean(dim=-1) 
+        sim = metric@metric.transpose(-1,-2)
+        energy_score = F.elu((sim - margin)/0.01, alpha=alpha).mean(dim=-1)
         indices =  torch.argsort(energy_score, descending=True)
         # seperate protected token and mergeable tokens  
+        if margin >= 0.45:
+            a_idx, b_idx = indices[..., ::2], indices[..., 1::2] 
+            return bipartite_soft_matching(metric=metric, class_token=class_token, ratio=ratio, a_idx=a_idx, b_idx=b_idx, scores=sim, r=r)
+
         merge_idx = indices[..., :2*r]
         protected_idx = indices[..., 2*r:]
-        # divide based on odd and even indices
         a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2] 
 
         # get similarity scores between mergeable tokens

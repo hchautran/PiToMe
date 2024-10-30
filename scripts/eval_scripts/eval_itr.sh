@@ -4,7 +4,7 @@ MODEL=$2 # albef blip blip2
 ALGO=$3 # pitome tome tofu mctf crossget 
 RATIO=$4 # 0.9 0.925 0.95 0.975 
 
-python -m torch.distributed.run --nproc_per_node=5 main_itr.py \
+python -m torch.distributed.run --nproc_per_node=1 main_itr.py \
    --cfg-path scripts/eval_scripts/${MODEL}_itr_${DATASET}.yml \
    --dataset $DATASET \
    --model $MODEL \

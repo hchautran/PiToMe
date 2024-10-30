@@ -17,7 +17,6 @@ class PiToMeBlock(ResidualAttentionBlock):
                 ratio=ratio,
                 metric=metric,
                 margin=self.margin,
-                # attn=attn if self.margin >= 0.45 else None,
                 class_token=self._info["class_token"]
             )
 
