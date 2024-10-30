@@ -2,7 +2,9 @@
 <p align="center">
 
   <h1 align="center">Accelerating Transformers with Spectrum-Preserving Token Merging</h1>
-  <h3 align="center" style="font-size: 40;">NeurIPS, 2024</h3> 
+  <h3 align="center" style="font-size: 50;">
+    <a href="https://neurips.cc/" style="text-decoration: none; color: inherit;">NeurIPS, 2024</a>
+</h3>
 
   <p align="center">
     <a href="https://scholar.google.com/citations?user=FZH2vcEAAAAJ&hl=en"><strong>Hoai-Chau Tran*</strong></a>
