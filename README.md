@@ -291,15 +291,11 @@ Citation
 
 
 ```
-@misc{https://doi.org/10.48550/arxiv.2405.16148,
-  doi = {10.48550/ARXIV.2405.16148},
-  url = {https://arxiv.org/abs/2405.16148},
-  author = {Tran,  Hoai-Chau and Nguyen,  Duy M. H. and Nguyen,  Duy M. and Nguyen,  Trung-Tin and Le,  Ngan and Xie,  Pengtao and Sonntag,  Daniel and Zou,  James Y. and Nguyen,  Binh T. and Niepert,  Mathias},
-  keywords = {Machine Learning (cs.LG),  FOS: Computer and information sciences,  FOS: Computer and information sciences},
-  title = {Accelerating Transformers with Spectrum-Preserving Token Merging},
-  publisher = {arXiv},
-  year = {2024},
-  copyright = {Creative Commons Attribution 4.0 International}
+@article{tran2024accelerating,
+  title={Accelerating Transformers with Spectrum-Preserving Token Merging},
+  author={Tran, Hoai-Chau and Nguyen, Duy MH and Nguyen, Duy M and Nguyen, Trung-Tin and Le, Ngan and Xie, Pengtao and Sonntag, Daniel and Zou, James Y and Nguyen, Binh T and Niepert, Mathias},
+  journal={Advances in Neural Information Processing Systems},
+  year={2025}
 }
 ```
 
