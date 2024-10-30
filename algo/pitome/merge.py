@@ -16,18 +16,53 @@ import numpy as np
 def do_nothing(x, mode=None):
     return x
 
-def bipartite_soft_matching(
+def pitome(
     metric=None,
-    ratio:float=1.0,    
     class_token: bool = False,
-    a_idx:torch.Tensor=None, 
-    b_idx:torch.Tensor=None,
+    indices:torch.Tensor=None, 
+    scores:torch.Tensor=None,
+    r:int=None
+) -> Tuple[Callable, Callable]:
+    B, T, T = scores.shape
+    merge_idx = indices[..., :2*r]
+    protected_idx = indices[..., 2*r:]
+    a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2] 
+
+    # get similarity scores between mergeable tokens
+    scores = scores.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
+    scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
+    _, dst_idx = scores.max(dim=-1) 
+    
+    def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
+        if class_token:
+            x_cls=x[:,0,:].unsqueeze(1)
+            x=x[:,1:,:]
+
+        B, T, C = x.shape
+        batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
+        protected = x[batch_idx, protected_idx, :]
+        src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
+
+        dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
+
+        if class_token:
+            return torch.cat([x_cls, protected, dst], dim=1)
+        return torch.cat([protected, dst], dim=1)
+
+    return merge
+
+
+def pitome_bsm(
+    metric=None,
+    class_token: bool = False,
+    indices:torch.Tensor=None,
     scores:torch.Tensor=None,
     r:int=None
 ) -> Tuple[Callable, Callable]:
 
     with torch.no_grad():
         B, T, T = scores.shape
+        a_idx, b_idx = indices[..., ::2], indices[..., 1::2] 
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
         scores = scores.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, b_idx.shape[-1])) 
         scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, a_idx.shape[-1], b_idx.shape[-1]))
@@ -58,10 +93,9 @@ def pitome_vision(
     ratio:float=1.0,
     margin:torch.Tensor=0.5,
     class_token: bool = False,
-    alpha=1.0
+    alpha=1.0,
+    use_bsm_pitome=False
 ):
-
-   
     with torch.no_grad():
         if class_token:
             metric=metric[:,1:,:]
@@ -77,36 +111,11 @@ def pitome_vision(
         energy_score = F.elu((sim - margin)/0.01, alpha=alpha).mean(dim=-1)
         indices =  torch.argsort(energy_score, descending=True)
         # seperate protected token and mergeable tokens  
-        if margin >= 0.45:
-            a_idx, b_idx = indices[..., ::2], indices[..., 1::2] 
-            return bipartite_soft_matching(metric=metric, class_token=class_token, ratio=ratio, a_idx=a_idx, b_idx=b_idx, scores=sim, r=r)
+        if use_bsm_pitome:
+            return pitome_bsm(metric=metric, class_token=class_token, indices=indices, scores=sim, r=r)
+        else:
+            return pitome(metric=metric, class_token=class_token, indices=indices, scores=sim, r=r)
 
-        merge_idx = indices[..., :2*r]
-        protected_idx = indices[..., 2*r:]
-        a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2] 
-
-        # get similarity scores between mergeable tokens
-        scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
-        scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
-        _, dst_idx = scores.max(dim=-1) 
-    
-    def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
-        if class_token:
-            x_cls=x[:,0,:].unsqueeze(1)
-            x=x[:,1:,:]
-
-        B, T, C = x.shape
-        batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
-        protected = x[batch_idx, protected_idx, :]
-        src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
-
-        dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
-
-        if class_token:
-            return torch.cat([x_cls, protected, dst], dim=1)
-        return torch.cat([protected, dst], dim=1)
-
-    return merge
 
 
 def pitome_text(

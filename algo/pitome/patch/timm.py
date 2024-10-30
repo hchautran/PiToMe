@@ -45,7 +45,8 @@ class PiToMeBlock(Block):
                 ratio=ratio,
                 metric=metric,
                 margin=self.margin,
-                class_token=self._info["class_token"]
+                class_token=self._info["class_token"],
+                use_bsm_pitome=True
             )
 
             if self._info["trace_source"]:
