@@ -36,7 +36,7 @@ class PiToMeBlock(Block):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         attn_size = self._info["size"] if self._info["prop_attn"] else None
-        x_attn, metric, attn = self.attn(self.norm1(x), attn_size)
+        x_attn, metric, _ = self.attn(self.norm1(x), attn_size)
         x = x + self._drop_path1(x_attn)
 
         ratio = self._info["ratio"].pop(0)
@@ -45,7 +45,6 @@ class PiToMeBlock(Block):
                 ratio=ratio,
                 metric=metric,
                 margin=self.margin,
-                # prune=self.margin > 0.45,
                 class_token=self._info["class_token"]
             )
 
@@ -54,8 +53,7 @@ class PiToMeBlock(Block):
                     merge, x, self._info["source"]
                 )
 
-            weight = self._info["size"] 
-            x, self._info["size"] = merge_wavg(merge, x, weight)
+            x, self._info["size"] = merge_wavg(merge, x,  self._info["size"] )
           
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))

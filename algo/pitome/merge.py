@@ -90,8 +90,8 @@ def pitome_vision(
     class_token: bool = False,
     alpha=1.0
 ):
-    if margin >= 0.45:
-        return bipartite_soft_matching(metric=metric, ratio=ratio, class_token=class_token)
+    # if margin >= 0.45:
+        # return bipartite_soft_matching(metric=metric, ratio=ratio, class_token=class_token)
    
     with torch.no_grad():
         if class_token:

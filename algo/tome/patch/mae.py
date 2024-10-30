@@ -104,7 +104,6 @@ def apply_patch(
     model.__class__ = ToMeVisionTransformer
     model.ratio = 1.0
     model._info = {
-        "r": model.r,
         "ratio": model.ratio,
         "size": None,
         "source": None,
