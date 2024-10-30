@@ -47,7 +47,7 @@ This repository provides a PyTorch implementation of the paper [Accelerating Tra
 
 News 
 ---
-- [ ] Code for VQA with LLaVA 1.5 is under refractoring. Comming soon. 
+- [ ] Code for VQA with LLaVA 1.5 is under refactoring. Coming soon!
 - [x] **[27/10/2024]** Release code for image classification task
 - [x] **[01/10/2024]** Release code for text classification task
 - [x] **[29/09/2024]** Release code for image-text retrieval task
