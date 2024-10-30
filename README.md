@@ -2,7 +2,7 @@
 <p align="center">
 
   <h1 align="center">Accelerating Transformers with Spectrum-Preserving Token Merging</h1>
-  <h3 align="center" style="font-size: 32;">NeurIPS, 2024</h3> 
+  <h3 align="center" style="font-size: 40;">NeurIPS, 2024</h3> 
 
   <p align="center">
     <a href="https://scholar.google.com/citations?user=FZH2vcEAAAAJ&hl=en"><strong>Hoai-Chau Tran*</strong></a>
@@ -45,12 +45,12 @@ This repository provides a PyTorch implementation of the paper [Accelerating Tra
 
 News 
 ---
-- Code for VQA with LLaVA 1.5 is under refractoring. Comming soon. 
-- [27/10/2024] Release code for image classification task
-- [01/10/2024] Release code for text classification task
-- [29/09/2024] Release code for image-text retrieval task
-- [25/09/2024] Our paper has been accepted at NeurIPS 2024 as a Poster ([OpenReview](https://openreview.net/forum?id=PPdJPIO3mV&noteId=NUW4EoVirr))
-- [29/05/2024] Upload PrePrint on Arxiv
+- [ ] Code for VQA with LLaVA 1.5 is under refractoring. Comming soon. 
+- [x] **[27/10/2024]** Release code for image classification task
+- [x] **[01/10/2024]** Release code for text classification task
+- [x] **[29/09/2024]** Release code for image-text retrieval task
+- [x] **[25/09/2024]** Our paper has been accepted at NeurIPS 2024 as a Poster 🎉 🎉 🎉
+- [x] **[29/05/2024]** Upload PrePrint on Arxiv
 
 Abstract
 --- 
@@ -299,7 +299,7 @@ Citation
 }
 ```
 
-If you have any issues, feel free to contact me at tranhoaichau.00@gmail.com
+If you have any issues, feel free to contact us at tranhoaichau.00@gmail.com or Ho_Minh_Duy.Nguyen@dfki.de
 
 
 Acknowledgement
