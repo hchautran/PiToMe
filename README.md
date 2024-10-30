@@ -13,7 +13,7 @@
     ·
     <a href="https://scholar.google.com/citations?user=wmuJBfcAAAAJ&hl=en"><strong>Duy M. Nguyen</strong></a>
     ·
-    <a href="https://trung-tinnguyen.github.io/"><strong>Trung-Tin Nguyen</strong></a>
+    <a href="https://trung-tinnguyen.github.io/"><strong>TrungTin Nguyen</strong></a>
     ·
     <a href="https://uark-aicv.github.io/"><strong>Ngan Le</strong></a>
     ·
