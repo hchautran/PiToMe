@@ -2,7 +2,9 @@
 <p align="center">
 
   <h1 align="center">Accelerating Transformers with Spectrum-Preserving Token Merging</h1>
-  <h3 align="center" style="font-size: 32;">NeurIPS, 2024</h3> 
+  <h3 align="center" style="font-size: 50;">
+    <a href="https://neurips.cc/" style="text-decoration: none; color: inherit;">NeurIPS, 2024</a>
+</h3>
 
   <p align="center">
     <a href="https://scholar.google.com/citations?user=FZH2vcEAAAAJ&hl=en"><strong>Hoai-Chau Tran*</strong></a>
@@ -11,7 +13,7 @@
     ·
     <a href="https://scholar.google.com/citations?user=wmuJBfcAAAAJ&hl=en"><strong>Duy M. Nguyen</strong></a>
     ·
-    <a href="https://trung-tinnguyen.github.io/"><strong>Trung-Tin Nguyen</strong></a>
+    <a href="https://trung-tinnguyen.github.io/"><strong>TrungTin Nguyen</strong></a>
     ·
     <a href="https://uark-aicv.github.io/"><strong>Ngan Le</strong></a>
     ·
@@ -45,12 +47,12 @@ This repository provides a PyTorch implementation of the paper [Accelerating Tra
 
 News 
 ---
-- Code for VQA with LLaVA 1.5 is under refractoring. Comming soon. 
-- [27/10/2024] Release code for image classification task
-- [01/10/2024] Release code for text classification task
-- [29/09/2024] Release code for image-text retrieval task
-- [25/09/2024] Our paper has been accepted at NeurIPS 2024 as a Poster ([OpenReview](https://openreview.net/forum?id=PPdJPIO3mV&noteId=NUW4EoVirr))
-- [29/05/2024] Upload PrePrint on Arxiv
+- [ ] Code for VQA with LLaVA 1.5 is under refractoring. Comming soon. 
+- [x] **[27/10/2024]** Release code for image classification task
+- [x] **[01/10/2024]** Release code for text classification task
+- [x] **[29/09/2024]** Release code for image-text retrieval task
+- [x] **[25/09/2024]** Our paper has been accepted at NeurIPS 2024 as a Poster 🎉 🎉 🎉
+- [x] **[29/05/2024]** Upload PrePrint on Arxiv
 
 Abstract
 --- 
@@ -291,19 +293,15 @@ Citation
 
 
 ```
-@misc{https://doi.org/10.48550/arxiv.2405.16148,
-  doi = {10.48550/ARXIV.2405.16148},
-  url = {https://arxiv.org/abs/2405.16148},
-  author = {Tran,  Hoai-Chau and Nguyen,  Duy M. H. and Nguyen,  Duy M. and Nguyen,  Trung-Tin and Le,  Ngan and Xie,  Pengtao and Sonntag,  Daniel and Zou,  James Y. and Nguyen,  Binh T. and Niepert,  Mathias},
-  keywords = {Machine Learning (cs.LG),  FOS: Computer and information sciences,  FOS: Computer and information sciences},
-  title = {Accelerating Transformers with Spectrum-Preserving Token Merging},
-  publisher = {arXiv},
-  year = {2024},
-  copyright = {Creative Commons Attribution 4.0 International}
+@article{tran2024accelerating,
+  title={Accelerating Transformers with Spectrum-Preserving Token Merging},
+  author={Tran, Hoai-Chau and Nguyen, Duy MH and Nguyen, Duy M and Nguyen, Trung-Tin and Le, Ngan and Xie, Pengtao and Sonntag, Daniel and Zou, James Y and Nguyen, Binh T and Niepert, Mathias},
+  journal={Advances in Neural Information Processing Systems},
+  year={2025}
 }
 ```
 
-If you have any issues, feel free to contact me at tranhoaichau.00@gmail.com
+If you have any issues, feel free to contact us at tranhoaichau.00@gmail.com or Ho_Minh_Duy.Nguyen@dfki.de
 
 
 Acknowledgement
