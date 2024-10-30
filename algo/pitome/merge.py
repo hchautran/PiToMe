@@ -18,10 +18,8 @@ def do_nothing(x, mode=None):
 
 def bipartite_soft_matching(
     metric: torch.Tensor,
-    r: int=0,
     ratio:float=1.0,    
     class_token: bool = False,
-    distill_token: bool = False,
     a_idx=None, 
     b_idx=None,
     scores=None,
@@ -50,9 +48,7 @@ def bipartite_soft_matching(
         # We can only reduce by a maximum of 50% tokens
         B,T,_ = metric.shape
         
-        if r > 0:
-            r = min(r, (T-protected) // 2)
-        elif ratio < 1.0:
+        if ratio < 1.0:
             r = math.floor(T- T*ratio)
         else:
             return do_nothing, do_nothing
@@ -94,6 +90,8 @@ def pitome_vision(
     class_token: bool = False,
     alpha=1.0
 ):
+    if margin >= 0.45:
+        return bipartite_soft_matching(metric=metric, ratio=ratio, class_token=class_token)
    
     with torch.no_grad():
         if class_token:
@@ -130,9 +128,7 @@ def pitome_vision(
         protected = x[batch_idx, protected_idx, :]
         src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
 
-        # if mode == 'mean' we merge token else prune tokens
-        if mode == 'mean':
-            dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
+        dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
 
         if class_token:
             return torch.cat([x_cls, protected, dst], dim=1)

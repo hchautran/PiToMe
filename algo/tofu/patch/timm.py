@@ -46,7 +46,6 @@ class ToFuBlock(Block):
                 metric=metric,
                 ratio=ratio,
                 class_token=self._info["class_token"],
-                distill_token=self._info["distill_token"],
             )
 
             if self._info["trace_source"]:

@@ -43,14 +43,13 @@ class ToMeBlock(Block):
                 metric=metric,
                 ratio=ratio,
                 class_token=self._info["class_token"],
-                distill_token=self._info["distill_token"],
             )
 
             if self._info["trace_source"]:
                 self._info["source"] = merge_source(
                     merge, x, self._info["source"]
                 )
-            x, self._info["size"] = merge_wavg(merge, x, self._info["size"])
+            x, self._info["size"] = merge_wavg(merge, x, None)
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
         return x

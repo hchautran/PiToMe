@@ -1,16 +1,17 @@
 
 # Loop through each element in the array
-for model in 'DEIT' 'MAE'
+for model in 'DEIT' 
 do 
-    for input_size in 224 384
+    for input_size in 224 
     do
         for model_size in 'T' 'S' 'B' # for deit
         # for model size in 'B' 'L' 'H' #for mae
         do
             # for algo in  'pitome' 
-            for algo in  'pitome' 'tome' 'dct' 'tofu' 'diffrate'
+            for ratio in '0.9' '0.925' '0.95' '0.975'  
             do
-                for ratio in '0.9' '0.925' '0.95' '0.975'  
+                for algo in 'tome' 'pitome' 'dct' 'tofu' 'diffrate' 
+                # for algo in pitome 
                 do
                 # Indented for loop body:
                 echo "running $model $model_size $algo."

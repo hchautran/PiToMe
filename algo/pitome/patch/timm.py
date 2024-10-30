@@ -14,7 +14,7 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Attention, Block
-from ..merge import merge_source, pitome_vision, merge_wavg, merge_mean
+from ..merge import merge_source, pitome_vision, merge_wavg, merge_mean, prune
 
 
 
@@ -56,6 +56,7 @@ class PiToMeBlock(Block):
 
             weight = self._info["size"] 
             x, self._info["size"] = merge_wavg(merge, x, weight)
+          
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
         # print(x.shape)
@@ -71,7 +72,7 @@ class PiToMeAttention(Attention):
     """
 
     def forward(
-        self, x: torch.Tensor, isolation_score: torch.Tensor = None
+        self, x: torch.Tensor, size: torch.Tensor = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # Note: this is copied from timm.models.vision_transformer.Attention with modifications.
         B, N, C = x.shape
@@ -89,8 +90,8 @@ class PiToMeAttention(Attention):
         attn = (q @ k.transpose(-2, -1)) * self.scale
 
         # Apply proportional attention
-        if isolation_score is not None:
-            attn = attn +  isolation_score.log()[:, None, None, :, 0]
+        if size is not None:
+            attn = attn +  size.log()[:, None, None, :, 0]
 
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
