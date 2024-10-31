@@ -172,8 +172,8 @@ CUDA_VISIBLE_DEVICES=0 python -m accelerate.commands.launch --main_process_port 
 You can also evaluate/train all other baselines with multiple ratio `r` by running:
 
 ```sh
-python scripts/eval_scripts/eval_itr_all.sh #off-the-shell evaluate 
-python scripts/train_scripts/train_itr_all.sh #retrain
+sh scripts/eval_scripts/eval_itr_all.sh #off-the-shell evaluate 
+sh scripts/train_scripts/train_itr_all.sh #retrain
 ```
 
 The results will be printed and saved to the `itr_outputs` directory. 
@@ -222,8 +222,8 @@ CUDA_VISIBLE_DEVICES=0 python -m accelerate.commands.launch --main_process_port 
 
 You can also evaluate/train all models with all baselines using multiple ratio `r` by running:
 ``` sh
-python scripts/eval_scripts/eval_ic_all.sh #off-the-shell evaluate
-python scripts/train_scripts/train_ic_all.sh #retrain model
+sh scripts/eval_scripts/eval_ic_all.sh #off-the-shell evaluate
+sh scripts/train_scripts/train_ic_all.sh #retrain model
 ```
 The results will be printed and saved to `outputs/ic_outputs` directory.
 
@@ -277,8 +277,8 @@ CUDA_VISIBLE_DEVICES=$5 python -m accelerate.commands.launch main_tc.py \
 
 You can also evaluate all models with all baselines using multiple ratio `r` by running:
 ```sh
-python scripts/eval_scripts/eval_tc_all.sh #off-the-shell performance
-python scripts/train_scripts/train_tc_all.sh #retrain
+sh scripts/eval_scripts/eval_tc_all.sh #off-the-shell performance
+sh scripts/train_scripts/train_tc_all.sh #retrain
 ```
 The results will be printed and saved to `outputs/tc_outputs` directory.
 
