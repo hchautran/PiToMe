@@ -95,7 +95,7 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False
+    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False, output_attn=False
 ):
 
     MCTFVisionTransformer = make_tome_class(model.__class__)
@@ -104,14 +104,19 @@ def apply_patch(
     model.__class__ = MCTFVisionTransformer
     model.ratio = 1.0
     model._info = {
-        "ratio": model.ratio,
+        "trace_source"   : False,
+        "prop_attn"      : 1,
+        "one_step_ahead" : 1,
+        "tau_sim"        : 1,
+        "tau_info"       : 20,
+        "tau_size"       : 40,
+        "bidirection"    : 1,
+        "pooling_type"   : 0,
         "size": None,
-        "source": None,
-        "trace_source": trace_source,
-        "prop_attn": prop_attn,
-        "class_token": False,
-        "distill_token": False,
+        "class_token"  : model.cls_token is not None,
+        "output_attn": output_attn,
     }
+
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._info["distill_token"] = True

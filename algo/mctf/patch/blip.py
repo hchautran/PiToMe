@@ -156,7 +156,6 @@ def apply_patch(
 
     model.__class__ = MCTFVisionTransformer
     model.ratio = 1.0 
-    default=[0.35, 0.15, 0, 1, 1, 1, 20, 40, 1, 1, 0]
     model._info = {
         "trace_source"   : False,
         "prop_attn"      : 1,
@@ -169,6 +168,8 @@ def apply_patch(
         "size": None,
         "class_token"  : model.cls_token is not None,
         "output_attn": output_attn,
+        "trace_source": trace_source,
+        "prop_attn": prop_attn,
     }
 
 

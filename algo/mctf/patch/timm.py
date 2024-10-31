@@ -41,11 +41,16 @@ class MCTFBlock(Block):
         ratio = self._info["ratio"].pop(0)
         if ratio < 1.0:
             merge = bipartite_soft_matching(
-                metric=metric,
                 ratio=ratio,
-                class_token=self._info["class_token"],
-                distill_token=self._info["distill_token"],
+                metric=metric,
+                class_token   = self._info["class_token"],
+                tau_sim       = self._info["tau_sim"],
+                tau_info      = self._info["tau_info"],
+                tau_size      = self._info["tau_size"],
+                size          = self._info["size"],
+                bidirection   = self._info["bidirection"]
             )
+
 
             if self._info["trace_source"]:
                 self._info["source"] = merge_source(

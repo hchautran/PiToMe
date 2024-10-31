@@ -217,7 +217,7 @@ def make_mctf_class(transformer_class):
 
 
 def apply_patch(
-   model: Transformer, trace_source: bool = False, prop_attn: bool = True) :
+   model: Transformer, trace_source: bool = False, prop_attn: bool = True, output_attn: bool = False): 
 
     MCTFTransformers = make_mctf_class(model.__class__)
     print('using', 'mctf')
@@ -227,15 +227,20 @@ def apply_patch(
     
     # model.compress_method = 'mctf' 
     model._info = {
-        "ratio": model.ratio,
+        "trace_source"   : False,
+        "prop_attn"      : 1,
+        "one_step_ahead" : 1,
+        "tau_sim"        : 1,
+        "tau_info"       : 20,
+        "tau_size"       : 40,
+        "bidirection"    : 1,
+        "pooling_type"   : 0,
         "size": None,
-        "source": None,
+        "class_token"  : True,
         "trace_source": trace_source,
         "prop_attn": prop_attn,
-        "class_token": True,
-        "distill_token": False,
+        "output_attn": output_attn,
     }
-
 
     for module in model.modules():
         if isinstance(module, TransformerBlock):
