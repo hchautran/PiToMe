@@ -307,4 +307,4 @@ If you have any issues, feel free to contact us at tranhoaichau.00@gmail.com or 
 Acknowledgement
 ---
 
-Thanks [Token Merging: Your ViT But Faster](https://arxiv.org/abs/2210.09461) for providing open-source code. This repository is built based on the original ToMe structure.
+Thanks [Token Merging: Your ViT But Faster](https://arxiv.org/abs/2210.09461) (ToMe) for providing open-source code. This repository is built based on the original ToMe structure. We also adopted baselines from [ToFu](https://arxiv.org/abs/2312.01026), [DiffRate](https://arxiv.org/abs/2305.17997), [mctf](https://github.com/mlvlab/MCTF), [crossget](https://arxiv.org/abs/2305.17455), [dct](https://arxiv.org/abs/2305.15099).

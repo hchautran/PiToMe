@@ -144,7 +144,6 @@ def apply_patch(
     model.__class__ = ToMeVisionTransformer
     model.ratio = 1.0 
     
-    # model.compress_method = 'tome' 
     model._info = {
         "ratio": model.ratio,
         "size": None,
@@ -154,16 +153,13 @@ def apply_patch(
         "class_token": model.cls_token is not None,
         "distill_token": False,
     }
-    current_layer = 0
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._info["distill_token"] = True
 
     for module in model.modules():
         if isinstance(module, Block):
-            # module.__class__ = ToMeBlock if compress_method == 'tome' else ToMeBlock 
             module.__class__ = ToMeBlock
             module._info = model._info
-            current_layer +=1
         elif isinstance(module, Attention):
             module.__class__ = ToMeAttention

@@ -3,9 +3,7 @@
 # for dataset in 'coco' 
 for dataset in 'flickr' 'coco'
 do
-    # for model in  'clip' 'blip' 'albef' 'blip2'
-    for model in 'clip' 
-    # for model in 'blip2' 
+    for model in  'clip' 'blip' 'albef' 'blip2'
     do
         for algo in 'pitome' 'tome' 'tofu' 'dct' 
         do
