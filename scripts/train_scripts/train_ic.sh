@@ -11,7 +11,7 @@
 # export CKT_SIZE='vit_base_patch16_224'
 # export CKT_SIZE='vit_large_patch16_224'
 export ARCH=$1
-export SIZE=$2
+export MODEL_SIZE=$2
 export INPUT_SIZE=$3
 export RATIO=$4
 export ALGO=$5
@@ -20,9 +20,8 @@ export EPOCH=30
 
 CUDA_VISIBLE_DEVICES=$6 python -m accelerate.commands.launch --main_process_port 2950$6 main_ic.py \
    --batch-size $BATCH_SIZE \
-   --model ${ARCH}-${MODEL_SIZE}-${INPUT_SIZE}  \ 
+   --model ${ARCH}-${MODEL_SIZE}-${INPUT_SIZE}  \
    --algo ${ALGO} \
    --ratio ${RATIO} \
    --epoch $EPOCH  \
-   --lr 0.00001
 
