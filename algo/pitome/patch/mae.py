@@ -15,6 +15,7 @@ from timm.models.vision_transformer import Attention, Block, VisionTransformer
 from copy import copy
 from .timm import PiToMeBlock, PiToMeAttention, PiToMeBlock
 import torch.nn as nn
+import math
 
 
 def make_pitome_class(transformer_class):
@@ -27,6 +28,8 @@ def make_pitome_class(transformer_class):
 
         def forward(self, x, return_flop=True) -> torch.Tensor:
             self._info["ratio"] = [self.ratio] * len(self.blocks) 
+            num_bsm_layers = math.ceil(len(self.blocks) * 0.5) 
+            self._info["use_bsm_pitome"] = [False] * (num_bsm_layers) + [True] * (len(self.blocks)-num_bsm_layers)
             self._info["size"] = None
             self._info["source"] = None
             self._info["isolate_score"] = None
@@ -112,12 +115,12 @@ def apply_patch(
         "prop_attn": False,
         "class_token": model.cls_token is not None,
         "distill_token": False,
+
     }
     current_layer = 0
     num_layers = len(model.blocks)
     # margins = [0.9- 0.9*(i/num_layers) for i in range(num_layers)]
     margins = [.9 - 0.9*(i/num_layers) for i in range(num_layers)]
-    print(margins)
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._info["distill_token"] = True

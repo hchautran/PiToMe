@@ -40,13 +40,14 @@ class PiToMeBlock(Block):
         x = x + self._drop_path1(x_attn)
 
         ratio = self._info["ratio"].pop(0)
+        use_bsm_pitome = self._info["use_bsm_pitome"].pop(0)
         if ratio < 1.0:
             merge = pitome_vision(
                 ratio=ratio,
                 metric=metric,
                 margin=self.margin,
                 class_token=self._info["class_token"],
-                use_bsm_pitome=True
+                use_bsm_pitome=use_bsm_pitome
             )
 
             if self._info["trace_source"]:
@@ -58,7 +59,6 @@ class PiToMeBlock(Block):
           
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
-        # print(x.shape)
         return x 
 
 

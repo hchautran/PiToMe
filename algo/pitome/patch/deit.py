@@ -14,8 +14,8 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Attention, Block, VisionTransformer
-# from timm.models.helpers import checkpoint_seq 
 from .timm import PiToMeAttention, PiToMeBlock, PiToMeBlock
+import math
 
 
 
@@ -29,6 +29,9 @@ def make_pitome_class(transformer_class):
         def forward(self, x, return_flop=True) -> torch.Tensor:
       
             self._info["ratio"] = [self.ratio] * len(self.blocks) 
+            # self._info["use_bsm_pitome"] = [False] * (len(self.blocks)//2) + [True] * (len(self.blocks)//2)
+            num_bsm_layers = math.ceil(len(self.blocks) * 0.75) 
+            self._info["use_bsm_pitome"] = [True] * (num_bsm_layers) + [False] * (len(self.blocks)-num_bsm_layers)
             self._info["size"] = None
             self._info["source"] = None
             self.total_flop = 0
