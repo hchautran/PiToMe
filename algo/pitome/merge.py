@@ -108,7 +108,7 @@ def pitome_vision(
         # calculate energy score  
         metric = F.normalize(metric, p=2, dim=-1) 
         sim = metric@metric.transpose(-1,-2)
-        energy_score = F.elu((sim - margin)/0.01, alpha=alpha).mean(dim=-1)
+        energy_score = F.elu((sim - margin), alpha=alpha).mean(dim=-1)
         indices =  torch.argsort(energy_score, descending=True)
         # seperate protected token and mergeable tokens  
         if use_bsm_pitome:
