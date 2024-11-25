@@ -134,7 +134,7 @@ def pitome_text(
         r = math.floor(T- T*ratio)
         metric = F.normalize(metric, p=2, dim=-1) 
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
-        # calculate energy score for in this implementation we use gaussian kernel which show better performance than the equation (4) in the paper 
+        # To calculate energy scores for text tokens, in this implementation, we use the Gaussian kernel. This shows better performance than the equation (4) in the paper 
         sim = metric@metric.transpose(-1,-2)
         # sim = F.elu((metric@metric.transpose(-1,-2) - margin)/0.01, alpha=alpha)
         sigma = 1 - margin 
@@ -142,7 +142,7 @@ def pitome_text(
         indices =  torch.argsort(energy_score , descending=True)
         merge_idx = indices[..., :2*r]
         protected_idx = indices[..., 2*r:]
-        # Also instead of using odd and even indices since we choose to split based on higher and lower energy set which show significant better performance 
+        # Also instead of using odd and even indices, we choose to split based on higher and lower energy sets which show significantly better performance 
         a_idx, b_idx = merge_idx[..., :r], merge_idx[..., r:]
         scores = sim.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, r)) 
         scores = scores.gather(dim=-2, index=a_idx.unsqueeze(-1).expand(B, r, r ))
