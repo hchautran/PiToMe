@@ -26,7 +26,8 @@ class PiToMeCLIPEncoder(CLIPEncoder):
                 ratio=ratio,
                 metric=metric,
                 margin=self.margins[idx],
-                class_token=self._info["class_token"]
+                class_token=self._info["class_token"],
+                use_bsm_pitome= (idx < 12 )
             )
 
             if self._info["trace_source"]:

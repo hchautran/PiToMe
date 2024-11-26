@@ -10,7 +10,7 @@ import torch
 import logging
 import numpy as np
 from datasets import Image, Sequence
-from .api import metrics
+from .api import metrics as Metrics
 from .api import registry
 from .tasks import get_task_dict
 from .models.llava import Llava
@@ -466,7 +466,7 @@ def evaluate(
             # hotfix: bleu, chrf, ter seem to be really expensive to bootstrap
             # so we run them less iterations. still looking for a cleaner way to do this
             if bootstrap_iters > 0:
-                stderr = metrics.stderr_for_metric(
+                stderr = Metrics.stderr_for_metric(
                     metric=task.aggregation()[metric],
                     bootstrap_iters=min(bootstrap_iters, 100) if metric in ["bleu", "chrf", "ter"] else bootstrap_iters,
                 )

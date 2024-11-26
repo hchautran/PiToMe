@@ -345,7 +345,10 @@ def cli_evaluate_single(args: Union[argparse.Namespace, None] = None) -> None:
                     samples_dumped = json.dumps(data_to_dump, indent=4, default=_handle_non_serializable)
                     filename.open("w").write(samples_dumped)
                     eval_logger.info(f"Saved samples to {filename}")
-        abs_path ='/home/caduser/HDD/vit_token_compress/PiToMe'
+        
+        abs_path =f'{os.getcwd()}/outputs/vqa_outputs'
+        if not os.path.exists(abs_path):
+            os.makedirs(abs_path)
         file_name = f'{abs_path}/{args.model}.csv'
         if not Path(file_name).is_file():
             head = "model,dataset,algo,acc,eval time\n"

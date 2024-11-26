@@ -24,13 +24,13 @@ from algo import (
 warnings.filterwarnings("ignore")
 eval_logger = logging.getLogger("lmms-eval")
 
-try:
-    from llava.model.builder import load_pretrained_model
-    from llava.mm_utils import get_model_name_from_path, process_images, tokenizer_image_token
-    from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN, IGNORE_INDEX
-    from llava.conversation import conv_templates, SeparatorStyle
-except ImportError:
-    eval_logger.error("LLaVA is not installed. Please install LLaVA to use this model.")
+# try:
+from llava.model.builder import load_pretrained_model
+from llava.mm_utils import get_model_name_from_path, process_images, tokenizer_image_token
+from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN, IGNORE_INDEX
+from llava.conversation import conv_templates, SeparatorStyle
+# except ImportError:
+    # eval_logger.error("LLaVA is not installed. Please install LLaVA to use this model.")
 
 
 @register_model("llava")

@@ -18,11 +18,13 @@ do
         #     --algo baseline \
         #     --ratio 1.0 
             # --wandb_args project=$model,name=baseline
-        for algo in 'tome' 'pitome' 
+        for algo in  'pitome' 
         do 
-            for ratio in  '0.85' '0.875' '0.9' '0.925' '0.95' '0.975'  
+            # for ratio in  '0.85' '0.875' '0.9' '0.925' '0.95' '0.975'  
+            for ratio in  '0.8' 
             do 
-                python -m torch.distributed.run --nproc_per_node=1 main_vqa.py \
+                python -m accelerate.commands.launch \
+                    --num_processes=5 main_vqa.py \
                     --model llava   \
                     --model_args pretrained="liuhaotian/$model" \
                     --tasks $task --log_samples \
@@ -31,6 +33,7 @@ do
                     --batch_size 1 \
                     --algo $algo \
                     --ratio $ratio \
+                    --compress_vit
                     # --wandb_args project=$model,name=$algo-$ratio 
             done
         done
