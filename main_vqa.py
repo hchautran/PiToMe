@@ -355,13 +355,13 @@ def cli_evaluate_single(args: Union[argparse.Namespace, None] = None) -> None:
             with open(file_name, "a") as myfile:
                 myfile.write(head)
         task_metrics = {
-            'gqa': 'exact_match',
-            'textvqa': 'exact_match',
+            # 'gqa': 'exact_match',
+            # 'textvqa': 'exact_match',
             'scienceqa_img': 'exact_match',
-            'vizwiz_vqa_val': 'exact_match',
-            'mme': 'mme_percetion_score',
-            'vqav2': 'exact_match',
-            'vqav2_test': 'submission',
+            # 'vizwiz_vqa_val': 'exact_match',
+            # 'mme': 'mme_percetion_score',
+            # 'vqav2': 'exact_match',
+            # 'vqav2_test': 'submission',
         }
         row = f'{model_name},{args.tasks},{args.algo},{results["results"][args.tasks][f"{task_metrics[args.tasks]},none"]},{total_time}\n'
         with open(file_name, "a") as myfile:
