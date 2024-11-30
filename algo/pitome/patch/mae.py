@@ -119,7 +119,6 @@ def apply_patch(
     }
     current_layer = 0
     num_layers = len(model.blocks)
-    # margins = [0.9- 0.9*(i/num_layers) for i in range(num_layers)]
     margins = [.9 - 0.9*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:

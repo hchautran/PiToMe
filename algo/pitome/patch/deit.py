@@ -83,7 +83,6 @@ def apply_patch(
     model.__class__ = PiToMeVisionTransformer
     model.ratio = 1.0 
     
-    # model.compress_method = 'tome' 
     model._info = {
         "ratio": model.ratio,
         "margin":  [],
@@ -97,7 +96,6 @@ def apply_patch(
     current_layer = 0
     margin = margin 
     num_layers = len(model.blocks)
-    # margins = [margin - margin*(i/num_layers) for i in range(num_layers)]
     margins = [.9 - .9*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
@@ -105,7 +103,6 @@ def apply_patch(
 
     for module in model.modules():
         if isinstance(module, Block):
-            # module.__class__ = ToMeBlock if compress_method == 'tome' else PiToMeBlock 
             module.__class__ = PiToMeBlock
             module.init_margin(margins[current_layer])
             module._info = model._info

@@ -34,10 +34,7 @@ class PiToMeCLIPEncoder(CLIPEncoder):
                 self._info["source"] = merge_source(
                     merge, x, self._info["source"]
                 )
-            # if idx > 3:
             x = merge_mean(merge, x)
-            # else:
-                # x = prune(merge, x)
         return x
 
 
