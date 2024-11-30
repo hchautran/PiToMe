@@ -1,5 +1,5 @@
 from transformers.models.clip.modeling_clip import CLIPEncoder, CLIPEncoderLayer 
-from ..merge import merge_source, pitome_vision, merge_mean 
+from ..merge import merge_source, pitome_vision, merge_mean, prune 
 from transformers.modeling_outputs import BaseModelOutput
 from typing import Optional, Tuple, Union
 import torch.nn as nn
@@ -27,14 +27,17 @@ class PiToMeCLIPEncoder(CLIPEncoder):
                 metric=metric,
                 margin=self.margins[idx],
                 class_token=self._info["class_token"],
-                use_bsm_pitome= (idx < 12 )
+                use_bsm=(idx<=12)
             )
 
             if self._info["trace_source"]:
                 self._info["source"] = merge_source(
                     merge, x, self._info["source"]
                 )
+            # if idx > 3:
             x = merge_mean(merge, x)
+            # else:
+                # x = prune(merge, x)
         return x
 
 

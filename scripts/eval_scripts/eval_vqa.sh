@@ -5,7 +5,7 @@ export model='llava-v1.5-7b'
 # for task in  'vqav2' 'vizwiz_vqa_val' 'mmbench' 'mme'
 for i in 1 2 3 4 5
 do
-    for task in   'scienceqa_img' 'mme' 
+    for task in   'scienceqa_img'  
     do 
 
         # python -m torch.distributed.run --nproc_per_node=5 lmms-eval/lmms_eval/__main__.py \
@@ -20,8 +20,8 @@ do
             # --wandb_args project=$model,name=baseline
         for algo in  'pitome' 
         do 
-            # for ratio in  '0.85' '0.875' '0.9' '0.925' '0.95' '0.975'  
-            for ratio in  '0.8' 
+            for ratio in  '0.85' '0.875' '0.9' '0.925' '0.95' '0.975'  
+            # for ratio in  '0.8' 
             do 
                 python -m accelerate.commands.launch \
                     --num_processes=5 main_vqa.py \

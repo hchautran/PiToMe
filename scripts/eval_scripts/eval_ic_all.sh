@@ -7,8 +7,8 @@ do
         # for algo in  'pitome' 
         for ratio in '0.9' '0.925' '0.95' '0.975'  
         do
-            # for algo in 'tome' 'pitome' 'dct' 'tofu' 'diffrate' 
-            for algo in 'pitome' 
+            for algo in 'pitome' 'tome' 
+            # for algo in 'pitome' 
             do
             # Indented for loop body:
             echo "running DEIT $model_size $algo."

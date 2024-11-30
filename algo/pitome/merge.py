@@ -16,6 +16,60 @@ import numpy as np
 def do_nothing(x, mode=None):
     return x
 
+def bsm(
+    metric: torch.Tensor,
+    ratio:float=1.0,    
+    class_token: bool = False,
+) -> Tuple[Callable, Callable]:
+    
+    protected = 0
+    if class_token:
+        protected += 1
+    if len(metric.shape) == 2:
+        metric = metric[None,...]
+
+    # We can only reduce by a maximum of 50% tokens
+    T = metric.shape[1]
+    
+    if ratio < 1.0:
+        r = math.floor(T- T*ratio)
+    else:
+        return do_nothing, do_nothing
+
+
+    with torch.no_grad():
+        metric = metric / metric.norm(dim=-1, keepdim=True)
+        a, b = metric[..., ::2, :], metric[..., 1::2, :]
+        scores = a @ b.transpose(-1, -2)
+
+        if class_token:
+            scores[..., 0, :] = -math.inf
+
+        node_max, node_idx = scores.max(dim=-1)
+        edge_idx = node_max.argsort(dim=-1, descending=True)[..., None]
+
+        unm_idx = edge_idx[..., r:, :]  # Unmerged Tokens
+        src_idx = edge_idx[..., :r, :]  # Merged Tokens
+        dst_idx = node_idx[..., None].gather(dim=-2, index=src_idx)
+
+        if class_token:
+            unm_idx = unm_idx.sort(dim=1)[0]
+
+    def merge(x: torch.Tensor, mode="mean") -> torch.Tensor:
+        if len(x.shape) == 2:
+            x.unsqueeze_(0)
+        src, dst = x[..., ::2, :], x[..., 1::2, :]
+        n, t1, c = src.shape
+        unm = src.gather(dim=-2, index=unm_idx.expand(n, t1 - r, c))
+        src = src.gather(dim=-2, index=src_idx.expand(n, r, c))
+        dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce=mode)
+
+        return torch.cat([unm, dst], dim=1)
+    
+
+
+    return merge
+
 def pitome(
     metric=None,
     class_token: bool = False,
@@ -42,8 +96,8 @@ def pitome(
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
         protected = x[batch_idx, protected_idx, :]
         src, dst = x[batch_idx, a_idx, :], x[batch_idx,  b_idx, :]
-
-        dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
+        if mode != "prune":
+            dst = dst.scatter_reduce(-2, dst_idx.unsqueeze(2).expand(B, r, C), src, reduce=mode)
 
         if class_token:
             return torch.cat([x_cls, protected, dst], dim=1)
@@ -80,8 +134,9 @@ def pitome_bsm(
         src, dst = x[batch_idx, a_idx, :], x[batch_idx, b_idx, :]
         n, t1, c = src.shape
         unm = src.gather(dim=-2, index=unm_idx.expand(n, t1 - r, c))
-        src = src.gather(dim=-2, index=src_idx.expand(n, r, c))
-        dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce=mode)
+        if mode != "prune":
+            src = src.gather(dim=-2, index=src_idx.expand(n, r, c))
+            dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce=mode)
 
         if class_token:
             return torch.cat([x_cls, unm, dst], dim=1)
@@ -94,8 +149,11 @@ def pitome_vision(
     margin:torch.Tensor=0.5,
     class_token: bool = False,
     alpha=1.0,
-    use_bsm_pitome=False
+    use_bsm=False,
+    use_bsm_pitome=False,
 ):
+    if use_bsm:
+        return bsm(metric=metric, ratio=ratio, class_token=class_token)
     with torch.no_grad():
         if class_token:
             metric=metric[:,1:,:]
