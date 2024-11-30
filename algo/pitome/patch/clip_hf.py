@@ -34,7 +34,7 @@ class PiToMeCLIPEncoder(CLIPEncoder):
                 self._info["source"] = merge_source(
                     merge, x, self._info["source"]
                 )
-            x = merge_mean(merge, x)
+            x  = merge_mean(merge, x)
         return x
 
 
@@ -78,8 +78,6 @@ class PiToMeCLIPEncoder(CLIPEncoder):
                 Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
         """
         len_layers = len(self.layers)
-        # self._info["ratio"] = [self.ratio if i%2==0 else 1.0 for i in range(len_layers)]
-        # self._info["ratio"] = [self.ratio for i in range(len_layers) ]
         self._info["ratio"] = [self.ratio] * len(self.layers) 
         self._info["size"] = None
         self._info["source"] = None
