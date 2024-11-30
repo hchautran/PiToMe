@@ -137,7 +137,7 @@ class MCTFCLIPEncoder(CLIPEncoder):
 
 
 def apply_patch(
-   model: CLIPEncoder, trace_source: bool = False, prop_attn: bool = True) :
+   model: CLIPEncoder, trace_source: bool = False, prop_attn: bool = False) :
 
     print('using', 'tome')
 

@@ -142,7 +142,7 @@ def make_pitome_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True, margin=None, output_attn=False, alpha=1.0):
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False, margin=None, output_attn=False, alpha=1.0):
 
     PiToMeVisionTransformer = make_pitome_class(model.__class__)
     print('using', 'pitome')

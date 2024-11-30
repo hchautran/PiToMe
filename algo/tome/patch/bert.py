@@ -248,7 +248,7 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-   model: BertEncoder, trace_source: bool = False, prop_attn: bool = True):
+   model: BertEncoder, trace_source: bool = False, prop_attn: bool = False):
 
     ToMeBertEncoder = make_tome_class(model.__class__)
     print('using', 'tome')

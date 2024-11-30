@@ -78,6 +78,7 @@ def pitome(
     r:int=None
 ) -> Tuple[Callable, Callable]:
     B, T, T = scores.shape
+    # seperate protected token and mergeable tokens  
     merge_idx = indices[..., :2*r]
     protected_idx = indices[..., 2*r:]
     a_idx, b_idx = merge_idx[..., ::2], merge_idx[..., 1::2] 
@@ -115,7 +116,7 @@ def pitome_bsm(
 ) -> Tuple[Callable, Callable]:
 
     with torch.no_grad():
-        B, T, T = scores.shape
+        B, T, _ = scores.shape
         a_idx, b_idx = indices[..., ::2], indices[..., 1::2] 
         batch_idx = torch.arange(B).unsqueeze_(1).to(metric.device)
         scores = scores.gather(dim=-1, index=b_idx.unsqueeze(-2).expand(B, T, b_idx.shape[-1])) 
@@ -168,7 +169,6 @@ def pitome_vision(
         sim = metric@metric.transpose(-1,-2)
         energy_score = F.elu((sim - margin), alpha=alpha).mean(dim=-1)
         indices =  torch.argsort(energy_score, descending=True)
-        # seperate protected token and mergeable tokens  
         if use_bsm_pitome:
             return pitome_bsm(metric=metric, class_token=class_token, indices=indices, scores=sim, r=r)
         else:

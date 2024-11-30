@@ -70,14 +70,13 @@ class ToMeTransformer(Transformer):
         
 
 def apply_patch(
-   model: Transformer, trace_source: bool = False, prop_attn: bool = True):
+   model: Transformer, trace_source: bool = False, prop_attn: bool = False):
 
     print('using', 'tome')
 
     model.__class__ = ToMeTransformer 
     model.ratio = 1.0 
     
-    # model.compress_method = 'tome' 
     model._info = {
         "ratio": model.ratio,
         "size": None,
@@ -93,8 +92,5 @@ def apply_patch(
 
     for module in model.modules():
         if isinstance(module, ResidualAttentionBlock):
-            # module.__class__ = ToMeBlock if compress_method == 'tome' else ToMeBlock 
             module.__class__ = ToMeBlock
             module._info = model._info
-        # elif isinstance(module, Attention):
-        #     module.__class__ = ToMeAttention

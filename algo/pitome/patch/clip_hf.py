@@ -139,7 +139,7 @@ class PiToMeCLIPEncoder(CLIPEncoder):
 
 
 def apply_patch(
-   model: CLIPEncoder, trace_source: bool = False, prop_attn: bool = True, margin=0.9, output_attn=False):
+   model: CLIPEncoder, trace_source: bool = False, prop_attn: bool = False, margin=0.9, output_attn=False):
 
     print('using', 'pitome')
 

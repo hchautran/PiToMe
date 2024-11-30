@@ -30,7 +30,7 @@ def make_pitome_class(transformer_class):
       
             self._info["ratio"] = [self.ratio] * len(self.blocks) 
             # self._info["use_bsm_pitome"] = [False] * (len(self.blocks)//2) + [True] * (len(self.blocks)//2)
-            num_bsm_layers = math.ceil(len(self.blocks) * 0.75) 
+            num_bsm_layers = math.ceil(len(self.blocks) * 0.5) 
             self._info["use_bsm_pitome"] = [True] * (num_bsm_layers) + [False] * (len(self.blocks)-num_bsm_layers)
             self._info["size"] = None
             self._info["source"] = None
@@ -96,7 +96,7 @@ def apply_patch(
     current_layer = 0
     margin = margin 
     num_layers = len(model.blocks)
-    margins = [.9 - .9*(i/num_layers) for i in range(num_layers)]
+    margins = [.75 - .75*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._info["distill_token"] = True

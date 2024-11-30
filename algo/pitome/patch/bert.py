@@ -244,7 +244,7 @@ def make_pitome_class(transformer_class):
 
 
 def apply_patch(
-   model: BertEncoder, trace_source: bool = False, prop_attn: bool = True, margin=None, alpha=1.0, use_attn=False):
+   model: BertEncoder, trace_source: bool = False, prop_attn: bool = False, margin=None, alpha=1.0, use_attn=False):
    
     PiToMeBertEncoder = make_pitome_class(model.__class__)
     print('using', 'pitome')

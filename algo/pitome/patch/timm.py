@@ -35,19 +35,19 @@ class PiToMeBlock(Block):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        size = self._info["size"] if self._info['prop_attn'] else None 
         x_attn, metric = self.attn(self.norm1(x), self._info["size"] )
         x = x + self._drop_path1(x_attn)
 
         ratio = self._info["ratio"].pop(0)
-        use_bsm = self._info["use_bsm_pitome"].pop(0)
+        use_bsm_pitome = self._info["use_bsm_pitome"].pop(0)
         if ratio < 1.0:
             merge = pitome_vision(
                 ratio=ratio,
                 metric=metric,
                 margin=self.margin,
                 class_token=self._info["class_token"],
-                # use_bsm=use_bsm
-                use_bsm_pitome=use_bsm
+                use_bsm_pitome=use_bsm_pitome
             )
 
             if self._info["trace_source"]:
@@ -55,7 +55,7 @@ class PiToMeBlock(Block):
                     merge, x, self._info["source"]
                 )
 
-            x, self._info["size"] = merge_wavg(merge, x, self._info["size"])
+            x,  self._info["size"]  = merge_wavg(merge, x, self._info["size"] ) 
 
         x = x + self._drop_path2(self.mlp(self.norm2(x)))
         return x 

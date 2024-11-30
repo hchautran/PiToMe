@@ -69,7 +69,7 @@ class PiToMeTransformer(Transformer):
 
 
 def apply_patch(
-   model: Transformer, trace_source: bool = False, prop_attn: bool = True, margin=0.9):
+   model: Transformer, trace_source: bool = False, prop_attn: bool = False, margin=0.9):
 
     print('using', 'pitome')
 
