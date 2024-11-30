@@ -95,7 +95,7 @@ def make_tome_class(transformer_class):
 
 
 def apply_patch(
-    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False 
+    model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True 
 ):
 
     ToMeVisionTransformer = make_tome_class(model.__class__)

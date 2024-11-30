@@ -119,7 +119,7 @@ def apply_patch(
     }
     current_layer = 0
     num_layers = len(model.blocks)
-    margins = [.9 - 0.9*(i/num_layers) for i in range(num_layers)]
+    margins = [.75 - 0.75*(i/num_layers) for i in range(num_layers)]
 
     if hasattr(model, "dist_token") and model.dist_token is not None:
         model._info["distill_token"] = True
