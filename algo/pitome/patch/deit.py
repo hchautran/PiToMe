@@ -75,7 +75,7 @@ def make_pitome_class(transformer_class):
 
 
 def apply_patch(
-   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = True):
+   model: VisionTransformer, trace_source: bool = False, prop_attn: bool = False):
 
     PiToMeVisionTransformer = make_pitome_class(model.__class__)
     print('using', 'pitome')
@@ -94,7 +94,6 @@ def apply_patch(
         "distill_token": False,
     }
     current_layer = 0
-    margin = margin 
     num_layers = len(model.blocks)
     margins = [.75 - .75*(i/num_layers) for i in range(num_layers)]
 

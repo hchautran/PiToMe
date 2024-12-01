@@ -33,8 +33,7 @@ class ToMeBlock(Block):
         return self.drop_path2(x) if hasattr(self, "drop_path2") else self.drop_path(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        attn_size = self._info["size"] if self._info["prop_attn"] else None
-        x_attn, metric = self.attn(self.norm1(x), attn_size)
+        x_attn, metric = self.attn(self.norm1(x))
         x = x + self._drop_path1(x_attn)
 
         ratio = self._info["ratio"].pop(0)

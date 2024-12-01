@@ -9,7 +9,6 @@ class PiToMeBlock(Block):
      - Compute and propogate token size and potentially the token sources.
     """
     def init_margin(self, margin=0.5):
-        # self.margin = nn.Parameter(torch.tensor(margin)) 
         self.margin = margin
     
     def compress_x(self, metric, x):
