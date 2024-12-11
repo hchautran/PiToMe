@@ -36,6 +36,8 @@
     <a href='' style='padding-left: 0.5rem;'><img src='https://colab.research.google.com/assets/colab-badge.svg' alt='Google Colab'></a>
     <a href='' style='padding-left: 0.5rem;'>
       <img src='https://img.shields.io/badge/Youtube-Video-red?style=flat&logo=youtube&logoColor=red' alt='Youtube Video'></a>
+    <a href='https://drive.google.com/file/d/1sJOSRFzOxhGdyxgOCK3721ltfWHcfu0X/view' style='padding-left: 0.5rem;'>
+      <img src='https://img.shields.io/badge/Poster-Download-blue?style=flat&logo=file&logoColor=blue' alt='Poster'></a>
   </p>
 
 </p>
