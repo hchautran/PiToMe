@@ -50,7 +50,6 @@ This repository provides a PyTorch implementation of the paper [Accelerating Tra
 News 
 ---
 - [ ] Code for VQA with LLaVA 1.5 is under refactoring. Coming soon!
-- [x] **[27/10/2024]** Release code for image classification task
 - [x] **[01/10/2024]** Release code for text classification task
 - [x] **[29/09/2024]** Release code for image-text retrieval task
 - [x] **[25/09/2024]** Our paper has been accepted at NeurIPS 2024 as a Poster 🎉 🎉 🎉
@@ -178,57 +177,7 @@ sh scripts/eval_scripts/eval_itr_all.sh #off-the-shell evaluate
 sh scripts/train_scripts/train_itr_all.sh #retrain
 ```
 
-The results will be printed and saved to the `itr_outputs` directory. 
-
-
-Image Classification 
----
-### Using `pitome` with ViT models for image classification
-We are currently supporting the `DeiT` and `MAE` models for image classification tasks.
-```py
-from timm.models import create_model
-from algo import pitome
-
-# Load a pretrained model, can be any vit / deit model.
-model = create_model("deit_base_patch16_224", pretrained=True)
-# Patch the ViT model with ToMe.
-pitome.patch.deit(model)
-# pitome.patch.mae(model)
-# Set the ratio of remain token  per layer. See paper for details.
-model.ratio = 0.95 
-```
-
-### Run
-In this task all experiment are conducted on [ImageNet1K](https://huggingface.co/datasets/ILSVRC/imagenet-1k) dataset, which is a subset of ImageNet that contain 1000 classes. By default, all data and model checkpoints will be downloaded and saved into the folder specified by `DATA_PATH` variable located in [tasks/ic/utils.py](tasks/ic/utils.py). You can change this to the path you wanted.
-
-You can try directly compressing these models for off-the-shell performance
-``` sh
-python main_ic.py \
-   --batch-size 256 \ 
-   --model ${ARCH}-${MODEL_SIZE}-${INPUT_SIZE}  \ 
-   --algo ${ALGO} \
-   --ratio ${RATIO} \
-   --eval
-```
-Or retraining them by running this command: 
-``` sh
-CUDA_VISIBLE_DEVICES=0 python -m accelerate.commands.launch --main_process_port 29500 main_ic.py \
-   --batch-size $BATCH_SIZE \
-   --model ${ARCH}-${MODEL_SIZE}-${INPUT_SIZE}  \ 
-   --algo ${ALGO} \
-   --ratio ${RATIO} \
-   --epoch $EPOCH  \
-   --lr 0.00001
-
-```
-
-You can also evaluate/train all models with all baselines using multiple ratio `r` by running:
-``` sh
-sh scripts/eval_scripts/eval_ic_all.sh #off-the-shell evaluate
-sh scripts/train_scripts/train_ic_all.sh #retrain model
-```
-The results will be printed and saved to `outputs/ic_outputs` directory.
-
+The results will be printed and saved to the `itr_outputs` 
 
 Text Classification 
 ---
