@@ -8,11 +8,79 @@
 import math
 from typing import Callable, Tuple
 import torch
-import torch.nn.functional as F
+# from hilbert_utils import get_hilbert_inverse, get_hilbert_order
 
 
 def do_nothing(x, mode=None):
     return x
+
+
+
+def hilbert_matching(
+    metric: torch.Tensor,
+    ratio: float = 1.0,
+    class_token: bool = False, 
+):
+    if ratio >= 1.0:
+        return do_nothing, do_nothing
+    
+
+
+def consecutive_soft_matching(
+    metric: torch.Tensor,
+    ratio: float = 1.0,
+    class_token: bool = False,
+) -> Tuple[Callable, Callable]:
+    """
+    Merge every group of 4 consecutive tokens into their average.
+
+    Designed for Hilbert-ordered sequences where groups of 4 consecutive tokens
+    form a 2×2 spatially adjacent block.  No similarity scoring — fixed stride-4
+    average pool forward, broadcast back on unmerge.
+
+    T must be divisible by 4; trailing tokens that don't fill a group are kept.
+
+    Args:
+        metric      : [B, T, C] — only used to capture T and device; not scored
+        ratio       : unused (kept for API compatibility); merging always reduces
+                      by 4× on the grouped tokens
+        class_token : reserved, not used
+    """
+    if ratio >= 1.0:
+        return do_nothing, do_nothing
+
+    if len(metric.shape) == 2:
+        metric = metric[None]
+
+    B, T, _ = metric.shape
+    G = T // 4          # number of complete groups of 4
+    tail = T - G * 4    # leftover tokens (0–3) that are kept as-is
+
+    if G == 0:
+        return do_nothing, do_nothing
+
+    def merge(x: torch.Tensor, mode: str = "mean") -> torch.Tensor:
+        if x.dim() == 2:
+            x = x.unsqueeze(0)
+        n, _, c = x.shape
+        grouped = x[:, :G * 4, :].view(n, G, 4, c)   # [B, G, 4, C]
+        merged  = grouped.mean(dim=2)                  # [B, G,    C]
+        if tail > 0:
+            return torch.cat([merged, x[:, G * 4:, :]], dim=1)  # [B, G + tail, C]
+        return merged
+
+    def unmerge(x: torch.Tensor) -> torch.Tensor:
+        if x.dim() == 2:
+            x = x.unsqueeze(0)
+        n, _, c = x.shape
+        merged_out = x[:, :G, :]                       # [B, G,    C]
+        # Broadcast each group average back to 4 positions
+        out_grouped = merged_out.unsqueeze(2).expand(n, G, 4, c).reshape(n, G * 4, c)
+        if tail > 0:
+            return torch.cat([out_grouped, x[:, G:, :]], dim=1)  # [B, T, C]
+        return out_grouped
+
+    return merge, unmerge
 
 
 def bipartite_soft_matching(
@@ -20,6 +88,7 @@ def bipartite_soft_matching(
     ratio:float=1.0,    
     class_token: bool = False,
 ) -> Tuple[Callable, Callable]:
+    
     
     protected = 0
     if class_token:
@@ -46,10 +115,14 @@ def bipartite_soft_matching(
 
         node_max, node_idx = scores.max(dim=-1)
         edge_idx = node_max.argsort(dim=-1, descending=True)[..., None]
+        indices = torch.arange(T).to(metric.device)
+        a_idx = indices[::2].unsqueeze(0).unsqueeze(-1)  # (1, N/2, 1)
+        b_idx = indices[1::2].unsqueeze(0).unsqueeze(-1)  # (1, N/2, 1)
 
         unm_idx = edge_idx[..., r:, :]  # Unmerged Tokens
         src_idx = edge_idx[..., :r, :]  # Merged Tokens
         dst_idx = node_idx[..., None].gather(dim=-2, index=src_idx)
+        
 
         if class_token:
             unm_idx = unm_idx.sort(dim=1)[0]
@@ -62,8 +135,12 @@ def bipartite_soft_matching(
         unm = src.gather(dim=-2, index=unm_idx.expand(n, t1 - r, c))
         src = src.gather(dim=-2, index=src_idx.expand(n, r, c))
         dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce=mode)
+        unm_absolute_indices = torch.gather(a_idx.expand(n, a.shape[1], 1), dim=1, index=unm_idx).squeeze(-1)
+        # (B*num_heads, N_dst)
+        dst_absolute_indices = b_idx.squeeze(-1).expand(n, -1)
+        absolute_indices = torch.cat([unm_absolute_indices, dst_absolute_indices], dim=1)
 
-        return torch.cat([unm, dst], dim=1)
+        return torch.cat([unm, dst], dim=1), absolute_indices
     
     def unmerge(x: torch.Tensor) -> torch.Tensor:
         unm_len = unm_idx.shape[1]
