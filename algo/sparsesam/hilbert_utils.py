@@ -142,18 +142,7 @@ def _compute_hilbert_order(H: int, W: int, device_str: str):
 
 
 def get_hilbert_order(H: int, W: int, device=None) -> torch.Tensor:
-    """
-    Return a 1-D index tensor `perm` of shape (H*W,) such that
 
-        tokens_hilbert = tokens_raster[perm]      # for a 1-D sequence
-        tokens_hilbert = tokens_raster[:, perm]   # for (B, H*W, C)
-
-    reorders raster-flattened tokens into Hilbert-curve order.
-
-    Args:
-        H, W    : spatial grid dimensions (need not be powers of 2).
-        device  : torch.device or str; defaults to CPU.
-    """
     if device is None:
         device = torch.device("cpu")
     device_str = str(torch.device(device))
@@ -162,12 +151,7 @@ def get_hilbert_order(H: int, W: int, device=None) -> torch.Tensor:
 
 
 def get_hilbert_inverse(H: int, W: int, device=None) -> torch.Tensor:
-    """
-    Return the inverse permutation: given Hilbert-ordered tokens, restore
-    raster order.
 
-        tokens_raster = tokens_hilbert[inv_perm]
-    """
     if device is None:
         device = torch.device("cpu")
     device_str = str(torch.device(device))
@@ -177,7 +161,7 @@ def get_hilbert_inverse(H: int, W: int, device=None) -> torch.Tensor:
 
 @lru_cache(maxsize=64)
 def _compute_hilbert_attn_index(H: int, W: int, device_str: str):
-    """Cached 2-D index tensor for permuting both axes of an attention matrix."""
+
     perm, inv_perm = _compute_hilbert_order(H, W, device_str)
     # attn_hilbert = attn_raster[perm[:, None], perm[None, :]]
     # Building the meshgrid once avoids re-broadcasting on every forward pass.
@@ -187,13 +171,7 @@ def _compute_hilbert_attn_index(H: int, W: int, device_str: str):
 
 
 def get_hilbert_attn_index(H: int, W: int, device=None):
-    """
-    Return (row_idx, col_idx, inv_perm) for permuting an [*, N, N] attention
-    matrix to Hilbert order and then inverse-permuting the output.
 
-        attn_hilbert = attn_raster[:, row_idx, col_idx]  # both axes, one op
-        out_raster   = out_hilbert[:, inv_perm, :]
-    """
     if device is None:
         device = torch.device("cpu")
     device_str = str(torch.device(device))

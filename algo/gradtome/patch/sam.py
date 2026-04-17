@@ -140,7 +140,8 @@ def add_decomposed_rel_pos(
     rel_w = torch.einsum("bhwc,wkc->bhwk", r_q, Rw).reshape(B, q_h*q_w, k_w)
 
     rel_pos =  (rel_h[:, : ,:, None] + rel_w[:, :, None, :]).reshape(B, q_h*q_w, k_h * k_w)
-    # breakpoint()
+    
+
     rel_pos, _  = merge(rel_pos.transpose(-1,-2))
     attn = attn + rel_pos.transpose(-1,-2)
     return attn
