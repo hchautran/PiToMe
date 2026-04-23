@@ -8,5 +8,7 @@
 from .sam import apply_patch as sam
 from .sam2 import apply_patch as sam2
 from .sam3 import apply_patch as sam3
+from .hook import apply_patch as hook
+from .channel_sort_sam import apply_patch as channel_sort_sam
 
-__all__ = ['sam', 'sam2', 'sam3']
+__all__ = ['sam', 'sam2', 'sam3', 'hook', 'channel_sort_sam']

@@ -104,60 +104,48 @@ def get_rel_pos(q_size: int, k_size: int, rel_pos: torch.Tensor) -> torch.Tensor
     return rel_pos_resized[relative_coords.long()]
 
 
-def add_decomposed_rel_pos_new(
-        attn: torch.Tensor,
-        q: torch.Tensor,
-        absolute_indices: torch.Tensor,
-        rel_pos_h: torch.Tensor,
-        rel_pos_w: torch.Tensor,
-        q_size: Tuple[int, int],
-        k_size: Tuple[int, int],
+
+def add_decomposed_rel_pos(
+    attn: torch.Tensor,
+    q: torch.Tensor,
+    merge,
+    rel_pos_h: torch.Tensor,
+    rel_pos_w: torch.Tensor,
+    q_size: Tuple[int, int],
+    k_size: Tuple[int, int],
 ) -> torch.Tensor:
     """
-    Make some adaptions after applying token merging.
     Calculate decomposed Relative Positional Embeddings from :paper:`mvitv2`.
     https://github.com/facebookresearch/mvit/blob/19786631e330df9f3622e5402b4a419a263a2c80/mvit/models/attention.py   # noqa B950
     Args:
         attn (Tensor): attention map.
-        q (Tensor): query q in the attention layer with shape (B*nHeads, N_reduced, C).
-        absolute_indices (Tensor): Tensor that records the indices of merged tokens (B, N_reduced).
+        q (Tensor): query q in the attention layer with shape (B, q_h * q_w, C).
         rel_pos_h (Tensor): relative position embeddings (Lh, C) for height axis.
         rel_pos_w (Tensor): relative position embeddings (Lw, C) for width axis.
-        q_size (Tuple): spatial sequence size of query q BEFORE merging with (q_h, q_w).
-        k_size (Tuple): spatial sequence size of key k BEFORE merging with (k_h, k_w).
+        q_size (Tuple): spatial sequence size of query q with (q_h, q_w).
+        k_size (Tuple): spatial sequence size of key k with (k_h, k_w).
 
     Returns:
         attn (Tensor): attention map with added relative positional embeddings.
     """
-    gather = mps_gather_workaround if attn.device.type == "mps" else torch.gather
-
-    _, N_reduced, dim = q.shape
     q_h, q_w = q_size
     k_h, k_w = k_size
-    Rh = get_rel_pos(q_h, k_h, rel_pos_h) # (q_h, k_h, dim)
-    Rw = get_rel_pos(q_w, k_w, rel_pos_w) # (q_w, k_w, dim)
+    Rh = get_rel_pos(q_h, k_h, rel_pos_h)
+    Rw = get_rel_pos(q_w, k_w, rel_pos_w)
 
-    # Transform absolute indices to height indices and width indices for further decomposed RPE extraction
-    h_indices = absolute_indices // q_w # (B, N_reduced)
-    w_indices = absolute_indices % q_w # (B, N_reduced)
+    B, _, dim = q.shape
+    r_q = q.reshape(B, q_h, q_w, dim)
+    rel_h = torch.einsum("bhwc,hkc->bhwk", r_q, Rh).reshape(B, q_h*q_w, k_h )
+    rel_w = torch.einsum("bhwc,wkc->bhwk", r_q, Rw).reshape(B, q_h*q_w, k_w)
 
-    nHeads = torch.tensor(q.shape[0] // absolute_indices.shape[0], device=q.device)
+    rel_pos =  (rel_h[:, : ,:, None] + rel_w[:, :, None, :]).reshape(B, q_h*q_w, k_h * k_w)
+    
 
-    # As merging indices are same for all heads
-    h_indices = h_indices.repeat_interleave(nHeads, dim=0) # (B*nHeads, N_reduced)
-    w_indices = w_indices.repeat_interleave(nHeads, dim=0) # (B*nHeads, N_reduced)
-
-    Rh_gathered = Rh[h_indices, :, :] # (B*nHeads, N_reduced, k_h, dim)
-    Rw_gathered = Rw[w_indices, :, :] # (B*nHeads, N_reduced, k_w, dim)
-
-    rel_h = torch.einsum("bnc,bnkc->bnk", q, Rh_gathered) # (B*nHeads, N_reduced, k_h)
-    rel_w = torch.einsum("bnc,bnkc->bnk", q, Rw_gathered) # (B*nHeads, N_reduced, k_w)
-
-    rel_h = gather(rel_h, dim=-1, index=h_indices.unsqueeze(1).expand(-1, N_reduced, -1)) # (B*nHeads, N_reduced, N_reduced)
-    rel_w = gather(rel_w, dim=-1, index=w_indices.unsqueeze(1).expand(-1, N_reduced, -1)) # (B*nHeads, N_reduced, N_reduced)
-
-    attn = attn + rel_h + rel_w
-
+    if merge is not None:
+        rel_pos, _  = merge(rel_pos.transpose(-1,-2), mode=None)
+        attn = attn + rel_pos.transpose(-1,-2)
+    else:
+        attn = attn + rel_pos 
     return attn
 
 
@@ -190,47 +178,48 @@ def aggregate_over_head(x: torch.Tensor, num_heads: int, option: str = "mean") -
 
 class ToMeSAMAttention(Attention):
 
-    def forward(self, x: torch.Tensor, ratio ) -> torch.Tensor:  
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, H, W, _ = x.shape
         C = _ // self.num_heads
 
-        x = x.reshape(B, H*W, -1) # (B, N, C * nHeads)
+        x = x.reshape(B, H*W, -1)
+        _, N, _ = x.shape
 
-        # mean aggregation over multiple heads to reduce dimensions for similarity comparison
-        # breakpoint()
-        metric =  aggregate_over_head(x, num_heads=self.num_heads, option="mean") 
+        info = self._tome_info
+        ratio = info["ratio_scalar"]
 
-        x_merge, x_unmerge = bipartite_soft_matching(
-            metric=metric, ratio=ratio
-        )
-
-        x_reduced, merged_indices = x_merge(x) # (B, N', C*nHeads)
-
-        _, N_reduced, _ = x_reduced.shape 
-        qkv = self.qkv(x_reduced)
-        
-        qkv = qkv.view(B, N_reduced, 3, self.num_heads, C).permute(2, 0, 3, 1, 4).reshape(3, B*self.num_heads, N_reduced, C)
-
+        qkv = self.qkv(x)
+        qkv = qkv.view(B, N, 3, self.num_heads, C).permute(2, 0, 3, 1, 4).reshape(3, B*self.num_heads, N, C)
         q, k, v = qkv.unbind(0)
+
+        cache_key = info["cache_key"]
+        x_merge   = info[f"{cache_key}_merge"]
+        x_unmerge = info[f"{cache_key}_unmerge"]
+
+        if x_merge is None:
+            x_merge, x_unmerge = bipartite_soft_matching(metric=k, ratio=ratio)
+            info[f"{cache_key}_merge"]   = x_merge
+            info[f"{cache_key}_unmerge"] = x_unmerge
+
+        k, _ = x_merge(k, mode=None)
+        v, _ = x_merge(v, mode=None)
         attn = (q * self.scale) @ k.transpose(-2, -1)
 
         if self.use_rel_pos:
-            attn = add_decomposed_rel_pos_new(
-                attn, q, merged_indices,
-                self.rel_pos_h, self.rel_pos_w, 
+            attn = add_decomposed_rel_pos(
+                attn, q, x_merge,
+                self.rel_pos_h, self.rel_pos_w,
                 (H, W), (H, W)
             )
 
         attn = attn.softmax(dim=-1)
         x = attn @ v
 
-        x = x.view(B, self.num_heads, N_reduced, -1).permute(0, 2, 1, 3).reshape(B, N_reduced, -1)
+        x = x.view(B, self.num_heads, N, -1).permute(0, 2, 1, 3).reshape(B, N, -1)
         x = self.proj(x)
+        x = x.reshape(B, H, W, -1)
 
-        x = x_unmerge(x)  # (B, N, C*nHeads)
-        x = x.reshape(B, H, W, -1) # (B, H, W, C*nHeads)
-
-        return x, x_merge, x_unmerge 
+        return x, None
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Patched Block — merge AFTER attention residual, unmerge AFTER MLP
@@ -255,6 +244,8 @@ class ToMeSAMBlock(Block):
         B, H_sp, W_sp, C = x.shape
         info  = self._tome_info
         ratio = info["ratio"].pop(0)
+        info["ratio_scalar"] = ratio
+        info["cache_key"]    = "local" if self.window_size > 0 else "global"
 
         shortcut = x
         x_n = self.norm1(x)
@@ -262,25 +253,24 @@ class ToMeSAMBlock(Block):
             ws = self.window_size
             H_w, W_w = x_n.shape[1], x_n.shape[2]
             x_n_win, pad_hw = window_partition(x_n, ws)
-            x_attn, merge, unmerge = self.attn(x_n_win, ratio)
-            x_attn = window_unpartition(x_attn, ws, pad_hw, (H_w, W_w))
+            x_attn_win, _ = self.attn(x_n_win)
+            x_attn = window_unpartition(x_attn_win, ws, pad_hw, (H_w, W_w))
         else:
+            x_attn, _ = self.attn(x_n)
 
-            x_attn, merge, unmerge = self.attn(x_n, ratio)   
+        x = shortcut + x_attn
+        x_seq = x.reshape(B, H_sp * W_sp, C)
 
+        if info["merge_mlp"] and ratio < 1.0:
+            cache_key = info["cache_key"]
+            x_merge   = info[f"{cache_key}_merge"]
+            x_unmerge = info[f"{cache_key}_unmerge"]
+            x_seq, _  = x_merge(x_seq, mode='mean')
+            x_seq     = x_seq + self.mlp(self.norm2(x_seq))
+            x_seq     = x_unmerge(x_seq)
+        else:
+            x_seq = x_seq + self.mlp(self.norm2(x_seq))
 
-
-        x = shortcut + x_attn                         
-        x_seq = x.reshape(B, H_sp * W_sp, C)          
-        # x_merge, x_unmerge = bipartite_soft_matching(
-            # metric=x_seq, ratio=ratio
-        # )
-        # x_seq_merged, _ = x_merge(x_seq)    # (B, N', C)
-        # self._tome_info["x_attn"] = x_seq
-        # self._tome_info["metric"] = metric
-
-        # x_seq = x_seq + x_unmerge(self.mlp(self.norm2(x_seq_merged)))
-        x_seq = x_seq + self.mlp(self.norm2(x_seq))
         return x_seq.reshape(B, H_sp, W_sp, C)
 
 
@@ -293,6 +283,7 @@ def apply_patch(
     algo: str = "tome",
     ratio: float = 0.9,
     margin: float = 0.5,
+    merge_mlp: bool = False,
     trace_source: bool = False,
 ) -> ImageEncoderViT:
     """
@@ -305,17 +296,23 @@ def apply_patch(
     ratio        : fraction of tokens to keep per block  (0 < ratio ≤ 1).
                    Update at runtime via ``encoder.tome_info['ratio']``.
     margin       : PiToMe energy margin (ignored for ToMe).
+    merge_mlp    : if True, also merge tokens before the MLP and unmerge after.
     trace_source : reserved for future source-tracking support.
     """
     assert algo in ("tome", "pitome"), f"algo must be 'tome' or 'pitome', got {algo!r}"
     assert 0 < ratio <= 1.0, "ratio must be in (0, 1]"
 
     tome_info = {
-        "algo":   algo,
-        "ratio":  ratio,   # scalar; rebuilt into a list each forward
-        "margin": margin,
-        "x_attn": None,
-        "metric": None 
+        "algo":           algo,
+        "ratio":          ratio,   # scalar; rebuilt into a list each forward
+        "margin":         margin,
+        "merge_mlp":      merge_mlp,
+        "ratio_scalar":   ratio,
+        "cache_key":      "local",
+        "local_merge":    None,
+        "local_unmerge":  None,
+        "global_merge":   None,
+        "global_unmerge": None,
     }
     encoder.tome_info = tome_info
 
@@ -325,7 +322,11 @@ def apply_patch(
     def _patched_forward(self, x: torch.Tensor):
         n = len(self.blocks)
         r = self.tome_info["ratio"]
-        self.tome_info["ratio"] = [r] * n
+        self.tome_info["ratio"]          = [r] * n
+        self.tome_info["local_merge"]    = None
+        self.tome_info["local_unmerge"]  = None
+        self.tome_info["global_merge"]   = None
+        self.tome_info["global_unmerge"] = None
 
         result = _orig_forward(self, x)
 

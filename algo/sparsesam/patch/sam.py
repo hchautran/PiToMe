@@ -10,13 +10,14 @@ import cuda.bindings.driver as cuda
 from cutlass.cute.runtime import from_dlpack
 import torch
 import torch.nn.functional as F
+import math
 
 _here = os.path.dirname(__file__)
 _sam_root = os.path.normpath(os.path.join(_here, '..', '..', '..', '..', 'sam-hq'))
 if _sam_root not in sys.path:
     sys.path.insert(0, _sam_root)
 
-_bsa_cute = os.path.normpath(os.path.join(_here, '..', '..', '..', '..', 'Block-Sparse-Attention', 'cute'))
+_bsa_cute = os.path.normpath(os.path.join(_here, '..', '..', '..', '..', 'cute'))
 if _bsa_cute not in sys.path:
     sys.path.insert(0, _bsa_cute)
 from flash_attn import FlashAttentionForwardAmpere
@@ -25,15 +26,14 @@ from segment_anything.modeling.image_encoder import (
     ImageEncoderViT,
     Block,
     Attention,
-    add_decomposed_rel_pos,
     window_partition,
     window_unpartition,
 )
-from ..merge import merge_wavg, bipartite_soft_matching
 from ..hilbert_utils import get_hilbert_inverse, get_hilbert_order
+from ..z_utils import get_z_order, get_z_inverse 
 
 
-    
+
 def get_rel_pos(q_size: int, k_size: int, rel_pos: torch.Tensor) -> torch.Tensor:
 
     max_rel_dist = int(2 * max(q_size, k_size) - 1)
@@ -55,7 +55,6 @@ def get_rel_pos(q_size: int, k_size: int, rel_pos: torch.Tensor) -> torch.Tensor
 
 
 
-
 def aggregate_over_head(x: torch.Tensor, num_heads: int, option: str = "mean") -> torch.Tensor:
 
     B, N, _ = x.shape
@@ -73,21 +72,23 @@ def aggregate_over_head(x: torch.Tensor, num_heads: int, option: str = "mean") -
     return metric
 
 
-_FA2_M_BLOCK_LOCAL  = 32
-_FA2_N_BLOCK_LOCAL  = 32 
+_FA2_M_BLOCK_LOCAL  = 64 
+_FA2_N_BLOCK_LOCAL  = 64
 
 _FA2_M_BLOCK_GLOBAL = 64 
-_FA2_N_BLOCK_GLOBAL = 64 
+_FA2_N_BLOCK_GLOBAL = 64
 
-_FA2_THREADS_LOCAL  = 64 
-_FA2_THREADS_GLOBAL = 128 
+_FA2_THREADS_LOCAL  = 128 
+_FA2_THREADS_GLOBAL = 128
 
 _FA2_DTYPE_FP16 = cutlass.dtype("Float16")
-
+_SPARSE_MASK_DTYPE = cutlass.dtype("Int32")
 _FA2_COMPILED: dict = {}
-
 _FA2_CAN_IMPL: dict = {}
 _HILBERT_CACHE: dict = {}
+_SPARSE_MASK_CACHE: dict = {}
+
+
 
 
 def compute_rel_bias(
@@ -123,8 +124,8 @@ def _wrap_perm(t: torch.Tensor) -> "cute.Tensor":
 
 def _get_hilbert_perm(win: int, device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
     if win not in _HILBERT_CACHE:
-        order = get_hilbert_order(win, win).to(device=device, dtype=torch.int32)
-        inv   = get_hilbert_inverse(win, win).to(device=device, dtype=torch.int64)
+        order = get_z_order(win, win).to(device=device, dtype=torch.int32)
+        inv   = get_z_inverse(win, win).to(device=device, dtype=torch.int32)
         _HILBERT_CACHE[win] = (order, inv)
     return _HILBERT_CACHE[win]
 
@@ -139,50 +140,72 @@ def _fa2_can_implement(
     return _FA2_CAN_IMPL[key]
 
 
+
+def make_A_mask(B, H, T, sparsity, m_block, n_block):
+    num_m_blocks = math.ceil(T / m_block)
+    num_n_blocks = math.ceil(T / n_block)
+    print('got here')
+    # print('num m block', num_m_blocks)
+    # print('num n block', num_n_blocks)
+
+    t = torch.zeros(B, H, num_m_blocks, num_n_blocks, dtype=torch.int32, device="cuda")
+    t = t + torch.eye(num_m_blocks, num_n_blocks, dtype=torch.int32, device="cuda")
+    t[:, :, :, :int((1-sparsity) * num_n_blocks)] = 1
+    ct = from_dlpack(t, assumed_align=4)
+    return ct
+
 def _get_fa2_compiled(
-    q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c,
+    B, H ,q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c,
     win, scale, cu_stream,
-    D: int, m_block: int, n_block: int, threads: int
+    D: int, m_block: int, n_block: int, threads: int,
+    sparsity:float
 ):
-    key = (win, D, m_block, n_block, threads)
+    key = (win, D, m_block, n_block, threads, sparsity)
+    mask_key = (B, H, win)
+    if mask_key not in _SPARSE_MASK_CACHE:
+        _SPARSE_MASK_CACHE[mask_key] = make_A_mask(B, H, win**2, sparsity,m_block, n_block ) 
+
     if key not in _FA2_COMPILED:
         _FA2_COMPILED[key] = cute.compile(
             FlashAttentionForwardAmpere(D, m_block, n_block, threads, win),
-            q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c, scale, cu_stream,
-            options="",
+            q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c, _SPARSE_MASK_CACHE[mask_key], scale, cu_stream,
         )
-    return _FA2_COMPILED[key]
+    return _FA2_COMPILED[key], _SPARSE_MASK_CACHE[mask_key]
+
+
+
+
 
 
 class ToMeSAMAttention(Attention):
 
     def forward(self, x: torch.Tensor, ratio, use_fa2=True,
+                already_hilbert: bool = False,
                 m_block: int = _FA2_M_BLOCK_LOCAL,
                 n_block: int = _FA2_N_BLOCK_LOCAL,
                 threads: int = _FA2_THREADS_LOCAL,
+                sparsity:float = 0.0
                 ) -> torch.Tensor:
         B, H, W, _ = x.shape
         Sq  = H * W
-        D   = _ // self.num_heads  
-        win = H  
+        D   = _ // self.num_heads
+        win = H
 
         qkv = self.qkv(x.view(B, Sq, -1))
         qkv = qkv.view(B, Sq, 3, self.num_heads, D).permute(2,0,1,3,4).contiguous()
         q, k, v = qkv.unbind(0)
+        o = torch.empty_like(q)
 
+        # breakpoint()
         if not hasattr(self, '_Rh') or self._Rh is None:
             self._Rh = get_rel_pos(win, win, self.rel_pos_h)
             self._Rw = get_rel_pos(win, win, self.rel_pos_w)
         Rh, Rw = self._Rh, self._Rw
 
-        rel_h, rel_w = compute_rel_bias(q, Rh, Rw, win)
-
         hilbert_order, inv_hilbert = _get_hilbert_perm(win, x.device)
-        q = q[:, hilbert_order, :, :].contiguous()
-        k = k[:, hilbert_order, :, :].contiguous()
-        v = v[:, hilbert_order, :, :].contiguous()
+        q_spatial = q[:, inv_hilbert, :, :]
+        rel_h, rel_w = compute_rel_bias(q_spatial, Rh, Rw, win)
 
-        o = torch.empty_like(q)
         cu_stream = cuda.CUstream(torch.cuda.current_stream().cuda_stream)
         q_c = _wrap_qkvo(q, _FA2_DTYPE_FP16)
         k_c = _wrap_qkvo(k, _FA2_DTYPE_FP16)
@@ -193,14 +216,20 @@ class ToMeSAMAttention(Attention):
         perm_q_c = _wrap_perm(hilbert_order)
         perm_k_c = _wrap_perm(hilbert_order)  # same perm for self-attention
 
-        compiled = _get_fa2_compiled(
-            q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c,
+        compiled, mask = _get_fa2_compiled(
+            B, H ,q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c,
             win, self.scale, cu_stream, D, m_block, n_block, threads,
+            sparsity=sparsity,
         )
-        compiled(q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c, self.scale, cu_stream)
+        compiled(q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c, mask ,self.scale, cu_stream)
 
-        o_orig = o[:, inv_hilbert, :, :].contiguous()
-        return self.proj(o_orig.reshape(B, Sq, -1)).reshape(B, H, W, -1)
+        if already_hilbert:
+            # Leave output in Hilbert order so the next block can reuse it without
+            # re-permuting.  The block-level logic handles the final un-permute.
+            return self.proj(o.reshape(B, Sq, -1)).reshape(B, H, W, -1)
+        else:
+            o_orig = o[:, inv_hilbert, :, :].contiguous()
+            return self.proj(o_orig.reshape(B, Sq, -1)).reshape(B, H, W, -1)
 
 
 class ToMeSAMBlock(Block):
@@ -209,26 +238,37 @@ class ToMeSAMBlock(Block):
         B, H_sp, W_sp, C = x.shape
         info  = self._tome_info
         ratio = info["ratio"].pop(0)
+        sparsity = info.get("sparsity", 1.0)
 
         shortcut = x
         x_n = self.norm1(x)
         if self.window_size > 0:
             ws = self.window_size
             H_w, W_w = x_n.shape[1], x_n.shape[2]
-            x_n_win, pad_hw = window_partition(x_n, ws)
-            x_attn = self.attn(x_n_win, ratio, use_fa2=True)
+            hilbert_order, inv_hilbert = _get_hilbert_perm(ws, x_n.device)
+            x_n_win, pad_hw = window_partition(x_n, ws)   # [B*nW, ws, ws, C]
+            Bw, _, _, Cw = x_n_win.shape
+            x_n_win = x_n_win.reshape(Bw, ws * ws, Cw)[:, hilbert_order, :].reshape(Bw, ws, ws, Cw)
+            x_attn = self.attn(x_n_win, ratio, use_fa2=True, already_hilbert=True)
+            Ca = x_attn.shape[-1]
+            x_attn = x_attn.reshape(Bw, ws * ws, Ca)[:, inv_hilbert, :].reshape(Bw, ws, ws, Ca)
             x_attn = window_unpartition(x_attn, ws, pad_hw, (H_w, W_w))
         else:
+            hilbert_order, inv_hilbert = _get_hilbert_perm(H_sp, x_n.device)
+            x_n = x_n.reshape(B, H_sp * W_sp, C)[:, hilbert_order, :].reshape(B, H_sp, W_sp, C)
             x_attn = self.attn(
                 x_n, ratio,
+                already_hilbert=True,
                 m_block=_FA2_M_BLOCK_GLOBAL,
                 n_block=_FA2_N_BLOCK_GLOBAL,
                 threads=_FA2_THREADS_GLOBAL,
+                sparsity=sparsity
             )
+            x_attn = x_attn.reshape(B, H_sp * W_sp, C)[:, inv_hilbert, :].reshape(B, H_sp, W_sp, C)
 
-        x = shortcut + x_attn                         
+        x = shortcut + x_attn
 
-        x_seq = x.reshape(B, H_sp * W_sp, C)          
+        x_seq = x.reshape(B, H_sp * W_sp, C)
 
         x_seq = x_seq + self.mlp(self.norm2(x_seq))
         return x_seq.reshape(B, H_sp, W_sp, C)
@@ -236,7 +276,7 @@ class ToMeSAMBlock(Block):
 
 
 
-def _warmup_fa2_kernels(encoder: ImageEncoderViT) -> None:
+def _warmup_fa2_kernels(encoder: ImageEncoderViT, sparsity) -> None:
 
     device = next(encoder.parameters()).device
     seen: set = set()
@@ -259,7 +299,7 @@ def _warmup_fa2_kernels(encoder: ImageEncoderViT) -> None:
         n_block = _FA2_N_BLOCK_GLOBAL
         threads = _FA2_THREADS_GLOBAL
 
-        compile_key = (win, D, m_block, n_block, threads)
+        compile_key = (win, D, m_block, n_block, threads,sparsity) 
         if compile_key in seen or not _fa2_can_implement(D, m_block, n_block, threads):
             seen.add(compile_key)
             continue
@@ -290,13 +330,15 @@ def _warmup_fa2_kernels(encoder: ImageEncoderViT) -> None:
 
         print(
             f"[ToMe-SAM] compiling FA2 kernel  global  "
-            f"win={win}  D={D}  m={m_block}  n={n_block}  T={threads} ...",
+            f"win={win}  D={D}  m={m_block}  n={n_block}  T={threads}  "
+            f"sparsity={sparsity:.3f}   ...",
             end=" ", flush=True,
         )
         _get_fa2_compiled(
-            q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c,
+            B, H, q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c,
             win, attn.scale, cu_stream,
             D, m_block, n_block, threads,
+            sparsity,
         )
         print("done")
 
@@ -308,17 +350,21 @@ def apply_patch(
     ratio: float = 0.9,
     margin: float = 0.5,
     trace_source: bool = False,
+    sparsity: float = 0.0,
 ) -> ImageEncoderViT:
+    print('sparsity', sparsity)
 
-    assert algo in ("tome", "pitome"), f"algo must be 'tome' or 'pitome', got {algo!r}"
+    # assert algo in ("tome", "pitome"), f"algo must be 'tome' or 'pitome', got {algo!r}"
     assert 0 < ratio <= 1.0, "ratio must be in (0, 1]"
+    assert 0.0 <= sparsity < 1.0, "sparsity must be in [0, 1)"
 
     tome_info = {
-        "algo":   algo,
-        "ratio":  ratio,   
+        "algo": algo,
+        "ratio": ratio,
         "margin": margin,
         "x_attn": None,
-        "metric": None 
+        "metric": None,
+        "sparsity": sparsity,
     }
     encoder.tome_info = tome_info
 
@@ -349,11 +395,12 @@ def apply_patch(
     print(
         f"[ToMe-SAM] patched  algo={algo}  ratio={ratio}"
         + (f"  margin={margin}" if algo == "pitome" else "")
+        + f"  sparsity={sparsity:.2f}"
         + f"  blocks={n_blocks} (global={n_global} local={n_blocks-n_global})"
         + "  strategy=post-attn-merge / post-mlp-unmerge (all blocks)"
-        + "  token-order=hilbert"
+        + "  token-order=hilbert (applied once per block-type group)"
     )
 
-    _warmup_fa2_kernels(encoder)
+    _warmup_fa2_kernels(encoder, sparsity=sparsity)
 
     return encoder

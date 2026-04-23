@@ -70,6 +70,7 @@ from segment_anything.modeling.image_encoder import (
     window_unpartition,
 )
 from ..merge import grad_bipartite_soft_matching
+from .sam_hilbert import tile_stride_matching 
 from ..hilbert_utils import get_hilbert_inverse, get_hilbert_order
 
 def get_rel_pos(q_size: int, k_size: int, rel_pos: torch.Tensor) -> torch.Tensor:
@@ -142,8 +143,11 @@ def add_decomposed_rel_pos(
     rel_pos =  (rel_h[:, : ,:, None] + rel_w[:, :, None, :]).reshape(B, q_h*q_w, k_h * k_w)
     
 
-    rel_pos, _  = merge(rel_pos.transpose(-1,-2))
-    attn = attn + rel_pos.transpose(-1,-2)
+    if merge is not None:
+        rel_pos, _  = merge(rel_pos.transpose(-1,-2), mode=None)
+        attn = attn + rel_pos.transpose(-1,-2)
+    else:
+        attn = attn + rel_pos 
     return attn
 
 
@@ -176,52 +180,50 @@ def aggregate_over_head(x: torch.Tensor, num_heads: int, option: str = "mean") -
 
 class ToMeSAMAttention(Attention):
 
-    def forward(self, x: torch.Tensor, ratio ) -> torch.Tensor:  
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, H, W, _ = x.shape
         C = _ // self.num_heads
 
-        x = x.reshape(B, H*W, -1) # (B, N, C * nHeads)
+        x = x.reshape(B, H*W, -1)
+        _, N, _ = x.shape
+        r = int(N * (1 - self._tome_info["ratio_scalar"]))
 
-        # mean aggregation over multiple heads to reduce dimensions for similarity comparison
-        # breakpoint()
-        # metric =  aggregate_over_head(x, num_heads=self.num_heads, option="mean") 
-        H_reduced, W_reduced = math.floor(H*0.5), math.floor(W*0.5) 
-
-
-
-        _, N, _ = x.shape 
         qkv = self.qkv(x)
-        
         qkv = qkv.view(B, N, 3, self.num_heads, C).permute(2, 0, 3, 1, 4).reshape(3, B*self.num_heads, N, C)
-
         q, k, v = qkv.unbind(0)
 
-        x_merge, x_unmerge = grad_bipartite_soft_matching(
-            metric=k, r=(H*W - H_reduced*W_reduced), H=H, W=W 
-        )
-        k, merged_indices = x_merge(k) # (B, N', C*nHeads)
-        v, _ = x_merge(v) # (B, N', C*nHeads)
-        
+        info = self._tome_info
+        cache_key = info["cache_key"]
+        x_merge = info[f"{cache_key}_merge"]
+        x_unmerge = info[f"{cache_key}_unmerge"]
+
+        if x_merge is None:
+            x_merge, x_unmerge = tile_stride_matching(
+                x=k, r=r, H=H, W=W
+            )
+            info[f"{cache_key}_merge"]   = x_merge
+            info[f"{cache_key}_unmerge"] = x_unmerge
+
+        k, _ = x_merge(k, mode=None)
+        v, _ = x_merge(v, mode=None)
+
         attn = (q * self.scale) @ k.transpose(-2, -1)
 
         if self.use_rel_pos:
             attn = add_decomposed_rel_pos(
                 attn, q, x_merge,
-                self.rel_pos_h, self.rel_pos_w, 
+                self.rel_pos_h, self.rel_pos_w,
                 (H, W), (H, W)
             )
 
         attn = attn.softmax(dim=-1)
-        # print(attn.shape)
         x = attn @ v
 
         x = x.view(B, self.num_heads, N, -1).permute(0, 2, 1, 3).reshape(B, N, -1)
         x = self.proj(x)
+        x = x.reshape(B, H, W, -1)
 
-        # x = x_unmerge(x)  # (B, N, C*nHeads)
-        x = x.reshape(B, H, W, -1) # (B, H, W, C*nHeads)
-
-        return x, x_merge, x_unmerge 
+        return x
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Patched Block — merge AFTER attention residual, unmerge AFTER MLP
@@ -246,29 +248,34 @@ class ToMeSAMBlock(Block):
         B, H_sp, W_sp, C = x.shape
         info  = self._tome_info
         ratio = info["ratio"].pop(0)
+        info["ratio_scalar"] = ratio
+        info["cache_key"]    = "local" if self.window_size > 0 else "global"
 
         shortcut = x
         x_n = self.norm1(x)
+
         if self.window_size > 0:
             ws = self.window_size
             H_w, W_w = x_n.shape[1], x_n.shape[2]
             x_n_win, pad_hw = window_partition(x_n, ws)
-            x_attn, merge, unmerge = self.attn(x_n_win, ratio)
-            x_attn = window_unpartition(x_attn, ws, pad_hw, (H_w, W_w))
+            x_attn_win = self.attn(x_n_win)
+            x_attn = window_unpartition(x_attn_win, ws, pad_hw, (H_w, W_w))
         else:
+            x_attn = self.attn(x_n)
 
-            x_attn, merge, unmerge = self.attn(x_n, ratio)   
+        x = shortcut + x_attn
+        x_seq = x.reshape(B, H_sp * W_sp, C)
 
-        x = shortcut + x_attn                         
+        if info["merge_mlp"] and ratio < 1.0:
+            cache_key = info["cache_key"]
+            x_merge   = info[f"{cache_key}_merge"]
+            x_unmerge = info[f"{cache_key}_unmerge"]
+            x_seq, _  = x_merge(x_seq, mode='mean')
+            x_seq     = x_seq + self.mlp(self.norm2(x_seq))
+            x_seq     = x_unmerge(x_seq)
+        else:
+            x_seq = x_seq + self.mlp(self.norm2(x_seq))
 
-        x_seq = x.reshape(B, H_sp * W_sp, C)          
-
-        # x_merge, x_unmerge = grad_bipartite_soft_matching(
-            # metric=aggregate_over_head(x_seq, 16), r=2048, H=64, W=64 
-        # )
-        # x_seq_merged, _ = x_merge(x_seq)    # (B, N', C)
-        # x_seq = x_seq + x_unmerge(self.mlp(self.norm2(x_seq_merged)))
-        x_seq = x_seq + self.mlp(self.norm2(x_seq))
         return x_seq.reshape(B, H_sp, W_sp, C)
 
 
@@ -281,6 +288,7 @@ def apply_patch(
     algo: str = "tome",
     ratio: float = 0.9,
     margin: float = 0.5,
+    merge_mlp: bool = False,
     trace_source: bool = False,
 ) -> ImageEncoderViT:
     """
@@ -293,17 +301,23 @@ def apply_patch(
     ratio        : fraction of tokens to keep per block  (0 < ratio ≤ 1).
                    Update at runtime via ``encoder.tome_info['ratio']``.
     margin       : PiToMe energy margin (ignored for ToMe).
+    merge_mlp    : if True, also merge tokens before the MLP and unmerge after.
     trace_source : reserved for future source-tracking support.
     """
     assert algo in ("tome", "pitome"), f"algo must be 'tome' or 'pitome', got {algo!r}"
     assert 0 < ratio <= 1.0, "ratio must be in (0, 1]"
 
     tome_info = {
-        "algo":   algo,
-        "ratio":  ratio,   # scalar; rebuilt into a list each forward
-        "margin": margin,
-        "x_attn": None,
-        "metric": None 
+        "algo":           algo,
+        "ratio":          ratio,   # scalar; rebuilt into a list each forward
+        "margin":         margin,
+        "merge_mlp":      merge_mlp,
+        "ratio_scalar":   ratio,
+        "cache_key":      "local",
+        "local_merge":    None,
+        "local_unmerge":  None,
+        "global_merge":   None,
+        "global_unmerge": None,
     }
     encoder.tome_info = tome_info
 
@@ -313,7 +327,11 @@ def apply_patch(
     def _patched_forward(self, x: torch.Tensor):
         n = len(self.blocks)
         r = self.tome_info["ratio"]
-        self.tome_info["ratio"] = [r] * n
+        self.tome_info["ratio"]          = [r] * n
+        self.tome_info["local_merge"]    = None
+        self.tome_info["local_unmerge"]  = None
+        self.tome_info["global_merge"]   = None
+        self.tome_info["global_unmerge"] = None
 
         result = _orig_forward(self, x)
 

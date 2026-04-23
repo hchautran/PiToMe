@@ -139,7 +139,7 @@ def _compute_hilbert_order(H: int, W: int, device_str: str):
     inv_perm = torch.argsort(perm)       # inverse permutation
 
     return perm, inv_perm
-
+    
 
 def get_hilbert_order(H: int, W: int, device=None) -> torch.Tensor:
 
