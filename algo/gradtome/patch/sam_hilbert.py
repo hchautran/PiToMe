@@ -166,7 +166,7 @@ def tile_stride_matching(
             merge_repr = merge_tokens.mean(dim=2)                     # (B, n_merge, C)
 
         merged = torch.cat([keep_tokens, merge_repr], dim=1)        # (B, N', C)
-        return merged, None
+        return merged
 
     def unmerge(x_out: torch.Tensor) -> torch.Tensor:
         Bx, _, Cx = x_out.shape

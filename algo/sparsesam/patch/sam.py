@@ -30,7 +30,9 @@ from segment_anything.modeling.image_encoder import (
     window_unpartition,
 )
 from ..hilbert_utils import get_hilbert_inverse, get_hilbert_order
-from ..z_utils import get_z_order, get_z_inverse 
+from ..z_utils import get_z_inverse, get_z_order
+from typing import Callable
+# from ..merge import get_z_order, get_z_inverse 
 
 
 
@@ -72,13 +74,13 @@ def aggregate_over_head(x: torch.Tensor, num_heads: int, option: str = "mean") -
     return metric
 
 
-_FA2_M_BLOCK_LOCAL  = 64 
-_FA2_N_BLOCK_LOCAL  = 64
+_FA2_M_BLOCK_LOCAL  = 32 
+_FA2_N_BLOCK_LOCAL  = 32  
 
 _FA2_M_BLOCK_GLOBAL = 64 
 _FA2_N_BLOCK_GLOBAL = 64
 
-_FA2_THREADS_LOCAL  = 128 
+_FA2_THREADS_LOCAL  = 64 
 _FA2_THREADS_GLOBAL = 128
 
 _FA2_DTYPE_FP16 = cutlass.dtype("Float16")
@@ -97,11 +99,11 @@ def compute_rel_bias(
     Rw: torch.Tensor,
     win: int,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    B, Sq, H, D = q_bshd.shape
-    r_q   = q_bshd.permute(0, 2, 1, 3).reshape(B * H, win, win, D)
-    rel_h = torch.einsum("bhwc,hkc->bhwk", r_q, Rh).reshape(B * H, Sq, win)
-    rel_w = torch.einsum("bhwc,wkc->bhwk", r_q, Rw).reshape(B * H, Sq, win)
-    to_fa2 = lambda t: t.reshape(B, H, Sq, win).permute(0, 2, 1, 3).contiguous()
+    B, N, D = q_bshd.shape
+    r_q   = q_bshd.reshape(B , win, win, D)
+    rel_h = torch.einsum("bhwc,hkc->bhwk", r_q, Rh).reshape(B, N, win)
+    rel_w = torch.einsum("bhwc,wkc->bhwk", r_q, Rw).reshape(B, N, win)
+    to_fa2 = lambda t: t.unsqueeze(1).permute(0, 2, 1, 3).contiguous()
     return to_fa2(rel_h), to_fa2(rel_w)
 
 
@@ -119,15 +121,11 @@ def _wrap_bias(t: torch.Tensor) -> "cute.Tensor":
 
 
 def _wrap_perm(t: torch.Tensor) -> "cute.Tensor":
-    return from_dlpack(t, assumed_align=4)
+    ct = from_dlpack(t, assumed_align=4)
+    if t.dim() == 2:
+        ct = ct.mark_layout_dynamic(leading_dim=1)
+    return ct
 
-
-def _get_hilbert_perm(win: int, device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
-    if win not in _HILBERT_CACHE:
-        order = get_z_order(win, win).to(device=device, dtype=torch.int32)
-        inv   = get_z_inverse(win, win).to(device=device, dtype=torch.int32)
-        _HILBERT_CACHE[win] = (order, inv)
-    return _HILBERT_CACHE[win]
 
 
 def _fa2_can_implement(
@@ -141,7 +139,7 @@ def _fa2_can_implement(
 
 
 
-def make_A_mask(B, H, T, sparsity, m_block, n_block):
+def make_A_mask(B, H, T, ratio, m_block, n_block):
     num_m_blocks = math.ceil(T / m_block)
     num_n_blocks = math.ceil(T / n_block)
     print('got here')
@@ -150,7 +148,7 @@ def make_A_mask(B, H, T, sparsity, m_block, n_block):
 
     t = torch.zeros(B, H, num_m_blocks, num_n_blocks, dtype=torch.int32, device="cuda")
     t = t + torch.eye(num_m_blocks, num_n_blocks, dtype=torch.int32, device="cuda")
-    t[:, :, :, :int((1-sparsity) * num_n_blocks)] = 1
+    t[:, :, :, :int(ratio * num_n_blocks)] = 1
     ct = from_dlpack(t, assumed_align=4)
     return ct
 
@@ -158,14 +156,15 @@ def _get_fa2_compiled(
     B, H ,q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c,
     win, scale, cu_stream,
     D: int, m_block: int, n_block: int, threads: int,
-    sparsity:float
+    ratio:float
 ):
-    key = (win, D, m_block, n_block, threads, sparsity)
+    key = (win, D, m_block, n_block, threads, ratio)
     mask_key = (B, H, win)
     if mask_key not in _SPARSE_MASK_CACHE:
-        _SPARSE_MASK_CACHE[mask_key] = make_A_mask(B, H, win**2, sparsity,m_block, n_block ) 
+        _SPARSE_MASK_CACHE[mask_key] = make_A_mask(B, H, win**2, ratio,m_block, n_block ) 
 
     if key not in _FA2_COMPILED:
+        # fa2 = FlashAttentionForwardAmpere(D, m_block, n_block, threads, win)
         _FA2_COMPILED[key] = cute.compile(
             FlashAttentionForwardAmpere(D, m_block, n_block, threads, win),
             q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c, _SPARSE_MASK_CACHE[mask_key], scale, cu_stream,
@@ -174,62 +173,203 @@ def _get_fa2_compiled(
 
 
 
+def tile_stride_matching(
+    x:          torch.Tensor,   # (B, N, C) in raster order, N = H*W
+    H:          int,
+    W:          int,
+    ratio:   float = 0.0,    # fraction of tokens placed in the merge (interleaved) set
+    group_size: int   = 4,      # tokens per Z group; 4 (2×2) is fine-grained
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Sort Z-curve groups by Sobel gradient magnitude and return a token permutation:
+
+      keep set  (high-gradient, fraction 1-sparsity):
+          grouped layout  — 111222333444 — each attention block sees one group
+
+      merge set (low-gradient,  fraction sparsity):
+          interleaved layout — 123412341234 — each attention block gets one
+          token from every merge group, so the sparse diagonal mask still
+          captures diverse spatial coverage.
+
+    Returns:
+        perm     (B, N) int64  — perm[b,i]     = raster index at new position i
+        inv_perm (B, N) int64  — inv_perm[b,i] = new position of raster token i
+    """
+    N = H * W
+    assert N % group_size == 0, f"N={N} must be divisible by group_size={group_size}"
+
+    n_groups = N // group_size
+    gs       = group_size
+    ratio_n  = round(ratio * N)                      # exact primary-token target
+    n_keep   = min(ratio_n // gs, n_groups)          # full groups in keep (floor → n_keep*gs ≤ ratio_n)
+    n_extra  = ratio_n - n_keep * gs if n_keep < n_groups else 0  # tokens borrowed from merge_flat start
+    n_merge  = n_groups - n_keep                     # low-gradient groups, interleaved
+
+    with torch.no_grad():
+        B, N, C = x.shape
+        device  = x.device
+
+        # ── Sobel gradient magnitude ──────────────────────────────────────────
+        x_bchw = x.reshape(B, H, W, C).permute(0, 3, 1, 2)   # (B, C, H, W)
+        x_flat = x_bchw.reshape(B * C, 1, H, W)
+
+        sobel_x_k = torch.tensor(
+            [[-1., 0, 1], [-2., 0, 2], [-1., 0, 1]],
+            device=device, dtype=torch.float16,
+        ).view(1, 1, 3, 3)
+        sobel_y_k = torch.tensor(
+            [[-1., -2., -1.], [0., 0., 0.], [1., 2., 1.]],
+            device=device, dtype=torch.float16,
+        ).view(1, 1, 3, 3)
+
+        gx = F.conv2d(x_flat, sobel_x_k, padding=1).reshape(B, C, H, W)
+        gy = F.conv2d(x_flat, sobel_y_k, padding=1).reshape(B, C, H, W)
+        sobel_flat = torch.sqrt((gx**2 + gy**2).mean(dim=1)).reshape(B, N)
+
+        # ── Z-curve group ordering ────────────────────────────────────────────
+        z_perm = get_z_order(H, W, device=device)             # (N,)
+        sobel_z = sobel_flat[:, z_perm]                       # (B, N) in Z order
+
+        # Per-group mean Sobel; sort descending (high-gradient first)
+        grp_sobel = sobel_z.view(B, n_groups, gs).mean(-1)   # (B, n_groups)
+        grp_rank  = grp_sobel.argsort(dim=-1, descending=True)  # (B, n_groups)
+
+        keep_grps  = grp_rank[:, :n_keep]                     # (B, n_keep)
+        merge_grps = grp_rank[:, n_keep:]                     # (B, n_merge)
+
+        # group_raster[g] = raster indices of the gs tokens in Z group g
+        group_raster = z_perm.view(n_groups, gs)              # (n_groups, gs)
+
+        # Keep set: grouped layout  111222...  → (B, n_keep*gs)
+        keep_raster = group_raster[keep_grps.reshape(-1)].reshape(B, n_keep, gs)
+        keep_flat   = keep_raster.permute(0, 2, 1).reshape(B, n_keep * gs)
+
+        # Merge set: interleaved layout  123412341234
+        # (B, n_merge, gs) → transpose → (B, gs, n_merge) → flatten → (B, n_merge*gs)
+        # Within each gs-stride block every merge group contributes exactly one token,
+        # so the diagonal K-tile of the sparse mask captures all merge groups.
+        merge_raster = group_raster[merge_grps.reshape(-1)].reshape(B, n_merge, gs)
+        merge_flat   = merge_raster.permute(0, 2, 1).reshape(B, n_merge * gs)
+
+    # perm[b, i] = raster index of the i-th token in the new order
+    # Primary zone = keep_flat (n_keep*gs) + first n_extra tokens of merge_flat = ratio_n tokens
+    perm_1d = torch.cat([keep_flat, merge_flat[:, :n_extra], merge_flat[:, n_extra:]], dim=1)  # (B, N)
+    inv_perm_1d = torch.argsort(perm_1d, dim=1)               # (B, N) int64
+    return perm_1d, inv_perm_1d
+    
+
 
 
 
 class ToMeSAMAttention(Attention):
 
-    def forward(self, x: torch.Tensor, ratio, use_fa2=True,
-                already_hilbert: bool = False,
+    def forward(self, x: torch.Tensor, ratio: float, use_fa2: bool = True,  # noqa: ARG002 — kept for API compat
                 m_block: int = _FA2_M_BLOCK_LOCAL,
                 n_block: int = _FA2_N_BLOCK_LOCAL,
                 threads: int = _FA2_THREADS_LOCAL,
-                sparsity:float = 0.0
-                ) -> torch.Tensor:
+                sparsity: float = 0.0,
+                custom_mask: "cute.Tensor | None" = None) -> torch.Tensor:
         B, H, W, _ = x.shape
         Sq  = H * W
         D   = _ // self.num_heads
         win = H
 
+        # q, k, v in (B*num_heads, Sq, D) for tile_stride_matching
+        BH = B * self.num_heads
         qkv = self.qkv(x.view(B, Sq, -1))
-        qkv = qkv.view(B, Sq, 3, self.num_heads, D).permute(2,0,1,3,4).contiguous()
-        q, k, v = qkv.unbind(0)
+        qkv = qkv.view(B, Sq, 3, self.num_heads, D).permute(2, 0, 3, 1, 4).reshape(3, BH, Sq, D)
+        q, k, v = qkv.unbind(0)   # each (BH, Sq, D)
         o = torch.empty_like(q)
 
-        # breakpoint()
         if not hasattr(self, '_Rh') or self._Rh is None:
             self._Rh = get_rel_pos(win, win, self.rel_pos_h)
             self._Rw = get_rel_pos(win, win, self.rel_pos_w)
         Rh, Rw = self._Rh, self._Rw
 
-        hilbert_order, inv_hilbert = _get_hilbert_perm(win, x.device)
-        q_spatial = q[:, inv_hilbert, :, :]
-        rel_h, rel_w = compute_rel_bias(q_spatial, Rh, Rw, win)
+        # (BH, Sq, 1, win) — already the shape FA2 expects for bias
+        rel_h, rel_w = compute_rel_bias(q, Rh, Rw, win)
+
+        # Compute perm once per (win, ratio) pair per encoder forward pass;
+        # reuse the same permutation for all subsequent layers of the same type.
+        # win size naturally separates local blocks (small win) from global (full size).
+        perm_cache = self._tome_info.setdefault("perm_cache", {})
+        cache_key = (win, ratio)
+        if cache_key not in perm_cache:
+            perm_cache[cache_key] = tile_stride_matching(k, win, win, ratio=ratio)
+        perm, inv_perm = perm_cache[cache_key]
+
+        # Reorder q, k, v in the new token order (keeps-first, then merges)
+        perm_e = perm.unsqueeze(-1).expand(-1, -1, D)       # (BH, Sq, D)
+        q_p = q.gather(1, perm_e)
+        k_p = k.gather(1, perm_e)
+        v_p = v.gather(1, perm_e)
+
+        # FA2 perm tensors: (BH, Sq) int32
+        # perm[b, q_perm] = q_orig — the original spatial position for each permuted slot
+        perm_q_t = perm.to(torch.int32)
+        perm_k_t = perm.to(torch.int32)
 
         cu_stream = cuda.CUstream(torch.cuda.current_stream().cuda_stream)
-        q_c = _wrap_qkvo(q, _FA2_DTYPE_FP16)
-        k_c = _wrap_qkvo(k, _FA2_DTYPE_FP16)
-        v_c = _wrap_qkvo(v, _FA2_DTYPE_FP16)
-        o_c = _wrap_qkvo(o, _FA2_DTYPE_FP16)
+        q_c = _wrap_qkvo(q_p.unsqueeze(2), _FA2_DTYPE_FP16)
+        k_c = _wrap_qkvo(k_p.unsqueeze(2), _FA2_DTYPE_FP16)
+        v_c = _wrap_qkvo(v_p.unsqueeze(2), _FA2_DTYPE_FP16)
+        o_c = _wrap_qkvo(o.unsqueeze(2), _FA2_DTYPE_FP16)
         rh_c = _wrap_bias(rel_h)
         rw_c = _wrap_bias(rel_w)
-        perm_q_c = _wrap_perm(hilbert_order)
-        perm_k_c = _wrap_perm(hilbert_order)  # same perm for self-attention
+        perm_q_c = _wrap_perm(perm_q_t)
+        perm_k_c = _wrap_perm(perm_k_t)
 
-        compiled, mask = _get_fa2_compiled(
-            B, H ,q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c,
+        compiled, default_mask = _get_fa2_compiled(
+            BH, 1, q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c,
             win, self.scale, cu_stream, D, m_block, n_block, threads,
-            sparsity=sparsity,
+            ratio=ratio,
         )
-        compiled(q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c, mask ,self.scale, cu_stream)
+        mask = custom_mask if custom_mask is not None else default_mask
+        compiled(q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c, mask, self.scale, cu_stream)
 
-        if already_hilbert:
-            # Leave output in Hilbert order so the next block can reuse it without
-            # re-permuting.  The block-level logic handles the final un-permute.
-            return self.proj(o.reshape(B, Sq, -1)).reshape(B, H, W, -1)
-        else:
-            o_orig = o[:, inv_hilbert, :, :].contiguous()
-            return self.proj(o_orig.reshape(B, Sq, -1)).reshape(B, H, W, -1)
+        # Un-permute output back to raster order, then reshape for proj
+        inv_perm_e = inv_perm.unsqueeze(-1).expand(-1, -1, D)  # (BH, Sq, D)
+        o_out = o.gather(1, inv_perm_e).reshape(B, self.num_heads, Sq, D).permute(0, 2, 1, 3).reshape(B, Sq, -1)
+        return self.proj(o_out).reshape(B, H, W, -1)
+
+
+@torch.no_grad()
+def _compute_window_dense(
+    x: torch.Tensor,   # (B, H, W, C) block input — pre-norm, pre-attn
+    ws: int,
+    ratio: float,       # top ratio fraction of windows → dense
+) -> torch.Tensor:      # (B*nW,) bool — True = dense attention
+    B, H, W, C = x.shape
+
+    # Sobel gradient magnitude averaged over channels → (B, H, W)
+    x_flat = x.permute(0, 3, 1, 2).reshape(B * C, 1, H, W)
+    sk_x = torch.tensor([[-1., 0, 1], [-2., 0, 2], [-1., 0, 1]],
+                         device=x.device, dtype=torch.float16).view(1, 1, 3, 3)
+    sk_y = torch.tensor([[-1., -2., -1.], [0., 0., 0.], [1., 2., 1.]],
+                         device=x.device, dtype=torch.float16).view(1, 1, 3, 3)
+    gx = F.conv2d(x_flat, sk_x, padding=1)
+    gy = F.conv2d(x_flat, sk_y, padding=1)
+    grad = (gx ** 2 + gy ** 2).reshape(B, C, H, W).mean(1)  # (B, H, W)
+
+    # Pad to window-size multiple (same logic as window_partition)
+    H_pad = (ws - H % ws) % ws
+    W_pad = (ws - W % ws) % ws
+    if H_pad or W_pad:
+        grad = F.pad(grad.unsqueeze(1), (0, W_pad, 0, H_pad)).squeeze(1)
+    nH, nW = (H + H_pad) // ws, (W + W_pad) // ws
+    nWin = nH * nW
+
+    # Mean gradient per window → (B, nWin)
+    win_grad = (grad.reshape(B, nH, ws, nW, ws)
+                    .permute(0, 1, 3, 2, 4)
+                    .reshape(B, nWin, ws * ws)
+                    .mean(-1))
+
+    # Top ratio fraction → dense (True)
+    n_dense = max(1, round(ratio * nWin))
+    topk_min = win_grad.topk(n_dense, dim=1).values[:, -1:]  # (B, 1) min of top-k
+    dense = win_grad >= topk_min                              # (B, nWin) bool
+    return dense.reshape(B * nWin)
 
 
 class ToMeSAMBlock(Block):
@@ -245,29 +385,54 @@ class ToMeSAMBlock(Block):
         if self.window_size > 0:
             ws = self.window_size
             H_w, W_w = x_n.shape[1], x_n.shape[2]
-            hilbert_order, inv_hilbert = _get_hilbert_perm(ws, x_n.device)
             x_n_win, pad_hw = window_partition(x_n, ws)   # [B*nW, ws, ws, C]
-            Bw, _, _, Cw = x_n_win.shape
-            x_n_win = x_n_win.reshape(Bw, ws * ws, Cw)[:, hilbert_order, :].reshape(Bw, ws, ws, Cw)
-            x_attn = self.attn(x_n_win, ratio, use_fa2=True, already_hilbert=True)
-            Ca = x_attn.shape[-1]
-            x_attn = x_attn.reshape(Bw, ws * ws, Ca)[:, inv_hilbert, :].reshape(Bw, ws, ws, Ca)
+
+            # Compute window importance once per encoder forward (first local block)
+            if info["window_dense"] is None:
+                info["window_dense"] = _compute_window_dense(x, ws, ratio)  # (B*nW,) bool
+
+            dense_flat = info["window_dense"]   # (B*nW,) bool
+            nh  = self.attn.num_heads
+            nW  = x_n_win.shape[0] // B
+            BH  = B * nW * nh
+            T   = ws * ws
+            num_m = math.ceil(T / _FA2_M_BLOCK_LOCAL)
+            num_n = math.ceil(T / _FA2_N_BLOCK_LOCAL)
+
+            # ── Block-mask: allocate once, update in-place ──────────────────
+            # local_mask_buf / local_ct_mask persist across forward passes.
+            # local_dense_bh is recomputed per image (reset in _patched_forward).
+            if info["local_mask_buf"] is None:
+                num_init = max(1, 1)    # A-mask: first 10% K-blocks always active
+                base = torch.eye(num_m, num_n, dtype=torch.int32, device=x.device)
+                base[:, :num_init] = 1                   # initial K-columns always on
+                buf  = base.unsqueeze(0).unsqueeze(0).expand(BH, 1, -1, -1).contiguous()
+
+                info["local_mask_diag"] = buf.clone()   # cached A-mask baseline
+                info["local_mask_buf"]  = buf            # persistent write-target
+                info["local_ct_mask"]   = from_dlpack(buf, assumed_align=4)
+
+            if info["local_dense_bh"] is None:
+                info["local_dense_bh"] = dense_flat.repeat_interleave(nh)
+
+            buf      = info["local_mask_buf"]
+            dense_bh = info["local_dense_bh"]
+            buf.copy_(info["local_mask_diag"])   # reset to diagonal (fast GPU memcpy)
+            buf[dense_bh] = 1                    # enable full attn for dense windows
+            ct_mask  = info["local_ct_mask"]
+
+            x_attn = self.attn(x_n_win, ratio, use_fa2=True, custom_mask=ct_mask)
             x_attn = window_unpartition(x_attn, ws, pad_hw, (H_w, W_w))
         else:
-            hilbert_order, inv_hilbert = _get_hilbert_perm(H_sp, x_n.device)
-            x_n = x_n.reshape(B, H_sp * W_sp, C)[:, hilbert_order, :].reshape(B, H_sp, W_sp, C)
             x_attn = self.attn(
                 x_n, ratio,
-                already_hilbert=True,
                 m_block=_FA2_M_BLOCK_GLOBAL,
                 n_block=_FA2_N_BLOCK_GLOBAL,
                 threads=_FA2_THREADS_GLOBAL,
                 sparsity=sparsity
             )
-            x_attn = x_attn.reshape(B, H_sp * W_sp, C)[:, inv_hilbert, :].reshape(B, H_sp, W_sp, C)
 
         x = shortcut + x_attn
-
         x_seq = x.reshape(B, H_sp * W_sp, C)
 
         x_seq = x_seq + self.mlp(self.norm2(x_seq))
@@ -323,10 +488,10 @@ def _warmup_fa2_kernels(encoder: ImageEncoderViT, sparsity) -> None:
         o_c = _wrap_qkvo(o, _FA2_DTYPE_FP16)
         rh_c = _wrap_bias(rel_h)
         rw_c = _wrap_bias(rel_w)
-        # Use Hilbert perm for warmup so the compiled signature matches inference
-        hilbert_order, _ = _get_hilbert_perm(win, device)
-        perm_q_c = _wrap_perm(hilbert_order)
-        perm_k_c = _wrap_perm(hilbert_order)
+        # Identity permutation; shape (1, Sq) matches the 2D (B, Sq) convention
+        identity = torch.arange(Sq, device=q.device, dtype=torch.int32).unsqueeze(0)  # (1, Sq)
+        perm_q_c = _wrap_perm(identity)
+        perm_k_c = _wrap_perm(identity)
 
         print(
             f"[ToMe-SAM] compiling FA2 kernel  global  "
@@ -365,6 +530,12 @@ def apply_patch(
         "x_attn": None,
         "metric": None,
         "sparsity": sparsity,
+        # persistent across forward passes (allocated once)
+        "local_mask_buf":  None,
+        "local_mask_diag": None,
+        "local_ct_mask":   None,
+        # reset per image forward
+        "local_dense_bh":  None,
     }
     encoder.tome_info = tome_info
 
@@ -374,6 +545,10 @@ def apply_patch(
         n = len(self.blocks)
         r = self.tome_info["ratio"]
         self.tome_info["ratio"] = [r] * n
+        self.tome_info["perm_cache"]     = {}   # reset per-image-forward
+        self.tome_info["mlp_perm_cache"] = {}
+        self.tome_info["window_dense"]   = None  # recomputed on first local block
+        self.tome_info["local_dense_bh"] = None  # recomputed on first local block
 
         result = _orig_forward(self, x)
 

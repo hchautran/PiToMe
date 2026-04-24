@@ -144,7 +144,7 @@ def add_decomposed_rel_pos(
     
 
     if merge is not None:
-        rel_pos, _  = merge(rel_pos.transpose(-1,-2), mode=None)
+        rel_pos  = merge(rel_pos.transpose(-1,-2), mode=None)
         attn = attn + rel_pos.transpose(-1,-2)
     else:
         attn = attn + rel_pos 
@@ -204,8 +204,8 @@ class ToMeSAMAttention(Attention):
             info[f"{cache_key}_merge"]   = x_merge
             info[f"{cache_key}_unmerge"] = x_unmerge
 
-        k, _ = x_merge(k, mode=None)
-        v, _ = x_merge(v, mode=None)
+        k = x_merge(k, mode=None)
+        v = x_merge(v, mode=None)
 
         attn = (q * self.scale) @ k.transpose(-2, -1)
 

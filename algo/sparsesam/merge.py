@@ -2,6 +2,7 @@ from typing import Callable, Tuple
 import torch
 import torch.nn.functional as F
 import math
+from .hilbert_utils import get_hilbert_order
 
 
 track_merge_and_unmerge_funcs = []
@@ -126,74 +127,145 @@ def generate_src_and_dst_idx(grad: torch.Tensor,
 
     return src_idx, dst_idx
 
-def grad_bipartite_soft_matching(metric: torch.Tensor,
-                                 H: int, W: int,
-                                 sx: int=2,
-                                 sy: int=2,
-                                 grad_method: str='sobel',
-                                 r: int=0) -> Tuple[Callable, Callable]:
- 
-    if r == 0: 
-        return do_nothing, do_nothing
+def tile_stride_matching(
+    x:          torch.Tensor,   # (B, N, C) in raster order, N = H*W
+    H:          int,
+    W:          int,
+    r:      float,          # fraction of tokens to KEEP
+    group_size: int = 4,        # tokens per Hilbert group; 4 (2×2) is fine-grained, 64 (8×8) is coarse
+) -> Tuple[Callable, Callable]:
+    """
+    Partition tokens into Hilbert groups, rank groups by spatial gradient
+    magnitude, and return (merge, unmerge) callables.
 
-    gather = mps_gather_workaround if metric.device.type == "mps" else torch.gather
-    T = metric.shape[1]
-    
+    merge(x_in)  → (x_merged, None)
+        x_in   : (B, N, C)
+        x_merged: (B, N', C)  where N' = n_keep*group_size + n_merge
+
+    unmerge(x_out) → (B, N, C)
+        Restores full spatial resolution; merge-group members receive the
+        group representative's value (mean of the original group).
+    """
+    N = H * W
+    assert N % group_size == 0, (
+        f"N={N} (H={H}, W={W}) must be divisible by group_size={group_size}"
+    )
+
+    n_groups = N // group_size
+    gs       = group_size
+
+    # How many groups to merge  (each merge removes gs-1 tokens)
+    if r <= 0 or n_groups <= 1:
+        def _identity(x_in, mode=None):
+            if mode == 'permute':
+                B_in = x_in.shape[0]
+                return torch.arange(N, device=x_in.device, dtype=torch.int32).unsqueeze(0).expand(B_in, -1)
+            return x_in, None
+        return _identity, lambda x_out, mode=None: x_out
+
+    n_merge = min(n_groups - 1, math.ceil(r / max(gs - 1, 1)))
+    n_keep  = n_groups - n_merge
+
     with torch.no_grad():
-        B, N, C = metric.shape
+        B, _ , C = x.shape
+        device  = x.device
 
-        grad = get_sobel_gradient(metric.view(B, H, W, C)) # (B, H, W)
-        a_idx, b_idx = generate_src_and_dst_idx(grad, sx=sx, sy=sy) # (B, T-num_dst), (B, num_dst)
+        # ── 1. Full-channel Sobel gradient (matches merge.py get_sobel_gradient) ──
+        # Flatten batch×channel into a single batch dim so we need only one kernel.
+        x_bchw = x.reshape(B, H, W, C).permute(0, 3, 1, 2)  # (B, C, H, W)
+        x_flat = x_bchw.reshape(B * C, 1, H, W)                       # (B*C, 1, H, W)
 
-        def split(x):
-            C = x.shape[-1]
-            src = gather(x, dim=1, index=a_idx.unsqueeze(-1).expand(B, a_idx.shape[1], C))
-            dst = gather(x, dim=1, index=b_idx.unsqueeze(-1).expand(B, b_idx.shape[1], C))
-            return src, dst
+        sobel_x_k = torch.tensor(
+            [[-1., 0, 1], [-2., 0, 2], [-1., 0, 1]],
+            device=device, dtype=torch.float16
+        ).view(1, 1, 3, 3)
+        sobel_y_k = torch.tensor(
+            [[-1., -2., -1.], [0., 0., 0.], [1., 2., 1.]],
+            device=device, dtype=torch.float16
+        ).view(1, 1, 3, 3)
 
-        metric = F.normalize(metric, p=2, dim=-1)
-        a, b = split(metric)
-        # breakpoint()
-        sim = a @ b.transpose(-1, -2)
-        r = min(a.shape[1], r)
-        node_max, node_idx = sim.max(dim=-1)
-        edge_idx = node_max.argsort(dim=-1, descending=True)[..., None]
+        gx = F.conv2d(x_flat, sobel_x_k, padding=1).reshape(B, C, H, W)
+        gy = F.conv2d(x_flat, sobel_y_k, padding=1).reshape(B, C, H, W)
+        # L2 across channels → (B, N) raster
+        sobel_flat = torch.sqrt((gx**2 + gy**2).mean(dim=1)).reshape(B, N)
 
-        unm_idx = edge_idx[..., r:, :] # lower pairwise similarity - unmerged tokens
-        src_idx = edge_idx[..., :r, :] # higher pairwise similarity - merged tokens
-        dst_idx = gather(node_idx[..., None], dim=-2, index=src_idx)
+        # ── 2. Reorder to Hilbert curve ───────────────────────────────────────
+        # perm[hilbert_pos] = raster_idx  →  x_hilbert = x_raster[:, perm]
+        perm = get_hilbert_order(H, W, device=device)       # (N,)
+        sobel_z = sobel_flat[:, perm]                       # (B, N) Hilbert order
 
-    def merge(x: torch.Tensor, mode="mean") -> Tuple[torch.Tensor, torch.Tensor]:
-        src, dst = split(x)
-        n, t1, c = src.shape
-        unm = gather(src, dim=-2, index=unm_idx.expand(n, t1 - r, c))
+        # ── 3. Per-group mean Sobel magnitude ─────────────────────────────────
+        grp_sobel = sobel_z.view(B, n_groups, gs).mean(-1)  # (B, n_groups)
 
-        if mode is not None:
-            src = gather(src, dim=-2, index=src_idx.expand(n, r, c))
-            dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce=mode)
+        # ── 4. Rank groups ascending → lowest gradient = merge candidates ─────
+        grp_rank   = grp_sobel.argsort(dim=-1)                    # (B, n_groups)
+        merge_grps = grp_rank[:, :n_merge]                         # (B, n_merge)
+        keep_grps  = grp_rank[:, n_merge:]                         # (B, n_keep)
 
-        merged_tokens = torch.cat([unm, dst], dim=1)
-        unm_absolute_indices = gather(a_idx, dim=1, index=unm_idx.squeeze(-1))
-        absolute_indices = torch.cat([unm_absolute_indices, b_idx], dim=1)
-        return merged_tokens, absolute_indices
 
-    def unmerge(x: torch.Tensor) -> torch.Tensor:
-        _, _, c = x.shape
-        unm_len = unm_idx.shape[1]
-        unm, dst = x[..., :unm_len, :], x[..., unm_len:, :]
+        # ── 5. Raster token indices per Hilbert group ─────────────────────────
+        # Hilbert group g occupies Hilbert positions [g*gs, (g+1)*gs).
+        # perm[g*gs : (g+1)*gs] gives the raster indices for group g.
+        group_raster = perm.view(n_groups, gs)                     # (n_groups, gs)
+        breakpoint()
 
-        src = gather(dst, dim=-2, index=dst_idx.expand(B, r, c))
-        # Combine back to the original shape
-        out = torch.zeros(B, N, c, device=x.device, dtype=x.dtype)
-        out.scatter_(dim=-2, index=b_idx.unsqueeze(-1).expand(B, b_idx.shape[1], c), src=dst)
-        out.scatter_(dim=-2,
-                     index=gather(a_idx, dim=1, index=unm_idx.squeeze(-1)).unsqueeze(-1).expand(B, unm_len, c),
-                     src=unm)
-        out.scatter_(dim=-2, index=gather(a_idx, dim=1, index=src_idx.squeeze(-1)).unsqueeze(-1).expand(B, r, c),
-                     src=src)
+        # Merge group raster indices: (B, n_merge, gs)
+        merge_raster = group_raster[merge_grps.reshape(-1)].reshape(B, n_merge, gs)
+        merge_flat   = merge_raster.reshape(B, n_merge * gs)       # (B, n_merge*gs)
+
+        # Keep group raster indices: (B, n_keep*gs)
+        keep_raster = group_raster[keep_grps.reshape(-1)].reshape(B, n_keep, gs)
+        keep_flat   = keep_raster.reshape(B, n_keep * gs)          # (B, n_keep*gs)
+
+        # Permute order: all z-order groups sorted ascending by gradient (lowest first),
+        # each group's tokens contiguous in z-order — no transpose/interleave.
+        full_perm     = group_raster[grp_rank.reshape(-1)].reshape(B, N)          # (B, N)
+        full_inv_perm = full_perm.argsort(dim=1)                                  # (B, N)
+        breakpoint()
+
+    n_keep_flat = n_keep * gs
+
+    def merge(x_in: torch.Tensor, mode: str = None):
+        Bx, Nx, Cx = x_in.shape
+        if mode == 'permute':
+            return full_perm                                                        # (B, N)
+
+        k_idx = keep_flat.unsqueeze(-1).expand(Bx, n_keep_flat, Cx)
+        m_idx = merge_flat.unsqueeze(-1).expand(Bx, n_merge * gs, Cx)
+        if mode is None:
+            merge_tokens = x_in.gather(1, m_idx).reshape(Bx, n_merge, gs, Cx)
+            merge_repr = merge_tokens[:, :, 0, :]                     # (B, n_merge, C)
+        else:
+            merge_tokens = x_in.gather(1, m_idx).reshape(Bx, n_merge, gs, Cx)
+            merge_repr = merge_tokens.mean(dim=2)                     # (B, n_merge, C)
+
+        keep_tokens = x_in.gather(1, k_idx)                        # (B, n_keep*gs, C)
+        return torch.cat([keep_tokens, merge_repr], dim=1)          # (B, N', C)
+
+    def unmerge(x_out: torch.Tensor, mode: str = None) -> torch.Tensor:
+        Bx, _, Cx = x_out.shape
+
+        if mode == 'permute':
+            idx = full_inv_perm.unsqueeze(-1).expand(Bx, N, Cx)
+            return x_out.gather(1, idx)                             # (B, N, C)
+
+        keep_out  = x_out[:, :n_keep_flat, :]                      # (B, n_keep*gs, C)
+        merge_out = x_out[:, n_keep_flat:, :]                      # (B, n_merge, C)
+
+        out = torch.zeros(Bx, N, Cx, device=x_out.device, dtype=x_out.dtype)
+
+        # Scatter keep tokens back to their original raster positions
+        k_idx = keep_flat.unsqueeze(-1).expand(Bx, n_keep_flat, Cx)
+        out.scatter_(1, k_idx, keep_out)
+
+        # Broadcast each group representative to all gs group members
+        m_exp = merge_out.unsqueeze(2).expand(Bx, n_merge, gs, Cx)
+        m_idx = merge_flat.unsqueeze(-1).expand(Bx, n_merge * gs, Cx)
+        out.scatter_(1, m_idx, m_exp.reshape(Bx, n_merge * gs, Cx))
 
         return out
 
     return merge, unmerge
+
 
 
