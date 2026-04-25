@@ -261,13 +261,14 @@ class ToMeSAMBlock(Block):
         x = shortcut + x_attn
         x_seq = x.reshape(B, H_sp * W_sp, C)
 
-        if info["merge_mlp"] and ratio < 1.0:
-            cache_key = info["cache_key"]
-            x_merge   = info[f"{cache_key}_merge"]
-            x_unmerge = info[f"{cache_key}_unmerge"]
-            x_seq, _  = x_merge(x_seq, mode='mean')
-            x_seq     = x_seq + self.mlp(self.norm2(x_seq))
-            x_seq     = x_unmerge(x_seq)
+        if ratio < 1.0 and self.window_size > 0:
+            # Compute merge on the full-image sequence (B, N, C) so batch dims match.
+            # The cached merge from attention was built on windowed+multi-head tensors
+            # and cannot be reused here.
+            x_merge, x_unmerge = bipartite_soft_matching(metric=x_seq, ratio=ratio)
+            x_merged, _ = x_merge(x_seq, mode='mean')
+            x_merged    = x_merged + self.mlp(self.norm2(x_merged))
+            x_seq       = x_unmerge(x_merged)
         else:
             x_seq = x_seq + self.mlp(self.norm2(x_seq))
 

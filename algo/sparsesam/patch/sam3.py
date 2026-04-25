@@ -270,7 +270,7 @@ class ToMeSAMAttention(Attention):
                 m_block: int = _FA2_M_BLOCK_LOCAL,
                 n_block: int = _FA2_N_BLOCK_LOCAL,
                 threads: int = _FA2_THREADS_LOCAL,
-                sparsity: float = 0.0,
+                
                 custom_mask: "cute.Tensor | None" = None) -> torch.Tensor:
         B, H, W, _ = x.shape
         Sq  = H * W
@@ -381,7 +381,6 @@ class ToMeSAMBlock(Block):
         B, H_sp, W_sp, C = x.shape
         info  = self._tome_info
         ratio = info["ratio"].pop(0)
-        sparsity = info.get("sparsity", 1.0)
 
         shortcut = x
         x_n = self.norm1(x)
@@ -432,7 +431,6 @@ class ToMeSAMBlock(Block):
                 m_block=_FA2_M_BLOCK_GLOBAL,
                 n_block=_FA2_N_BLOCK_GLOBAL,
                 threads=_FA2_THREADS_GLOBAL,
-                sparsity=sparsity
             )
 
         x = shortcut + x_attn
@@ -444,7 +442,7 @@ class ToMeSAMBlock(Block):
 
 
 
-def _warmup_fa2_kernels(encoder: ImageEncoderViT, sparsity) -> None:
+def _warmup_fa2_kernels(encoder: ImageEncoderViT) -> None:
 
     device = next(encoder.parameters()).device
     seen: set = set()
@@ -467,7 +465,7 @@ def _warmup_fa2_kernels(encoder: ImageEncoderViT, sparsity) -> None:
         n_block = _FA2_N_BLOCK_GLOBAL
         threads = _FA2_THREADS_GLOBAL
 
-        compile_key = (win, D, m_block, n_block, threads,sparsity) 
+        compile_key = (win, D, m_block, n_block, threads) 
         if compile_key in seen or not _fa2_can_implement(D, m_block, n_block, threads):
             seen.add(compile_key)
             continue
@@ -498,17 +496,15 @@ def _warmup_fa2_kernels(encoder: ImageEncoderViT, sparsity) -> None:
 
         print(
             f"[ToMe-SAM] compiling FA2 kernel  global  "
-            f"win={win}  D={D}  m={m_block}  n={n_block}  T={threads}  "
-            f"sparsity={sparsity:.3f}   ...",
+            f"win={win}  D={D}  m={m_block}  n={n_block}  T={threads}   ...",
             end=" ", flush=True,
         )
         _get_fa2_compiled(
             B, H, q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c,
             win, attn.scale, cu_stream,
             D, m_block, n_block, threads,
-            sparsity,
+            ratio=0.5,
         )
-        print("done")
 
 
 
@@ -518,13 +514,10 @@ def apply_patch(
     ratio: float = 0.9,
     margin: float = 0.5,
     trace_source: bool = False,
-    sparsity: float = 0.0,
 ) -> ImageEncoderViT:
-    print('sparsity', sparsity)
 
     # assert algo in ("tome", "pitome"), f"algo must be 'tome' or 'pitome', got {algo!r}"
     assert 0 < ratio <= 1.0, "ratio must be in (0, 1]"
-    assert 0.0 <= sparsity < 1.0, "sparsity must be in [0, 1)"
 
     tome_info = {
         "algo": algo,
@@ -532,7 +525,6 @@ def apply_patch(
         "margin": margin,
         "x_attn": None,
         "metric": None,
-        "sparsity": sparsity,
         # persistent across forward passes (allocated once)
         "local_mask_buf":  None,
         "local_mask_diag": None,
@@ -573,12 +565,11 @@ def apply_patch(
     print(
         f"[ToMe-SAM] patched  algo={algo}  ratio={ratio}"
         + (f"  margin={margin}" if algo == "pitome" else "")
-        + f"  sparsity={sparsity:.2f}"
         + f"  blocks={n_blocks} (global={n_global} local={n_blocks-n_global})"
         + "  strategy=post-attn-merge / post-mlp-unmerge (all blocks)"
         + "  token-order=hilbert (applied once per block-type group)"
     )
 
-    _warmup_fa2_kernels(encoder, sparsity=sparsity)
+    _warmup_fa2_kernels(encoder)
 
     return encoder

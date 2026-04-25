@@ -74,13 +74,13 @@ def aggregate_over_head(x: torch.Tensor, num_heads: int, option: str = "mean") -
     return metric
 
 
-_FA2_M_BLOCK_LOCAL  = 64 
-_FA2_N_BLOCK_LOCAL  = 64  
+_FA2_M_BLOCK_LOCAL  = 32 
+_FA2_N_BLOCK_LOCAL  = 32  
 
 _FA2_M_BLOCK_GLOBAL = 64 
 _FA2_N_BLOCK_GLOBAL = 64
 
-_FA2_THREADS_LOCAL  = 128 
+_FA2_THREADS_LOCAL  = 64 
 _FA2_THREADS_GLOBAL = 128
 
 _FA2_DTYPE_FP16 = cutlass.dtype("Float16")
@@ -230,36 +230,17 @@ def tile_stride_matching(
         gy = F.conv2d(x_flat, sobel_y_k, padding=1).reshape(B, C, H, W)
         sobel_flat = torch.sqrt((gx**2 + gy**2).mean(dim=1)).reshape(B, N)
 
-        # ── Z-curve group ordering ────────────────────────────────────────────
         z_perm = get_z_order(H, W, device=device)             # (N,)
-        # z_perm = torch.arange(H*W, device= device)             # (N,)
         sobel_z = sobel_flat[:, z_perm]                       # (B, N) in Z order
 
-        # Per-group mean Sobel; sort descending (high-gradient first)
         grp_sobel = sobel_z.view(B, n_groups, gs).mean(-1)   # (B, n_groups)
         grp_rank  = grp_sobel.argsort(dim=-1, descending=True)  # (B, n_groups)
-        # grp_rank = torch.stack([
-            # torch.randperm(n_groups, device=device) for _ in range(B)
-        # ], dim=0)  
-
-        # keep_grps  = grp_rank[:, :n_keep]                     # (B, n_keep)
-        # merge_grps = grp_rank[:, n_keep:]                     # (B, n_merge)
-
-        # # group_raster[g] = raster indices of the gs tokens in Z group g
         group_raster = z_perm.view(n_groups, gs)              # (n_groups, gs)
 
-        # # Keep set: grouped layout  111222...  → (B, n_keep*gs)
-        # group_raster = group_raster[grp_rank.reshape(-1)].reshape(B, N, gs)
         all_raster = group_raster[grp_rank.reshape(-1)].reshape(B, n_groups, gs)
 
-        # keep_flat   = keep_raster.permute(0, 2, 1).reshape(B, n_keep * gs)
-
-        # merge_raster = group_raster[merge_grps.reshape(-1)].reshape(B, n_merge, gs)
-        # merge_flat   = merge_raster.permute(0, 2, 1).reshape(B, n_merge * gs)
-
-    # perm_1d = torch.cat([keep_flat, merge_flat[:, :n_extra], merge_flat[:, n_extra:]], dim=1)  # (B, N)
+      
     perm_1d =  all_raster.permute(0, 2, 1).reshape(B,  n_groups * gs)  # (B, N)
-    # perm_1d =  all_raster.reshape(B,  n_groups * gs)  # (B, N)
     inv_perm_1d = torch.argsort(perm_1d, dim=1)               # (B, N) int64
     return perm_1d, inv_perm_1d
     
@@ -273,7 +254,6 @@ class ToMeSAMAttention(Attention):
                 m_block: int = _FA2_M_BLOCK_LOCAL,
                 n_block: int = _FA2_N_BLOCK_LOCAL,
                 threads: int = _FA2_THREADS_LOCAL,
-                sparsity: float = 0.0,
                 custom_mask: "cute.Tensor | None" = None,
                 return_perm: bool = False) -> torch.Tensor:
         B, H, W, _ = x.shape
@@ -295,9 +275,6 @@ class ToMeSAMAttention(Attention):
         # (BH, Sq, 1, win) — already the shape FA2 expects for bias
         rel_h, rel_w = compute_rel_bias(q, Rh, Rw, win)
 
-        # Compute perm once per (win, ratio) pair per encoder forward pass;
-        # reuse the same permutation for all subsequent layers of the same type.
-        # win size naturally separates local blocks (small win) from global (full size).
         perm_cache = self._tome_info.setdefault("perm_cache", {})
         cache_key = (win, ratio)
         if cache_key not in perm_cache:
@@ -332,8 +309,6 @@ class ToMeSAMAttention(Attention):
         )
         mask = custom_mask if custom_mask is not None else default_mask
         compiled(q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c, mask, self.scale, cu_stream)
-
-        # Un-permute output back to raster order, then reshape for proj
         inv_perm_e = inv_perm.unsqueeze(-1).expand(-1, -1, D)  # (BH, Sq, D)
         o_out = o.gather(1, inv_perm_e).reshape(B, self.num_heads, Sq, D).permute(0, 2, 1, 3).reshape(B, Sq, -1)
         out = self.proj(o_out).reshape(B, H, W, -1)
@@ -389,7 +364,6 @@ class ToMeSAMBlock(Block):
         B, H_sp, W_sp, C = x.shape
         info  = self._tome_info
         ratio = info["ratio"].pop(0)
-        sparsity = info.get("sparsity", 1.0)
 
         shortcut = x
         x_n = self.norm1(x)
@@ -422,52 +396,28 @@ class ToMeSAMBlock(Block):
                 m_block=_FA2_M_BLOCK_GLOBAL,
                 n_block=_FA2_N_BLOCK_GLOBAL,
                 threads=_FA2_THREADS_GLOBAL,
-                sparsity=sparsity,
                 return_perm=True,
             )
 
         x = shortcut + x_attn
         x_seq = x.reshape(B, H_sp * W_sp, C)
 
-        # if ratio < 1.0 and self.window_size == 0:
-        #     # Global block: consensus ordering across all heads via average rank.
-        #     # inv_perm[b*nh+h, token] = rank assigned to that token by head h.
-        #     # Averaging ranks then re-sorting gives a single head-agnostic ordering.
-        #     nh = self.attn.num_heads
-        #     avg_rank   = inv_perm.view(B, nh, -1).float().mean(dim=1)  # (B, N)
-        #     perm_b     = avg_rank.argsort(dim=1)                        # (B, N)
-        #     inv_perm_b = perm_b.argsort(dim=1)                          # (B, N)
-        #     keep_n = max(1, round(0.5 * x_seq.shape[1]))
-        #     perm_e     = perm_b.unsqueeze(-1).expand(-1, -1, C)
-        #     inv_perm_e = inv_perm_b.unsqueeze(-1).expand(-1, -1, C)
-        #     x_perm = x_seq.gather(1, perm_e)
-        #     x_kept = x_perm[:, :keep_n, :]
-        #     x_kept = x_kept + self.mlp(self.norm2(x_kept))
-        #     x_perm[:, :keep_n, :] = x_kept
-        #     x_seq = x_perm.gather(1, inv_perm_e)
 
         if ratio < 1.0 and self.window_size > 0:
-            # Local block: borrow the global layer's full-image perm from the cache.
-            # The global attention stores its perm at key (H_sp, ratio); it is available
-            # once any global block has run this forward pass.
             global_cached = info.get("perm_cache", {}).get((H_sp, ratio))
             if global_cached is not None:
                 g_perm, g_inv_perm = global_cached
-                # g_inv_perm shape: (B*nh, N) — average rank across heads
                 nh = self.attn.num_heads
-                avg_rank   = g_inv_perm.view(B, nh, -1).float().mean(dim=1)  # (B, N)
-                perm_b     = avg_rank.argsort(dim=1)                          # (B, N)
-                inv_perm_b = perm_b.argsort(dim=1)                            # (B, N)
                 keep_n = max(1, round(ratio * x_seq.shape[1]))
-                perm_e     = perm_b.unsqueeze(-1).expand(-1, -1, C)
-                inv_perm_e = inv_perm_b.unsqueeze(-1).expand(-1, -1, C)
-                x_perm = x_seq.gather(1, perm_e)
-                x_kept = x_perm[:, :keep_n, :]
-                x_kept = x_kept + self.mlp(self.norm2(x_kept))
-                x_perm[:, :keep_n, :] = x_kept
-                x_seq = x_perm.gather(1, inv_perm_e)
+                # Average rank across heads → topk gives important-token indices directly.
+                # topk(largest=False) + scatter avoids 2× full-N argsort and 2× full-N gather.
+                avg_rank = g_inv_perm.view(B, nh, -1).float().mean(dim=1)    # (B, N)
+                top_idx  = avg_rank.topk(keep_n, dim=1, largest=False).indices  # (B, keep_n)
+                idx_e    = top_idx.unsqueeze(-1).expand(-1, -1, C)
+                x_kept   = x_seq.gather(1, idx_e)                             # (B, keep_n, C)
+                x_kept   = x_kept + self.mlp(self.norm2(x_kept))
+                x_seq    = x_seq.scatter(1, idx_e, x_kept)
             else:
-                # Global perm not yet computed (this local block precedes all global blocks)
                 x_seq = x_seq + self.mlp(self.norm2(x_seq))
 
         else:
@@ -477,7 +427,7 @@ class ToMeSAMBlock(Block):
 
 
 
-def _warmup_fa2_kernels(encoder: ImageEncoderViT, sparsity) -> None:
+def _warmup_fa2_kernels(encoder: ImageEncoderViT) -> None:
 
     device = next(encoder.parameters()).device
     seen: set = set()
@@ -500,7 +450,7 @@ def _warmup_fa2_kernels(encoder: ImageEncoderViT, sparsity) -> None:
         n_block = _FA2_N_BLOCK_GLOBAL
         threads = _FA2_THREADS_GLOBAL
 
-        compile_key = (win, D, m_block, n_block, threads,sparsity) 
+        compile_key = (win, D, m_block, n_block, threads)
         if compile_key in seen or not _fa2_can_implement(D, m_block, n_block, threads):
             seen.add(compile_key)
             continue
@@ -524,22 +474,20 @@ def _warmup_fa2_kernels(encoder: ImageEncoderViT, sparsity) -> None:
         o_c = _wrap_qkvo(o, _FA2_DTYPE_FP16)
         rh_c = _wrap_bias(rel_h)
         rw_c = _wrap_bias(rel_w)
-        # Identity permutation; shape (1, Sq) matches the 2D (B, Sq) convention
         identity = torch.arange(Sq, device=q.device, dtype=torch.int32).unsqueeze(0)  # (1, Sq)
         perm_q_c = _wrap_perm(identity)
         perm_k_c = _wrap_perm(identity)
 
         print(
             f"[ToMe-SAM] compiling FA2 kernel  global  "
-            f"win={win}  D={D}  m={m_block}  n={n_block}  T={threads}  "
-            f"sparsity={sparsity:.3f}   ...",
+            f"win={win}  D={D}  m={m_block}  n={n_block}  T={threads}   ...",
             end=" ", flush=True,
         )
         _get_fa2_compiled(
             B, H, q_c, k_c, v_c, o_c, rh_c, rw_c, perm_q_c, perm_k_c,
             win, attn.scale, cu_stream,
             D, m_block, n_block, threads,
-            sparsity,
+            ratio=0.5,
         )
         print("done")
 
@@ -551,13 +499,9 @@ def apply_patch(
     ratio: float = 0.9,
     margin: float = 0.5,
     trace_source: bool = False,
-    sparsity: float = 0.0,
 ) -> ImageEncoderViT:
-    print('sparsity', sparsity)
-
     # assert algo in ("tome", "pitome"), f"algo must be 'tome' or 'pitome', got {algo!r}"
     assert 0 < ratio <= 1.0, "ratio must be in (0, 1]"
-    assert 0.0 <= sparsity < 1.0, "sparsity must be in [0, 1)"
 
     tome_info = {
         "algo": algo,
@@ -565,7 +509,6 @@ def apply_patch(
         "margin": margin,
         "x_attn": None,
         "metric": None,
-        "sparsity": sparsity,
         # persistent across forward passes (allocated once)
         "local_mask_buf":  None,
         "local_mask_diag": None,
@@ -606,12 +549,11 @@ def apply_patch(
     print(
         f"[ToMe-SAM] patched  algo={algo}  ratio={ratio}"
         + (f"  margin={margin}" if algo == "pitome" else "")
-        + f"  sparsity={sparsity:.2f}"
         + f"  blocks={n_blocks} (global={n_global} local={n_blocks-n_global})"
         + "  strategy=post-attn-merge / post-mlp-unmerge (all blocks)"
         + "  token-order=hilbert (applied once per block-type group)"
     )
 
-    _warmup_fa2_kernels(encoder, sparsity=sparsity)
+    _warmup_fa2_kernels(encoder)
 
     return encoder
