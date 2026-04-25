@@ -220,7 +220,13 @@ class ToMeSAMAttentionRandom(Attention):
         rel_h, rel_w = compute_rel_bias(q, Rh, Rw, win)
 
         # Random permutation — NOT cached across layers (each layer gets fresh random order)
-        perm, inv_perm = tile_stride_matching_random(k, win, win, ratio=ratio)
+        
+        # perm, inv_perm = tile_stride_matching_random(k, win, win, ratio=ratio)
+        perm_cache = self._tome_info.setdefault("perm_cache", {})
+        cache_key = (win, ratio)
+        if cache_key not in perm_cache:
+            perm_cache[cache_key] = perm, inv_perm = tile_stride_matching_random(k, win, win, ratio=ratio)
+        perm, inv_perm = perm_cache[cache_key]
 
         perm_e = perm.unsqueeze(-1).expand(-1, -1, D)
         q_p = q.gather(1, perm_e)
@@ -306,24 +312,7 @@ class ToMeSAMBlockRandom(Block):
             num_m = math.ceil(T / _FA2_M_BLOCK_LOCAL)
             num_n = math.ceil(T / _FA2_N_BLOCK_LOCAL)
 
-            # if info["local_mask_buf"] is None:
-            #     num_init = max(1, int(ratio * num_m)) 
-            #     base = torch.eye(num_m, num_n, dtype=torch.int32, device=x.device)
-            #     base[:, :num_init] = 1
-            #     buf  = base.unsqueeze(0).unsqueeze(0).expand(BH, 1, -1, -1).contiguous()
 
-            #     info["local_mask_diag"] = buf.clone()
-            #     info["local_mask_buf"]  = buf
-            #     info["local_ct_mask"]   = from_dlpack(buf, assumed_align=4)
-
-            # if info["local_dense_bh"] is None:
-            #     info["local_dense_bh"] = dense_flat.repeat_interleave(nh)
-
-            # buf      = info["local_mask_buf"]
-            # # dense_bh = info["local_dense_bh"]
-            # buf.copy_(info["local_mask_diag"])
-            # # buf[dense_bh] = 1
-            # ct_mask  = info["local_ct_mask"]
 
             x_attn, perm, inv_perm = self.attn(
                 x_n_win, ratio,
@@ -345,23 +334,37 @@ class ToMeSAMBlockRandom(Block):
         x = shortcut + x_attn
         x_seq = x.reshape(B, H_sp * W_sp, C)
 
-        if self.window_size == 0 and ratio < 1.0:
-            keep_n = max(1, round(0.25 * x_seq.shape[1]))
-            perm = perm.view(B, self.attn.num_heads, -1)[:, 0, :]
-            inv_perm = inv_perm.view(B, self.attn.num_heads, -1)[:, 0, :]
-            perm_e = perm.unsqueeze(-1).expand(-1, -1, C)
-            inv_perm_e = inv_perm.unsqueeze(-1).expand(-1, -1, C)
 
-            x_perm = x_seq.gather(1, perm_e)
-            x_kept = x_perm[:, :keep_n, :]
-            x_kept = x_kept + self.mlp(self.norm2(x_kept))
-            x_perm[:, :keep_n, :] = x_kept
 
-            x_seq = x_perm.gather(1, inv_perm_e)
+        if ratio < 1.0 and self.window_size > 0:
+            # Local block: borrow the global layer's full-image perm from the cache.
+            # The global attention stores its perm at key (H_sp, ratio); it is available
+            # once any global block has run this forward pass.
+            global_cached = info.get("perm_cache", {}).get((H_sp, ratio))
+            if global_cached is not None:
+                g_perm, g_inv_perm = global_cached
+                # g_inv_perm shape: (B*nh, N) — average rank across heads
+                nh = self.attn.num_heads
+                avg_rank   = g_inv_perm.view(B, nh, -1).float().mean(dim=1)  # (B, N)
+                perm_b     = avg_rank.argsort(dim=1)                          # (B, N)
+                inv_perm_b = perm_b.argsort(dim=1)                            # (B, N)
+                keep_n = max(1, round(ratio * x_seq.shape[1]))
+                perm_e     = perm_b.unsqueeze(-1).expand(-1, -1, C)
+                inv_perm_e = inv_perm_b.unsqueeze(-1).expand(-1, -1, C)
+                x_perm = x_seq.gather(1, perm_e)
+                x_kept = x_perm[:, :keep_n, :]
+                x_kept = x_kept + self.mlp(self.norm2(x_kept))
+                x_perm[:, :keep_n, :] = x_kept
+                x_seq = x_perm.gather(1, inv_perm_e)
+            else:
+                # Global perm not yet computed (this local block precedes all global blocks)
+                x_seq = x_seq + self.mlp(self.norm2(x_seq))
+
         else:
             x_seq = x_seq + self.mlp(self.norm2(x_seq))
 
         return x_seq.reshape(B, H_sp, W_sp, C)
+
 
 
 def _warmup_fa2_kernels(encoder: ImageEncoderViT, sparsity) -> None:
@@ -467,6 +470,7 @@ def apply_patch(
         self.tome_info["mlp_perm_cache"] = {}
         self.tome_info["window_dense"]   = None
         self.tome_info["local_dense_bh"] = None
+        self.tome_info["global_stage"]   = 0
 
         result = _orig_forward(self, x)
 

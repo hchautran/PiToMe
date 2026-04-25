@@ -259,6 +259,7 @@ def tile_stride_matching(
 
     # perm_1d = torch.cat([keep_flat, merge_flat[:, :n_extra], merge_flat[:, n_extra:]], dim=1)  # (B, N)
     perm_1d =  all_raster.permute(0, 2, 1).reshape(B,  n_groups * gs)  # (B, N)
+    # perm_1d =  all_raster.reshape(B,  n_groups * gs)  # (B, N)
     inv_perm_1d = torch.argsort(perm_1d, dim=1)               # (B, N) int64
     return perm_1d, inv_perm_1d
     
@@ -406,30 +407,7 @@ class ToMeSAMBlock(Block):
             nW  = x_n_win.shape[0] // B
             BH  = B * nW * nh
             T   = ws * ws
-            num_m = math.ceil(T / _FA2_M_BLOCK_LOCAL)
-            num_n = math.ceil(T / _FA2_N_BLOCK_LOCAL)
 
-            # ── Block-mask: allocate once, update in-place ──────────────────
-            # local_mask_buf / local_ct_mask persist across forward passes.
-            # local_dense_bh is recomputed per image (reset in _patched_forward).
-            # if info["local_mask_buf"] is None:
-            #     num_init = max(1, int(ratio * num_m))    # A-mask: first 10% K-blocks always active
-            #     base = torch.eye(num_m, num_n, dtype=torch.int32, device=x.device)
-            #     base[:, :num_init] = 1                   # initial K-columns always on
-            #     buf  = base.unsqueeze(0).unsqueeze(0).expand(BH, 1, -1, -1).contiguous()
-
-            #     info["local_mask_diag"] = buf.clone()   # cached A-mask baseline
-            #     info["local_mask_buf"]  = buf            # persistent write-target
-            #     info["local_ct_mask"]   = from_dlpack(buf, assumed_align=4)
-
-            # if info["local_dense_bh"] is None:
-            #     info["local_dense_bh"] = dense_flat.repeat_interleave(nh)
-
-            # buf      = info["local_mask_buf"]
-            # # dense_bh = info["local_dense_bh"]
-            # buf.copy_(info["local_mask_diag"])   # reset to diagonal (fast GPU memcpy)
-            # # buf[dense_bh] = 1                    # enable full attn for dense windows
-            # ct_mask  = info["local_ct_mask"]
 
             x_attn, perm, inv_perm = self.attn(
                 x_n_win, ratio,
@@ -451,25 +429,51 @@ class ToMeSAMBlock(Block):
         x = shortcut + x_attn
         x_seq = x.reshape(B, H_sp * W_sp, C)
 
-        if self.window_size == 0 and ratio < 1.0:
-            keep_n = max(1, round(0.25 * x_seq.shape[1]))
-            # perm returned from attention is per head (BH, N);
-            # use one batch-level token order for pruning before the MLP.
-            perm = perm.view(B, self.attn.num_heads, -1)[:, 0, :]
-            inv_perm = inv_perm.view(B, self.attn.num_heads, -1)[:, 0, :]
-            perm_e = perm.unsqueeze(-1).expand(-1, -1, C)
-            inv_perm_e = inv_perm.unsqueeze(-1).expand(-1, -1, C)
-            x_perm = x_seq.gather(1, perm_e)
-            x_kept = x_perm[:, :keep_n, :]
-            x_kept = x_kept + self.mlp(self.norm2(x_kept))
-            x_perm[:, :keep_n, :] = x_kept
+        # if ratio < 1.0 and self.window_size == 0:
+        #     # Global block: consensus ordering across all heads via average rank.
+        #     # inv_perm[b*nh+h, token] = rank assigned to that token by head h.
+        #     # Averaging ranks then re-sorting gives a single head-agnostic ordering.
+        #     nh = self.attn.num_heads
+        #     avg_rank   = inv_perm.view(B, nh, -1).float().mean(dim=1)  # (B, N)
+        #     perm_b     = avg_rank.argsort(dim=1)                        # (B, N)
+        #     inv_perm_b = perm_b.argsort(dim=1)                          # (B, N)
+        #     keep_n = max(1, round(0.5 * x_seq.shape[1]))
+        #     perm_e     = perm_b.unsqueeze(-1).expand(-1, -1, C)
+        #     inv_perm_e = inv_perm_b.unsqueeze(-1).expand(-1, -1, C)
+        #     x_perm = x_seq.gather(1, perm_e)
+        #     x_kept = x_perm[:, :keep_n, :]
+        #     x_kept = x_kept + self.mlp(self.norm2(x_kept))
+        #     x_perm[:, :keep_n, :] = x_kept
+        #     x_seq = x_perm.gather(1, inv_perm_e)
 
-            x_seq = x_perm.gather(1, inv_perm_e)
+        if ratio < 1.0 and self.window_size > 0:
+            # Local block: borrow the global layer's full-image perm from the cache.
+            # The global attention stores its perm at key (H_sp, ratio); it is available
+            # once any global block has run this forward pass.
+            global_cached = info.get("perm_cache", {}).get((H_sp, ratio))
+            if global_cached is not None:
+                g_perm, g_inv_perm = global_cached
+                # g_inv_perm shape: (B*nh, N) — average rank across heads
+                nh = self.attn.num_heads
+                avg_rank   = g_inv_perm.view(B, nh, -1).float().mean(dim=1)  # (B, N)
+                perm_b     = avg_rank.argsort(dim=1)                          # (B, N)
+                inv_perm_b = perm_b.argsort(dim=1)                            # (B, N)
+                keep_n = max(1, round(ratio * x_seq.shape[1]))
+                perm_e     = perm_b.unsqueeze(-1).expand(-1, -1, C)
+                inv_perm_e = inv_perm_b.unsqueeze(-1).expand(-1, -1, C)
+                x_perm = x_seq.gather(1, perm_e)
+                x_kept = x_perm[:, :keep_n, :]
+                x_kept = x_kept + self.mlp(self.norm2(x_kept))
+                x_perm[:, :keep_n, :] = x_kept
+                x_seq = x_perm.gather(1, inv_perm_e)
+            else:
+                # Global perm not yet computed (this local block precedes all global blocks)
+                x_seq = x_seq + self.mlp(self.norm2(x_seq))
+
         else:
             x_seq = x_seq + self.mlp(self.norm2(x_seq))
 
         return x_seq.reshape(B, H_sp, W_sp, C)
-
 
 
 
