@@ -1,6 +1,6 @@
 """GradToMe partial: spatial-gradient-aware merged-K/V attention +
 merge/MLP/unmerge. Falls back to plain (chained) bipartite when the spatial
-grid isn't a perfect square. Mirrors SAM-side patch shape: subclass + swap.
+grid isn't a perfect square. 
 """
 
 from __future__ import annotations
@@ -12,7 +12,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 
-from .._pe_stage import _find_vision_transformer, _vit_uses_cls_token
+from .._pe_stage import (
+    SelfAttention, ResidualAttentionBlock,
+    _find_vision_transformer, _vit_uses_cls_token,
+)
 from .merge import grad_bipartite_soft_matching, do_nothing
 from ..tome.merge import bipartite_soft_matching
 
@@ -115,105 +118,91 @@ def _chained_bipartite_match(metric: torch.Tensor, ratio: float,
 
 # ── Subclasses ───────────────────────────────────────────────────────────
 
-def _make_classes():
-    from core.vision_encoder.pe import SelfAttention, ResidualAttentionBlock
+class GradTomePEPartialAttention(SelfAttention):
+    """SelfAttention with full Q and GradToMe-merged K/V."""
 
-    class GradTomePEPartialAttention(SelfAttention):
-        """SelfAttention with full Q and GradToMe-merged K/V."""
+    def forward(self, x, attn_mask=None):
+        info    = self._tome_info
+        ratio   = info.get("ratio", 1.0)
+        has_cls = info.get("use_cls_token", False)
+        sx      = info.get("grad_sx", 2)
+        sy      = info.get("grad_sy", 2)
 
-        def forward(self, x, attn_mask=None):
-            info    = self._tome_info
-            ratio   = info.get("ratio", 1.0)
-            has_cls = info.get("use_cls_token", False)
-            sx      = info.get("grad_sx", 2)
-            sy      = info.get("grad_sy", 2)
+        if ratio >= 1.0:
+            info["_block_merge_fn"]   = do_nothing
+            info["_block_unmerge_fn"] = do_nothing
+            return super().forward(x, attn_mask=attn_mask)
 
-            if ratio >= 1.0:
-                info["_block_merge_fn"]   = do_nothing
-                info["_block_unmerge_fn"] = do_nothing
-                return super().forward(x, attn_mask=attn_mask)
+        B, S, E = x.shape
+        H = self.num_heads
+        D = self.head_dim
 
-            B, S, E = x.shape
-            H = self.num_heads
-            D = self.head_dim
+        proj = F.linear(x, self.in_proj_weight, self.in_proj_bias)
+        proj = (proj.unflatten(-1, (3, E))
+                     .unsqueeze(0).transpose(0, -2).squeeze(-2).contiguous())
+        q, k, v = proj[0], proj[1], proj[2]
 
-            proj = F.linear(x, self.in_proj_weight, self.in_proj_bias)
-            proj = (proj.unflatten(-1, (3, E))
-                         .unsqueeze(0).transpose(0, -2).squeeze(-2).contiguous())
-            q, k, v = proj[0], proj[1], proj[2]
+        q = rearrange(q, "b s (h d) -> b h s d", h=H)
+        k = rearrange(k, "b s (h d) -> b h s d", h=H)
+        v = rearrange(v, "b s (h d) -> b h s d", h=H)
 
-            q = rearrange(q, "b s (h d) -> b h s d", h=H)
-            k = rearrange(k, "b s (h d) -> b h s d", h=H)
-            v = rearrange(v, "b s (h d) -> b h s d", h=H)
+        if self.rope:
+            q, k = self.rope(q, k)
 
-            if self.rope:
-                q, k = self.rope(q, k)
+        k_flat = rearrange(k, "b h s d -> b s (h d)")
+        v_flat = rearrange(v, "b h s d -> b s (h d)")
 
-            k_flat = rearrange(k, "b h s d -> b s (h d)")
-            v_flat = rearrange(v, "b h s d -> b s (h d)")
+        metric = x.mean(0, keepdim=True)
+        merge_fn, unmerge_fn = _build_grad_match(metric, ratio, has_cls, sx, sy)
+        info["_block_merge_fn"]   = merge_fn
+        info["_block_unmerge_fn"] = unmerge_fn
 
-            metric = x.mean(0, keepdim=True)
-            merge_fn, unmerge_fn = _build_grad_match(metric, ratio, has_cls, sx, sy)
-            info["_block_merge_fn"]   = merge_fn
-            info["_block_unmerge_fn"] = unmerge_fn
+        if merge_fn is do_nothing:
+            return super().forward(x, attn_mask=attn_mask)
 
-            if merge_fn is do_nothing:
-                return super().forward(x, attn_mask=attn_mask)
+        k_merged_flat, _ = merge_fn(k_flat, mode="mean")
+        v_merged_flat, _ = merge_fn(v_flat, mode="mean")
 
-            k_merged_flat, _ = merge_fn(k_flat, mode="mean")
-            v_merged_flat, _ = merge_fn(v_flat, mode="mean")
+        k_merged = rearrange(k_merged_flat, "b s (h d) -> b h s d", h=H)
+        v_merged = rearrange(v_merged_flat, "b s (h d) -> b h s d", h=H)
 
-            k_merged = rearrange(k_merged_flat, "b s (h d) -> b h s d", h=H)
-            v_merged = rearrange(v_merged_flat, "b s (h d) -> b h s d", h=H)
+        attn = F.scaled_dot_product_attention(
+            q, k_merged, v_merged,
+            attn_mask=None, dropout_p=0.0, is_causal=False, scale=self.scale,
+        )
+        attn = rearrange(attn, "b h s d -> b s (h d)")
+        return F.linear(attn, self.out_proj.weight, self.out_proj.bias)
 
-            attn = F.scaled_dot_product_attention(
-                q, k_merged, v_merged,
-                attn_mask=None, dropout_p=0.0, is_causal=False, scale=self.scale,
+
+class GradTomePEPartialBlock(ResidualAttentionBlock):
+    """attn (computes per-block grad matching) + optional merge/MLP/unmerge."""
+
+    def forward(self, x, attn_mask=None):
+        info: dict = self._tome_info
+
+        info["_block_merge_fn"]   = None
+        info["_block_unmerge_fn"] = None
+
+        x = x + self.drop_path1(
+            self.ls_1(self._call_attn(self.ln_1(x), attn_mask=attn_mask))
+        )
+
+        merge_fn   = info.get("_block_merge_fn")
+        unmerge_fn = info.get("_block_unmerge_fn")
+        mlp_merge  = info.get("mlp_merge", True)
+
+        if mlp_merge and merge_fn is not None and merge_fn is not do_nothing:
+            x_merged, _ = merge_fn(x, mode="mean")
+            x_merged = x_merged + self.drop_path2(
+                self.ls_2(self.mlp(self.ln_2(x_merged)))
             )
-            attn = rearrange(attn, "b h s d -> b s (h d)")
-            return F.linear(attn, self.out_proj.weight, self.out_proj.bias)
+            x = unmerge_fn(x_merged)
+        else:
+            x = x + self.drop_path2(self.ls_2(self.mlp(self.ln_2(x))))
 
-    class GradTomePEPartialBlock(ResidualAttentionBlock):
-        """attn (computes per-block grad matching) + optional merge/MLP/unmerge."""
-
-        def forward(self, x, attn_mask=None):
-            info: dict = self._tome_info
-
-            info["_block_merge_fn"]   = None
-            info["_block_unmerge_fn"] = None
-
-            x = x + self.drop_path1(
-                self.ls_1(self._call_attn(self.ln_1(x), attn_mask=attn_mask))
-            )
-
-            merge_fn   = info.get("_block_merge_fn")
-            unmerge_fn = info.get("_block_unmerge_fn")
-            mlp_merge  = info.get("mlp_merge", True)
-
-            if mlp_merge and merge_fn is not None and merge_fn is not do_nothing:
-                x_merged, _ = merge_fn(x, mode="mean")
-                x_merged = x_merged + self.drop_path2(
-                    self.ls_2(self.mlp(self.ln_2(x_merged)))
-                )
-                x = unmerge_fn(x_merged)
-            else:
-                x = x + self.drop_path2(self.ls_2(self.mlp(self.ln_2(x))))
-
-            info["_block_merge_fn"]   = None
-            info["_block_unmerge_fn"] = None
-            return x
-
-    return GradTomePEPartialAttention, GradTomePEPartialBlock
-
-
-GradTomePEPartialAttention: type = None  # type: ignore[assignment]
-GradTomePEPartialBlock: type = None      # type: ignore[assignment]
-
-
-def _ensure_classes():
-    global GradTomePEPartialAttention, GradTomePEPartialBlock
-    if GradTomePEPartialAttention is None or GradTomePEPartialBlock is None:
-        GradTomePEPartialAttention, GradTomePEPartialBlock = _make_classes()
+        info["_block_merge_fn"]   = None
+        info["_block_unmerge_fn"] = None
+        return x
 
 
 def apply_pe_gradtome_partial_patch(model: nn.Module,
@@ -227,13 +216,10 @@ def apply_pe_gradtome_partial_patch(model: nn.Module,
 
     `mlp_merge`: True (default) runs MLP on merged tokens then unmerges back;
     False runs MLP on full S — only K/V attention compression remains."""
-    from core.vision_encoder.pe import SelfAttention
-
     transformer = _find_vision_transformer(model)
     if transformer is None:
         raise RuntimeError("Could not locate the PE vision Transformer.")
 
-    _ensure_classes()
     use_cls_token = _vit_uses_cls_token(model)
 
     n_blocks = len(transformer.resblocks)
@@ -273,7 +259,6 @@ def apply_pe_gradtome_partial_patch(model: nn.Module,
 
 
 def get_classes() -> Tuple[type, type]:
-    _ensure_classes()
     return GradTomePEPartialBlock, GradTomePEPartialAttention
 
 

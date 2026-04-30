@@ -30,6 +30,22 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+# Mirror SAM-side path setup: if `perception_models/` is a sibling of
+# `PiToMe/`, add it to sys.path so `core.vision_encoder.pe` is importable
+# without the user having pip-installed it.
+_here = os.path.dirname(__file__)
+_pe_root = os.path.normpath(os.path.join(_here, "..", "..", "perception_models"))
+if os.path.isdir(_pe_root) and _pe_root not in sys.path:
+    sys.path.insert(0, _pe_root)
+
+from core.vision_encoder.pe import (
+    SelfAttention,
+    ResidualAttentionBlock,
+    VisionTransformer,
+    Transformer,
+)
+
+
 # Cute kernel: lazy-imported so this module is cheap to import on CUDA-less hosts.
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 _CUTE_DIR = os.path.join(_REPO_ROOT, "cute")
@@ -253,7 +269,6 @@ def _stage_end_indices(n_blocks: int, num_stages: int) -> List[int]:
 
 
 def _find_vision_transformer(model: nn.Module):
-    from core.vision_encoder.pe import VisionTransformer, Transformer
     for m in model.modules():
         if isinstance(m, VisionTransformer):
             for sub in m.modules():
@@ -263,131 +278,86 @@ def _find_vision_transformer(model: nn.Module):
 
 
 def _vit_uses_cls_token(model: nn.Module) -> bool:
-    from core.vision_encoder.pe import VisionTransformer
     for m in model.modules():
         if isinstance(m, VisionTransformer):
             return bool(getattr(m, "use_cls_token", False))
     return False
 
 
-# Lazy import: PE classes loaded the first time a base class is defined.
-def _pe_classes():
-    from core.vision_encoder.pe import SelfAttention, ResidualAttentionBlock
-    return SelfAttention, ResidualAttentionBlock
-
-
-# ── Attention base classes ───────────────────────────────────────────────
+# ── Attention subclasses ─────────────────────────────────────────────────
 #
-# Each algo's apply_patch reassigns `attn.__class__` to one of these (or a
-# subclass). State is read from `self._tome_info`, which is set by the
-# apply_patch.
+# State is read from `self._tome_info`, which is set by the corresponding
+# `apply_*` function. Same convention as SAM.
 
-def _make_FlashRopePEAttention():
-    SelfAttention, _ = _pe_classes()
+class FlashRopePEAttention(SelfAttention):
+    """SelfAttention that respects `info['active_idx']` (so RoPE follows
+    surviving tokens after compression), and optionally routes through
+    the fused FA2+RoPE cute kernel when `info['use_flash_rope']`."""
 
-    class FlashRopePEAttention(SelfAttention):
-        """SelfAttention that respects `info['active_idx']` (so RoPE follows
-        surviving tokens after compression), and optionally routes through
-        the fused FA2+RoPE cute kernel when `info['use_flash_rope']`."""
+    def forward(self, x, attn_mask=None):
+        info       = self._tome_info
+        active_idx = info.get("active_idx", None)
+        use_flash  = info.get("use_flash_rope", False)
 
-        def forward(self, x, attn_mask=None):
-            info       = self._tome_info
-            active_idx = info.get("active_idx", None)
-            use_flash  = info.get("use_flash_rope", False)
+        if use_flash:
+            cache = info.get("_stage_cache")
+            cache_key = (id(active_idx), x.shape[1], x.dtype)
+            if cache is None or cache.get("_key") != cache_key:
+                cache = _build_stage_cache(self, x.shape[1], x.dtype, active_idx)
+                cache["_key"] = cache_key
+                info["_stage_cache"] = cache
 
-            if use_flash:
-                cache = info.get("_stage_cache")
-                cache_key = (id(active_idx), x.shape[1], x.dtype)
-                if cache is None or cache.get("_key") != cache_key:
-                    cache = _build_stage_cache(self, x.shape[1], x.dtype, active_idx)
-                    cache["_key"] = cache_key
-                    info["_stage_cache"] = cache
+            out = flash_rope_attn(
+                self, x,
+                cos=cache.get("cos"), sin=cache.get("sin"),
+                block_mask=cache.get("block_mask"),
+            )
+            if out is not None:
+                return out
+            # Kernel couldn't be built — fall through to stock SDPA.
 
-                out = flash_rope_attn(
-                    self, x,
-                    cos=cache.get("cos"), sin=cache.get("sin"),
-                    block_mask=cache.get("block_mask"),
-                )
-                if out is not None:
-                    return out
-                # Kernel couldn't be built — fall through to stock SDPA.
-
-            if active_idx is None:
-                return super().forward(x, attn_mask=attn_mask)
-            # Stock SDPA with rope.freq sliced down to surviving tokens.
-            orig_freq = self.rope.freq
-            self.rope.freq = orig_freq.index_select(1, active_idx)
-            try:
-                return super().forward(x, attn_mask=attn_mask)
-            finally:
-                self.rope.freq = orig_freq
-
-    return FlashRopePEAttention
+        if active_idx is None:
+            return super().forward(x, attn_mask=attn_mask)
+        # Stock SDPA with rope.freq sliced down to surviving tokens.
+        orig_freq = self.rope.freq
+        self.rope.freq = orig_freq.index_select(1, active_idx)
+        try:
+            return super().forward(x, attn_mask=attn_mask)
+        finally:
+            self.rope.freq = orig_freq
 
 
-def _make_FlashRopeOnlyPEAttention():
-    SelfAttention, _ = _pe_classes()
+class FlashRopeOnlyPEAttention(SelfAttention):
+    """Pure cute-kernel attention swap. No compression awareness."""
 
-    class FlashRopeOnlyPEAttention(SelfAttention):
-        """Pure cute-kernel attention swap. No compression awareness."""
-
-        def forward(self, x, attn_mask=None):
-            del attn_mask
-            out = flash_rope_attn(self, x)
-            if out is None:
-                return super().forward(x)
-            return out
-
-    return FlashRopeOnlyPEAttention
-
-
-# Defer class creation: PE may not be importable at module load time.
-FlashRopePEAttention: type = None      # type: ignore[assignment]
-FlashRopeOnlyPEAttention: type = None  # type: ignore[assignment]
-
-
-def _ensure_attn_classes():
-    global FlashRopePEAttention, FlashRopeOnlyPEAttention
-    if FlashRopePEAttention is None:
-        FlashRopePEAttention = _make_FlashRopePEAttention()
-    if FlashRopeOnlyPEAttention is None:
-        FlashRopeOnlyPEAttention = _make_FlashRopeOnlyPEAttention()
+    def forward(self, x, attn_mask=None):
+        del attn_mask
+        out = flash_rope_attn(self, x)
+        if out is None:
+            return super().forward(x)
+        return out
 
 
 # ── Block base class for stage-end compression ──────────────────────────
 
-def _make_StageCompressPEBlock():
-    _, ResidualAttentionBlock = _pe_classes()
+class StageCompressPEBlock(ResidualAttentionBlock):
+    """Base for stage-end blocks. Runs the original block forward, then
+    calls `self.compress(x, active_idx, info) -> (x, new_active_idx)`.
 
-    class StageCompressPEBlock(ResidualAttentionBlock):
-        """Base for stage-end blocks. Runs the original block forward, then
-        calls `self.compress(x, active_idx, info) -> (x, new_active_idx)`.
+    Subclasses override `compress` with their merge rule."""
 
-        Subclasses override `compress` with their merge rule."""
+    def compress(self, x, active_idx, info):
+        raise NotImplementedError
 
-        def compress(self, x, active_idx, info):
-            raise NotImplementedError
-
-        def forward(self, x, attn_mask=None):
-            x = super().forward(x, attn_mask=attn_mask)
-            info: dict = self._tome_info
-            if info.get("ratio", 1.0) >= 1.0:
-                return x
-            x, new_active = self.compress(x, info.get("active_idx", None), info)
-            info["active_idx"] = new_active
-            info["_stage_cache"] = None    # invalidate cos/sin cache
+    def forward(self, x, attn_mask=None):
+        x = super().forward(x, attn_mask=attn_mask)
+        info: dict = self._tome_info
+        if info.get("ratio", 1.0) >= 1.0:
             return x
-
-    return StageCompressPEBlock
-
-
-StageCompressPEBlock: type = None  # type: ignore[assignment]
-
-
-def _ensure_block_classes():
-    global StageCompressPEBlock
-    if StageCompressPEBlock is None:
-        StageCompressPEBlock = _make_StageCompressPEBlock()
+        x, new_active = self.compress(x, info.get("active_idx", None), info)
+        info["active_idx"] = new_active
+        info["_stage_cache"] = None    # invalidate cos/sin cache
+        return x
 
 
 # ── Stage cache (cos/sin slice for surviving tokens) ─────────────────────
@@ -446,10 +416,6 @@ def apply_stage_compress(model: nn.Module,
 
     Returns the number of compression points installed.
     """
-    SelfAttention, ResidualAttentionBlock = _pe_classes()
-    _ensure_attn_classes()
-    _ensure_block_classes()
-
     transformer = _find_vision_transformer(model)
     if transformer is None:
         raise RuntimeError("Could not locate the PE vision Transformer in `model`.")
@@ -508,8 +474,6 @@ def apply_pe_flash_rope_patch(model: nn.Module, verbose: bool = True) -> int:
     """Replace every PE SelfAttention with `FlashRopeOnlyPEAttention`. No
     token compression. Falls back at runtime if the cute kernel can't be
     built for this (dtype, head_dim)."""
-    SelfAttention, _ = _pe_classes()
-
     _ensure_cute_deps()
     if FlashAttentionForwardAmpereRoPE is None:
         msg = (f"[pe-flash-rope] cute kernel not importable: "
@@ -517,8 +481,6 @@ def apply_pe_flash_rope_patch(model: nn.Module, verbose: bool = True) -> int:
         if verbose:
             print(msg)
         raise RuntimeError(msg)
-
-    _ensure_attn_classes()
 
     n = 0
     for mod in model.modules():

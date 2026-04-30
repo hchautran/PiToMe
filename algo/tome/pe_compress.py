@@ -12,46 +12,28 @@ import torch.nn as nn
 
 from .merge import bipartite_soft_matching, do_nothing
 from .._pe_stage import (
-    apply_stage_compress, FlashRopePEAttention,
-    _ensure_attn_classes, _ensure_block_classes,
+    apply_stage_compress, FlashRopePEAttention, StageCompressPEBlock,
 )
-from .. import _pe_stage as _ps
 
 
-def _make_TomePECompressBlock():
-    _ensure_block_classes()
+class TomePECompressBlock(StageCompressPEBlock):
+    """Bipartite soft matching: matched pairs averaged together."""
 
-    class TomePECompressBlock(_ps.StageCompressPEBlock):
-        """Bipartite soft matching: matched pairs averaged together."""
+    def compress(self, x, active_idx, info):
+        ratio: float = info["ratio"]
+        has_cls: bool = info.get("use_cls_token", False)
 
-        def compress(self, x, active_idx, info):
-            ratio: float = info["ratio"]
-            has_cls: bool = info.get("use_cls_token", False)
+        metric = x.mean(0, keepdim=True)
+        merge_fn, _ = bipartite_soft_matching(
+            metric=metric, ratio=ratio, class_token=has_cls,
+        )
+        if merge_fn is do_nothing:
+            return x, active_idx
 
-            metric = x.mean(0, keepdim=True)
-            merge_fn, _ = bipartite_soft_matching(
-                metric=metric, ratio=ratio, class_token=has_cls,
-            )
-            if merge_fn is do_nothing:
-                return x, active_idx
-
-            x_merged, idx_in_x = merge_fn(x, mode="mean")
-            new_active = (idx_in_x[0] if active_idx is None
-                          else active_idx.index_select(0, idx_in_x[0]))
-            return x_merged, new_active
-
-    return TomePECompressBlock
-
-
-TomePECompressBlock: type = None  # type: ignore[assignment]
-
-
-def _ensure_classes():
-    global TomePECompressBlock
-    _ensure_attn_classes()
-    _ensure_block_classes()
-    if TomePECompressBlock is None:
-        TomePECompressBlock = _make_TomePECompressBlock()
+        x_merged, idx_in_x = merge_fn(x, mode="mean")
+        new_active = (idx_in_x[0] if active_idx is None
+                      else active_idx.index_select(0, idx_in_x[0]))
+        return x_merged, new_active
 
 
 def apply_pe_tome_patch(model: nn.Module,
@@ -68,7 +50,6 @@ def apply_pe_tome_patch(model: nn.Module,
     that other stage-compress patches consume but tome doesn't."""
     assert 0 < ratio <= 1.0
     assert num_stages >= 1
-    _ensure_classes()
 
     info = {
         "ratio": ratio,
@@ -77,7 +58,7 @@ def apply_pe_tome_patch(model: nn.Module,
     return apply_stage_compress(
         model,
         compress_block_class=TomePECompressBlock,
-        attn_class=_ps.FlashRopePEAttention,
+        attn_class=FlashRopePEAttention,
         info=info,
         num_stages=num_stages,
         use_flash_rope=use_flash_rope,
@@ -88,8 +69,7 @@ def apply_pe_tome_patch(model: nn.Module,
 
 def get_classes() -> Tuple[type, type]:
     """Return (block_class, attn_class) for registry registration."""
-    _ensure_classes()
-    return TomePECompressBlock, _ps.FlashRopePEAttention
+    return TomePECompressBlock, FlashRopePEAttention
 
 
 def remove_pe_tome_patch(model: nn.Module) -> int:

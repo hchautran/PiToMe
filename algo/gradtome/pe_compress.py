@@ -14,9 +14,8 @@ import torch.nn as nn
 
 from .merge import grad_bipartite_soft_matching, do_nothing
 from .._pe_stage import (
-    apply_stage_compress, _ensure_attn_classes, _ensure_block_classes,
+    apply_stage_compress, FlashRopePEAttention, StageCompressPEBlock,
 )
-from .. import _pe_stage as _ps
 
 
 def _make_grad_merge(metric: torch.Tensor, r_grid: int, sx: int, sy: int,
@@ -46,55 +45,39 @@ def _make_grad_merge(metric: torch.Tensor, r_grid: int, sx: int, sy: int,
     return merge_fn
 
 
-def _make_GradTomePECompressBlock():
-    _ensure_block_classes()
+class GradTomePECompressBlock(StageCompressPEBlock):
+    """Spatial-gradient-aware bipartite; bipartite fallback off-square."""
 
-    class GradTomePECompressBlock(_ps.StageCompressPEBlock):
-        """Spatial-gradient-aware bipartite; bipartite fallback off-square."""
+    def compress(self, x, active_idx, info):
+        ratio: float = info["ratio"]
+        sx: int = info.get("grad_sx", 2)
+        sy: int = info.get("grad_sy", 2)
+        has_cls: bool = info.get("use_cls_token", False)
 
-        def compress(self, x, active_idx, info):
-            ratio: float = info["ratio"]
-            sx: int = info.get("grad_sx", 2)
-            sy: int = info.get("grad_sy", 2)
-            has_cls: bool = info.get("use_cls_token", False)
+        S = x.shape[1]
+        cls_off = 1 if has_cls else 0
+        N = S - cls_off
+        r_grid = int(math.isqrt(N))
+        square = (r_grid * r_grid == N)
 
-            S = x.shape[1]
-            cls_off = 1 if has_cls else 0
-            N = S - cls_off
-            r_grid = int(math.isqrt(N))
-            square = (r_grid * r_grid == N)
+        merge_fn = None
+        if square:
+            metric = x.mean(0, keepdim=True)
+            merge_fn = _make_grad_merge(metric, r_grid, sx, sy, ratio, cls_off)
 
-            merge_fn = None
-            if square:
-                metric = x.mean(0, keepdim=True)
-                merge_fn = _make_grad_merge(metric, r_grid, sx, sy, ratio, cls_off)
+        if merge_fn is None:
+            from ..tome.merge import bipartite_soft_matching as _bsm
+            metric = x.mean(0, keepdim=True)
+            _bm, _ = _bsm(metric=metric, ratio=ratio, class_token=has_cls)
+            if _bm is do_nothing:
+                return x, active_idx
+            x_merged, idx_in_x = _bm(x, mode="mean")
+        else:
+            x_merged, idx_in_x = merge_fn(x, mode="mean")
 
-            if merge_fn is None:
-                from ..tome.merge import bipartite_soft_matching as _bsm
-                metric = x.mean(0, keepdim=True)
-                _bm, _ = _bsm(metric=metric, ratio=ratio, class_token=has_cls)
-                if _bm is do_nothing:
-                    return x, active_idx
-                x_merged, idx_in_x = _bm(x, mode="mean")
-            else:
-                x_merged, idx_in_x = merge_fn(x, mode="mean")
-
-            new_active = (idx_in_x[0] if active_idx is None
-                          else active_idx.index_select(0, idx_in_x[0]))
-            return x_merged, new_active
-
-    return GradTomePECompressBlock
-
-
-GradTomePECompressBlock: type = None  # type: ignore[assignment]
-
-
-def _ensure_classes():
-    global GradTomePECompressBlock
-    _ensure_attn_classes()
-    _ensure_block_classes()
-    if GradTomePECompressBlock is None:
-        GradTomePECompressBlock = _make_GradTomePECompressBlock()
+        new_active = (idx_in_x[0] if active_idx is None
+                      else active_idx.index_select(0, idx_in_x[0]))
+        return x_merged, new_active
 
 
 def apply_pe_gradtome_patch(model: nn.Module,
@@ -110,7 +93,6 @@ def apply_pe_gradtome_patch(model: nn.Module,
     `**_` swallows `group_size` from `_kw_compress` (unused here)."""
     assert 0 < ratio <= 1.0
     assert num_stages >= 1
-    _ensure_classes()
 
     info = {
         "ratio": ratio,
@@ -121,7 +103,7 @@ def apply_pe_gradtome_patch(model: nn.Module,
     return apply_stage_compress(
         model,
         compress_block_class=GradTomePECompressBlock,
-        attn_class=_ps.FlashRopePEAttention,
+        attn_class=FlashRopePEAttention,
         info=info,
         num_stages=num_stages,
         use_flash_rope=use_flash_rope,
@@ -131,8 +113,7 @@ def apply_pe_gradtome_patch(model: nn.Module,
 
 
 def get_classes() -> Tuple[type, type]:
-    _ensure_classes()
-    return GradTomePECompressBlock, _ps.FlashRopePEAttention
+    return GradTomePECompressBlock, FlashRopePEAttention
 
 
 def remove_pe_gradtome_patch(model: nn.Module) -> int:

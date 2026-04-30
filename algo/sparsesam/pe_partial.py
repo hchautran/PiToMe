@@ -1,6 +1,6 @@
 """SparseSAM partial: cute block-sparse FA2+RoPE attention with
 uniform-stride permutation + optional ToMe-style merge/MLP/unmerge.
-Token count preserved. Mirrors SAM-side pattern: subclass + swap."""
+Token count preserved. """
 
 from __future__ import annotations
 import math
@@ -11,6 +11,7 @@ import torch.nn as nn
 
 from .. import _pe_stage as _ps
 from .._pe_stage import (
+    SelfAttention, ResidualAttentionBlock,
     _ensure_cute_deps, _get_kernel, _module_cached_cos_sin,
     _find_vision_transformer, _vit_uses_cls_token,
 )
@@ -78,132 +79,118 @@ def _kernel_dtype(self_attn) -> torch.dtype:
 
 # ── Subclasses ───────────────────────────────────────────────────────────
 
-def _make_classes():
-    from core.vision_encoder.pe import SelfAttention, ResidualAttentionBlock
+class SparsesamPEPartialAttention(SelfAttention):
+    """Block-sparse cute kernel attention. Expects permuted layout
+    (the block forward did this once at encoder entry); falls back to
+    stock SDPA if the kernel can't be built."""
 
-    class SparsesamPEPartialAttention(SelfAttention):
-        """Block-sparse cute kernel attention. Expects permuted layout
-        (the block forward did this once at encoder entry); falls back to
-        stock SDPA if the kernel can't be built."""
+    def forward(self, x, attn_mask=None):
+        info = self._tome_info
+        sr   = info.get("sparse_ratio", info.get("ratio", 1.0))
 
-        def forward(self, x, attn_mask=None):
-            info = self._tome_info
-            sr   = info.get("sparse_ratio", info.get("ratio", 1.0))
+        kdtype = _kernel_dtype(self)
+        kernel, _m_blk, _n_blk = _get_kernel(kdtype, self.head_dim)
+        if kernel is None:
+            return super().forward(x, attn_mask=attn_mask)
 
-            kdtype = _kernel_dtype(self)
-            kernel, _m_blk, _n_blk = _get_kernel(kdtype, self.head_dim)
-            if kernel is None:
-                return super().forward(x, attn_mask=attn_mask)
-
-            cache = info.get("_perm_cache")
-            cache_key = (x.shape[1], kdtype, sr)
-            if cache is None or cache.get("_key") != cache_key:
-                cache = _build_partial_cache(
-                    self, x.shape[1], kdtype, sr,
-                    info.get("group_size", 4),
-                    info.get("use_cls_token", False),
-                    x.device,
-                )
-                cache["_key"] = cache_key
-                info["_perm_cache"] = cache
-
-            _ensure_block_mask(cache, self, x, sr)
-
-            permuted = bool(info.get("x_is_permuted"))
-            out = flash_rope_sparse_attn(
-                self, x,
-                cos=cache.get("cos"), sin=cache.get("sin"),
-                block_mask=cache.get("block_mask"),
-                perm=cache.get("perm"), inv_perm=cache.get("inv_perm"),
-                assume_permuted=permuted,
+        cache = info.get("_perm_cache")
+        cache_key = (x.shape[1], kdtype, sr)
+        if cache is None or cache.get("_key") != cache_key:
+            cache = _build_partial_cache(
+                self, x.shape[1], kdtype, sr,
+                info.get("group_size", 4),
+                info.get("use_cls_token", False),
+                x.device,
             )
-            if out is not None:
-                return out
+            cache["_key"] = cache_key
+            info["_perm_cache"] = cache
 
-            if permuted and cache.get("inv_perm") is not None:
-                x = x.index_select(1, cache["inv_perm"])
-            out = super().forward(x, attn_mask=attn_mask)
-            if permuted and cache.get("perm") is not None:
-                out = out.index_select(1, cache["perm"])
+        _ensure_block_mask(cache, self, x, sr, dtype=kdtype)
+
+        permuted = bool(info.get("x_is_permuted"))
+        out = flash_rope_sparse_attn(
+            self, x,
+            cos=cache.get("cos"), sin=cache.get("sin"),
+            block_mask=cache.get("block_mask"),
+            perm=cache.get("perm"), inv_perm=cache.get("inv_perm"),
+            assume_permuted=permuted,
+        )
+        if out is not None:
             return out
 
-    class SparsesamPEPartialBlock(ResidualAttentionBlock):
-        """Block forward: permute once on first call, cute sparse-attn,
-        merge/MLP/unmerge."""
+        if permuted and cache.get("inv_perm") is not None:
+            x = x.index_select(1, cache["inv_perm"])
+        out = super().forward(x, attn_mask=attn_mask)
+        if permuted and cache.get("perm") is not None:
+            out = out.index_select(1, cache["perm"])
+        return out
 
-        def forward(self, x, attn_mask=None):
-            info: dict = self._tome_info
-            ratio = info.get("ratio", 1.0)
-            sr    = info.get("sparse_ratio", ratio)
 
-            # First block in the forward: permute x once.
-            if not info.get("x_is_permuted"):
-                kdtype = _kernel_dtype(self.attn)
-                kernel, _, _ = _get_kernel(kdtype, self.attn.head_dim)
-                if kernel is not None:
-                    cache_key = (x.shape[1], kdtype, sr)
-                    cache = info.get("_perm_cache")
-                    if cache is None or cache.get("_key") != cache_key:
-                        cache = _build_partial_cache(
-                            self.attn, x.shape[1], kdtype, sr,
-                            info.get("group_size", 4),
-                            info.get("use_cls_token", False),
-                            x.device,
-                        )
-                        cache["_key"] = cache_key
-                        info["_perm_cache"] = cache
-                    perm = cache.get("perm")
-                    if perm is not None:
-                        x = x.index_select(1, perm)
-                        info["x_is_permuted"] = True
+class SparsesamPEPartialBlock(ResidualAttentionBlock):
+    """Block forward: permute once on first call, cute sparse-attn,
+    merge/MLP/unmerge."""
 
-            x = x + self.drop_path1(
-                self.ls_1(self._call_attn(self.ln_1(x), attn_mask=attn_mask))
+    def forward(self, x, attn_mask=None):
+        info: dict = self._tome_info
+        ratio = info.get("ratio", 1.0)
+        sr    = info.get("sparse_ratio", ratio)
+
+        # First block in the forward: permute x once.
+        if not info.get("x_is_permuted"):
+            kdtype = _kernel_dtype(self.attn)
+            kernel, _, _ = _get_kernel(kdtype, self.attn.head_dim)
+            if kernel is not None:
+                cache_key = (x.shape[1], kdtype, sr)
+                cache = info.get("_perm_cache")
+                if cache is None or cache.get("_key") != cache_key:
+                    cache = _build_partial_cache(
+                        self.attn, x.shape[1], kdtype, sr,
+                        info.get("group_size", 4),
+                        info.get("use_cls_token", False),
+                        x.device,
+                    )
+                    cache["_key"] = cache_key
+                    info["_perm_cache"] = cache
+                perm = cache.get("perm")
+                if perm is not None:
+                    x = x.index_select(1, perm)
+                    info["x_is_permuted"] = True
+
+        x = x + self.drop_path1(
+            self.ls_1(self._call_attn(self.ln_1(x), attn_mask=attn_mask))
+        )
+
+        cache = info.get("_perm_cache")
+        n_merge = (cache.get("n_merge", 0) if cache else 0)
+        mlp_merge = info.get("mlp_merge", True)
+        if (mlp_merge and info.get("x_is_permuted")
+                and n_merge > 0 and ratio < 1.0):
+            B, S, C = x.shape
+            cls_part_size = cache["cls_part_size"]
+            gs            = cache["gs"]
+
+            keep_part     = x[:, :cls_part_size, :]
+            merge_section = x[:, cls_part_size:, :]
+            merge_view    = merge_section.reshape(B, gs, n_merge, C)
+            merge_repr    = merge_view[:, 0, :, :]
+
+            reduced_x = torch.cat([keep_part, merge_repr], dim=1)
+            reduced_x = reduced_x + self.drop_path2(
+                self.ls_2(self.mlp(self.ln_2(reduced_x)))
             )
 
-            cache = info.get("_perm_cache")
-            n_merge = (cache.get("n_merge", 0) if cache else 0)
-            mlp_merge = info.get("mlp_merge", True)
-            if (mlp_merge and info.get("x_is_permuted")
-                    and n_merge > 0 and ratio < 1.0):
-                B, S, C = x.shape
-                cls_part_size = cache["cls_part_size"]
-                gs            = cache["gs"]
+            keep_out          = reduced_x[:, :cls_part_size, :]
+            merge_repr_out    = reduced_x[:, cls_part_size:, :]
+            merge_section_out = (merge_repr_out
+                                  .unsqueeze(1)
+                                  .expand(B, gs, n_merge, C)
+                                  .reshape(B, gs * n_merge, C))
 
-                keep_part     = x[:, :cls_part_size, :]
-                merge_section = x[:, cls_part_size:, :]
-                merge_view    = merge_section.reshape(B, gs, n_merge, C)
-                merge_repr    = merge_view[:, 0, :, :]
+            x = torch.cat([keep_out, merge_section_out], dim=1)
+        else:
+            x = x + self.drop_path2(self.ls_2(self.mlp(self.ln_2(x))))
 
-                reduced_x = torch.cat([keep_part, merge_repr], dim=1)
-                reduced_x = reduced_x + self.drop_path2(
-                    self.ls_2(self.mlp(self.ln_2(reduced_x)))
-                )
-
-                keep_out          = reduced_x[:, :cls_part_size, :]
-                merge_repr_out    = reduced_x[:, cls_part_size:, :]
-                merge_section_out = (merge_repr_out
-                                      .unsqueeze(1)
-                                      .expand(B, gs, n_merge, C)
-                                      .reshape(B, gs * n_merge, C))
-
-                x = torch.cat([keep_out, merge_section_out], dim=1)
-            else:
-                x = x + self.drop_path2(self.ls_2(self.mlp(self.ln_2(x))))
-
-            return x
-
-    return SparsesamPEPartialAttention, SparsesamPEPartialBlock
-
-
-SparsesamPEPartialAttention: type = None  # type: ignore[assignment]
-SparsesamPEPartialBlock: type = None      # type: ignore[assignment]
-
-
-def _ensure_classes():
-    global SparsesamPEPartialAttention, SparsesamPEPartialBlock
-    if SparsesamPEPartialAttention is None or SparsesamPEPartialBlock is None:
-        SparsesamPEPartialAttention, SparsesamPEPartialBlock = _make_classes()
+        return x
 
 
 # ── Per-forward state ────────────────────────────────────────────────────
@@ -236,14 +223,11 @@ def apply_pe_sparsesam_partial_patch(model: nn.Module,
                                      mlp_merge: bool = True,
                                      verbose: bool = True) -> int:
     """Sparse-attention + (optional) ToMe-style merge/unmerge MLP."""
-    from core.vision_encoder.pe import SelfAttention
-
     transformer = _find_vision_transformer(model)
     if transformer is None:
         raise RuntimeError("Could not locate the PE vision Transformer in `model`.")
 
     _ensure_cute_deps()
-    _ensure_classes()
 
     n_blocks = len(transformer.resblocks)
     sb = max(0, min(int(start_block), n_blocks))
@@ -297,7 +281,6 @@ def apply_pe_sparsesam_partial_patch(model: nn.Module,
 
 
 def get_classes() -> Tuple[type, type]:
-    _ensure_classes()
     return SparsesamPEPartialBlock, SparsesamPEPartialAttention
 
 

@@ -22,6 +22,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from . import _pe_stage as _ps   # access lazy-initialized cute globals via module
+from ._pe_stage import SelfAttention, ResidualAttentionBlock
 
 
 _PERM_CACHE: dict = {}             # (S, ratio, gs, n_blk, has_cls, device) -> (perm, inv)
@@ -137,7 +138,9 @@ def flash_rope_sparse_attn(self_attn: nn.Module, x: torch.Tensor,
     E        = self_attn.embed_dim
 
     kernel, m_blk, n_blk = _ps._get_kernel(x.dtype, head_dim)
-    if kernel is None:
+    if kernel is None or block_mask is None:
+        # Kernel unavailable or mask wasn't built (caller missed `_ensure_block_mask`
+        # or passed a mismatched dtype): fall back to stock SDPA.
         return None
 
     B, S, _ = x.shape
@@ -215,10 +218,19 @@ def _build_stage_cache(self_attn: nn.Module, S: int, dtype: torch.dtype,
     }
 
 
-def _ensure_block_mask(cache: dict, self_attn, x: torch.Tensor, sr: float):
+def _ensure_block_mask(cache: dict, self_attn, x: torch.Tensor, sr: float,
+                       dtype: Optional[torch.dtype] = None):
+    """Build (or fetch) the cute block-sparse mask for this (B, S, ...).
+
+    `dtype` selects which kernel tile sizes to key the mask on; pass the
+    same dtype the caller used to look up the kernel and build the cache.
+    Defaults to `x.dtype`, but under autocast `x.dtype` may be fp32 (LN
+    upcast) while the kernel is fp16/bf16 — pass the weight dtype in
+    those callers."""
     if cache.get("block_mask") is not None:
         return cache["block_mask"]
-    kernel, m_blk, n_blk = _ps._get_kernel(x.dtype, self_attn.head_dim)
+    kdtype = dtype if dtype is not None else x.dtype
+    kernel, m_blk, n_blk = _ps._get_kernel(kdtype, self_attn.head_dim)
     if kernel is None:
         return None
     B, S, _ = x.shape
@@ -243,7 +255,6 @@ _FALLBACK_WARNED: dict = {}     # one warning per (dtype, head_dim)
 def _sdpa_with_active_rope(self_attn, x, attn_mask, active_idx):
     """SDPA fallback: slice rope.freq to active_idx, run stock SelfAttention.forward,
     restore rope.freq."""
-    from core.vision_encoder.pe import SelfAttention
     orig_freq = self_attn.rope.freq
     self_attn.rope.freq = orig_freq.index_select(1, active_idx)
     try:
@@ -252,154 +263,126 @@ def _sdpa_with_active_rope(self_attn, x, attn_mask, active_idx):
         self_attn.rope.freq = orig_freq
 
 
-# ── Attention base class ─────────────────────────────────────────────────
+# ── Attention subclass ───────────────────────────────────────────────────
 
-def _make_SparseRopePEAttention():
-    from core.vision_encoder.pe import SelfAttention
+class SparseRopePEAttention(SelfAttention):
+    """Sparse FA2+RoPE attention.
 
-    class SparseRopePEAttention(SelfAttention):
-        """Sparse FA2+RoPE attention.
+    Pre-compress (active_idx is None): falls through to stock SDPA.
+    No permutation, no cute kernel.
 
-        Pre-compress (active_idx is None): falls through to stock SDPA.
-        No permutation, no cute kernel.
+    Post-compress: routes through the block-sparse cute kernel.
+    `x` is expected to already be in permuted layout (the compress block
+    did this once); `assume_permuted=True` skips per-call index_select.
+    Falls back to SDPA if the cute kernel can't be built."""
 
-        Post-compress: routes through the block-sparse cute kernel.
-        `x` is expected to already be in permuted layout (the compress block
-        did this once); `assume_permuted=True` skips per-call index_select.
-        Falls back to SDPA if the cute kernel can't be built."""
+    def forward(self, x, attn_mask=None):
+        info       = self._tome_info
+        active_idx = info.get("active_idx", None)
 
-        def forward(self, x, attn_mask=None):
-            info       = self._tome_info
-            active_idx = info.get("active_idx", None)
+        if active_idx is None:
+            return super().forward(x, attn_mask=attn_mask)
 
-            if active_idx is None:
-                return super().forward(x, attn_mask=attn_mask)
+        kernel, _m_blk, _n_blk = _ps._get_kernel(x.dtype, self.head_dim)
+        if kernel is None:
+            key = (str(x.dtype), int(self.head_dim))
+            if key not in _FALLBACK_WARNED:
+                _FALLBACK_WARNED[key] = True
+                print(f"[pe-stage-sparse] cute kernel unavailable for "
+                      f"dtype={x.dtype} head_dim={self.head_dim} "
+                      f"— falling back to stock SDPA. To force a working "
+                      f"tile size, edit "
+                      f"PiToMe/algo/_pe_stage.py::_BLOCK_CANDIDATES.")
+            return _sdpa_with_active_rope(self, x, attn_mask, active_idx)
 
-            kernel, _m_blk, _n_blk = _ps._get_kernel(x.dtype, self.head_dim)
-            if kernel is None:
-                key = (str(x.dtype), int(self.head_dim))
-                if key not in _FALLBACK_WARNED:
-                    _FALLBACK_WARNED[key] = True
-                    print(f"[pe-stage-sparse] cute kernel unavailable for "
-                          f"dtype={x.dtype} head_dim={self.head_dim} "
-                          f"— falling back to stock SDPA. To force a working "
-                          f"tile size, edit "
-                          f"PiToMe/algo/_pe_stage.py::_BLOCK_CANDIDATES.")
-                return _sdpa_with_active_rope(self, x, attn_mask, active_idx)
+        sr         = info.get("sparse_ratio", info.get("ratio", 1.0))
+        group_size = info.get("group_size", 4)
+        has_cls    = info.get("use_cls_token", False)
 
-            sr         = info.get("sparse_ratio", info.get("ratio", 1.0))
-            group_size = info.get("group_size", 4)
-            has_cls    = info.get("use_cls_token", False)
-
-            cache = info.get("_stage_cache")
-            cache_key = (id(active_idx), x.shape[1], x.dtype, sr)
-            if cache is None or cache.get("_key") != cache_key:
-                cache = _build_stage_cache(
-                    self, x.shape[1], x.dtype, active_idx, sr,
-                    group_size, has_cls, x.device,
-                )
-                cache["_key"] = cache_key
-                info["_stage_cache"] = cache
-
-            _ensure_block_mask(cache, self, x, sr)
-
-            permuted = bool(info.get("x_is_permuted"))
-            out = flash_rope_sparse_attn(
-                self, x,
-                cos=cache.get("cos"), sin=cache.get("sin"),
-                block_mask=cache.get("block_mask"),
-                perm=cache.get("perm"), inv_perm=cache.get("inv_perm"),
-                assume_permuted=permuted,
+        cache = info.get("_stage_cache")
+        cache_key = (id(active_idx), x.shape[1], x.dtype, sr)
+        if cache is None or cache.get("_key") != cache_key:
+            cache = _build_stage_cache(
+                self, x.shape[1], x.dtype, active_idx, sr,
+                group_size, has_cls, x.device,
             )
-            if out is not None:
-                return out
+            cache["_key"] = cache_key
+            info["_stage_cache"] = cache
 
-            if permuted and cache.get("inv_perm") is not None:
-                x = x.index_select(1, cache["inv_perm"])
-            out = _sdpa_with_active_rope(self, x, attn_mask, active_idx)
-            if permuted and cache.get("perm") is not None:
-                out = out.index_select(1, cache["perm"])
+        _ensure_block_mask(cache, self, x, sr)
+
+        permuted = bool(info.get("x_is_permuted"))
+        out = flash_rope_sparse_attn(
+            self, x,
+            cos=cache.get("cos"), sin=cache.get("sin"),
+            block_mask=cache.get("block_mask"),
+            perm=cache.get("perm"), inv_perm=cache.get("inv_perm"),
+            assume_permuted=permuted,
+        )
+        if out is not None:
             return out
 
-    return SparseRopePEAttention
-
-
-SparseRopePEAttention: type = None  # type: ignore[assignment]
-
-
-def _ensure_attn_classes():
-    global SparseRopePEAttention
-    if SparseRopePEAttention is None:
-        SparseRopePEAttention = _make_SparseRopePEAttention()
+        if permuted and cache.get("inv_perm") is not None:
+            x = x.index_select(1, cache["inv_perm"])
+        out = _sdpa_with_active_rope(self, x, attn_mask, active_idx)
+        if permuted and cache.get("perm") is not None:
+            out = out.index_select(1, cache["perm"])
+        return out
 
 
 # ── Block base class ─────────────────────────────────────────────────────
 
-def _make_StageCompressSparsePEBlock():
-    from core.vision_encoder.pe import ResidualAttentionBlock
+class StageCompressSparsePEBlock(ResidualAttentionBlock):
+    """Stage-end block for sparse-attn compression.
 
-    class StageCompressSparsePEBlock(ResidualAttentionBlock):
-        """Stage-end block for sparse-attn compression.
+    Subclasses override `compress(x, active_idx, info)
+    -> (x, new_active_idx)` with the merge rule.
 
-        Subclasses override `compress(x, active_idx, info)
-        -> (x, new_active_idx)` with the merge rule.
+    Forward flow:
+      1. Run the original block (attention + MLP).
+      2. Un-permute `x` if currently in permuted layout.
+      3. Run `self.compress` on natural-order x.
+      4. Build the next stage's cache (cos/sin sliced + permuted).
+      5. Permute the compressed output once. `x_is_permuted` flips True.
+         Downstream blocks see permuted x and run cute sparse with
+         `assume_permuted=True` — no per-call permutation."""
 
-        Forward flow:
-          1. Run the original block (attention + MLP).
-          2. Un-permute `x` if currently in permuted layout.
-          3. Run `self.compress` on natural-order x.
-          4. Build the next stage's cache (cos/sin sliced + permuted).
-          5. Permute the compressed output once. `x_is_permuted` flips True.
-             Downstream blocks see permuted x and run cute sparse with
-             `assume_permuted=True` — no per-call permutation."""
+    def compress(self, x, active_idx, info):
+        raise NotImplementedError
 
-        def compress(self, x, active_idx, info):
-            raise NotImplementedError
+    def forward(self, x, attn_mask=None):
+        x = super().forward(x, attn_mask=attn_mask)
+        info: dict = self._tome_info
 
-        def forward(self, x, attn_mask=None):
-            x = super().forward(x, attn_mask=attn_mask)
-            info: dict = self._tome_info
+        if info.get("x_is_permuted"):
+            cache = info.get("_stage_cache")
+            inv_perm = cache.get("inv_perm") if cache else None
+            if inv_perm is not None:
+                x = x.index_select(1, inv_perm)
+            info["x_is_permuted"] = False
 
-            if info.get("x_is_permuted"):
-                cache = info.get("_stage_cache")
-                inv_perm = cache.get("inv_perm") if cache else None
-                if inv_perm is not None:
-                    x = x.index_select(1, inv_perm)
-                info["x_is_permuted"] = False
-
-            if info.get("ratio", 1.0) >= 1.0:
-                return x
-
-            x, new_active = self.compress(x, info.get("active_idx", None), info)
-            info["active_idx"] = new_active
-
-            sr = info.get("sparse_ratio", info.get("ratio", 1.0))
-            cache = _build_stage_cache(
-                self.attn, x.shape[1], x.dtype, new_active, sr,
-                info.get("group_size", 4),
-                info.get("use_cls_token", False),
-                x.device,
-            )
-            cache["_key"] = (id(new_active), x.shape[1], x.dtype, sr)
-            info["_stage_cache"] = cache
-
-            perm = cache.get("perm")
-            if perm is not None:
-                x = x.index_select(1, perm)
-                info["x_is_permuted"] = True
-
+        if info.get("ratio", 1.0) >= 1.0:
             return x
 
-    return StageCompressSparsePEBlock
+        x, new_active = self.compress(x, info.get("active_idx", None), info)
+        info["active_idx"] = new_active
 
+        sr = info.get("sparse_ratio", info.get("ratio", 1.0))
+        cache = _build_stage_cache(
+            self.attn, x.shape[1], x.dtype, new_active, sr,
+            info.get("group_size", 4),
+            info.get("use_cls_token", False),
+            x.device,
+        )
+        cache["_key"] = (id(new_active), x.shape[1], x.dtype, sr)
+        info["_stage_cache"] = cache
 
-StageCompressSparsePEBlock: type = None  # type: ignore[assignment]
+        perm = cache.get("perm")
+        if perm is not None:
+            x = x.index_select(1, perm)
+            info["x_is_permuted"] = True
 
-
-def _ensure_block_classes():
-    global StageCompressSparsePEBlock
-    if StageCompressSparsePEBlock is None:
-        StageCompressSparsePEBlock = _make_StageCompressSparsePEBlock()
+        return x
 
 
 # ── Per-forward state ────────────────────────────────────────────────────
@@ -445,8 +428,6 @@ def apply_stage_compress_sparse(model: nn.Module,
 
     Returns the number of compression points wired up.
     """
-    from core.vision_encoder.pe import SelfAttention
-
     transformer = _ps._find_vision_transformer(model)
     if transformer is None:
         raise RuntimeError("Could not locate the PE vision Transformer in `model`.")

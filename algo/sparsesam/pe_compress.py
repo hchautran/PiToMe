@@ -13,12 +13,10 @@ import torch.nn as nn
 
 from .z_utils import get_z_order
 from .._pe_stage import (
-    apply_stage_compress,
+    apply_stage_compress, FlashRopePEAttention, StageCompressPEBlock,
     apply_pe_flash_rope_patch, remove_pe_flash_rope_patch,
     flash_rope_attn,
-    _ensure_attn_classes, _ensure_block_classes,
 )
-from .. import _pe_stage as _ps
 
 
 _GROUP_RASTER_CACHE: dict = {}
@@ -129,27 +127,11 @@ def _compress_sparsesam_core(x: torch.Tensor,
     return x_new, new_active
 
 
-def _make_SparsesamPECompressBlock():
-    _ensure_block_classes()
+class SparsesamPECompressBlock(StageCompressPEBlock):
+    """Z-group SparseSAM merge."""
 
-    class SparsesamPECompressBlock(_ps.StageCompressPEBlock):
-        """Z-group SparseSAM merge."""
-
-        def compress(self, x, active_idx, info):
-            return _compress_sparsesam_core(x, active_idx, info)
-
-    return SparsesamPECompressBlock
-
-
-SparsesamPECompressBlock: type = None  # type: ignore[assignment]
-
-
-def _ensure_classes():
-    global SparsesamPECompressBlock
-    _ensure_attn_classes()
-    _ensure_block_classes()
-    if SparsesamPECompressBlock is None:
-        SparsesamPECompressBlock = _make_SparsesamPECompressBlock()
+    def compress(self, x, active_idx, info):
+        return _compress_sparsesam_core(x, active_idx, info)
 
 
 def apply_pe_sparsesam_patch(model: nn.Module,
@@ -163,7 +145,6 @@ def apply_pe_sparsesam_patch(model: nn.Module,
     assert 0 < ratio <= 1.0
     assert num_stages >= 1
     assert group_size >= 1
-    _ensure_classes()
 
     info = {
         "ratio": ratio,
@@ -173,7 +154,7 @@ def apply_pe_sparsesam_patch(model: nn.Module,
     return apply_stage_compress(
         model,
         compress_block_class=SparsesamPECompressBlock,
-        attn_class=_ps.FlashRopePEAttention,
+        attn_class=FlashRopePEAttention,
         info=info,
         num_stages=num_stages,
         use_flash_rope=use_flash_rope,
@@ -183,8 +164,7 @@ def apply_pe_sparsesam_patch(model: nn.Module,
 
 
 def get_classes() -> Tuple[type, type]:
-    _ensure_classes()
-    return SparsesamPECompressBlock, _ps.FlashRopePEAttention
+    return SparsesamPECompressBlock, FlashRopePEAttention
 
 
 def remove_pe_sparsesam_patch(model: nn.Module) -> int:
@@ -201,6 +181,6 @@ __all__ = [
     "apply_pe_sparse_patch", "remove_pe_sparse_patch",
     "apply_pe_flash_rope_patch", "remove_pe_flash_rope_patch",
     "flash_rope_attn",
-    "_compress_sparsesam_core",   # reused by pe_compress_sparse.py
+    "_compress_sparsesam_core",
     "get_classes",
 ]

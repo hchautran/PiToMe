@@ -138,18 +138,6 @@ def _kw_compress(args, ratio):
     )
 
 
-def _kw_compress_with_sparse(args, ratio):
-    """sparsesam_sparse: stage compression + cute block-sparse mask."""
-    cab = getattr(args, "compress_at_blocks", None)
-    return dict(
-        ratio=float(ratio if ratio is not None else args.ratio[0]),
-        num_stages=int(args.num_stages),
-        group_size=int(args.group_size),
-        sparse_ratio=getattr(args, "sparse_ratio", None),
-        compress_at_blocks=list(cab) if cab else None,
-    )
-
-
 def _kw_partial_basic(args, ratio):
     """tome_partial / gradtome_partial: full Q + merged K/V + merge MLP."""
     return dict(
@@ -226,20 +214,6 @@ def _register_builtins():
         category="attention",
         description="Standalone fused FA2 + 2D-axial RoPE cute kernel. "
                     "Pure attention speedup — no token compression.",
-    ))
-
-    # ── _sparse: stage compression + cute block-sparse mask ────────────────
-    from .sparsesam.pe_compress_sparse import (
-        apply_pe_sparsesam_sparse_patch, remove_pe_sparsesam_sparse_patch,
-    )
-    register_pe(PEAlgoSpec(
-        name="sparsesam_sparse",
-        apply=apply_pe_sparsesam_sparse_patch,
-        remove=remove_pe_sparsesam_sparse_patch,
-        kwargs_from_args=_kw_compress_with_sparse,
-        category="compress",
-        description="sparsesam stage merge + post-compress cute block-sparse "
-                    "FA2+RoPE attention (banded-diagonal + keep-bar mask).",
     ))
 
     # ── _partial: full token count, K/V or MLP compression ─────────────────
