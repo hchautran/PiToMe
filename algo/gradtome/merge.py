@@ -146,9 +146,9 @@ def grad_bipartite_soft_matching(metric: torch.Tensor,
         a_idx, b_idx = generate_src_and_dst_idx(grad, sx=sx, sy=sy) # (B, T-num_dst), (B, num_dst)
 
         def split(x):
-            C = x.shape[-1]
-            src = gather(x, dim=1, index=a_idx.unsqueeze(-1).expand(B, a_idx.shape[1], C))
-            dst = gather(x, dim=1, index=b_idx.unsqueeze(-1).expand(B, b_idx.shape[1], C))
+            n, _, C = x.shape
+            src = gather(x, dim=1, index=a_idx.unsqueeze(-1).expand(n, a_idx.shape[1], C))
+            dst = gather(x, dim=1, index=b_idx.unsqueeze(-1).expand(n, b_idx.shape[1], C))
             return src, dst
 
         metric = F.normalize(metric, p=2, dim=-1)
@@ -178,18 +178,18 @@ def grad_bipartite_soft_matching(metric: torch.Tensor,
         return merged_tokens, absolute_indices
 
     def unmerge(x: torch.Tensor) -> torch.Tensor:
-        _, _, c = x.shape
+        n, _, c = x.shape
         unm_len = unm_idx.shape[1]
         unm, dst = x[..., :unm_len, :], x[..., unm_len:, :]
 
-        src = gather(dst, dim=-2, index=dst_idx.expand(B, r, c))
+        src = gather(dst, dim=-2, index=dst_idx.expand(n, r, c))
         # Combine back to the original shape
-        out = torch.zeros(B, N, c, device=x.device, dtype=x.dtype)
-        out.scatter_(dim=-2, index=b_idx.unsqueeze(-1).expand(B, b_idx.shape[1], c), src=dst)
+        out = torch.zeros(n, N, c, device=x.device, dtype=x.dtype)
+        out.scatter_(dim=-2, index=b_idx.unsqueeze(-1).expand(n, b_idx.shape[1], c), src=dst)
         out.scatter_(dim=-2,
-                     index=gather(a_idx, dim=1, index=unm_idx.squeeze(-1)).unsqueeze(-1).expand(B, unm_len, c),
+                     index=gather(a_idx, dim=1, index=unm_idx.squeeze(-1)).unsqueeze(-1).expand(n, unm_len, c),
                      src=unm)
-        out.scatter_(dim=-2, index=gather(a_idx, dim=1, index=src_idx.squeeze(-1)).unsqueeze(-1).expand(B, r, c),
+        out.scatter_(dim=-2, index=gather(a_idx, dim=1, index=src_idx.squeeze(-1)).unsqueeze(-1).expand(n, r, c),
                      src=src)
 
         return out

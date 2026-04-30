@@ -136,7 +136,10 @@ def bipartite_soft_matching(
         src = src.gather(dim=-2, index=src_idx.expand(n, r, c))
         if mode is not None:
             dst = dst.scatter_reduce(-2, dst_idx.expand(n, r, c), src, reduce=mode)
-        unm_absolute_indices = torch.gather(a_idx.expand(n, a.shape[1], 1), dim=1, index=unm_idx).squeeze(-1)
+        unm_absolute_indices = torch.gather(
+            a_idx.expand(n, a.shape[1], 1), dim=1,
+            index=unm_idx.expand(n, -1, 1),
+        ).squeeze(-1)
         # (B*num_heads, N_dst)
         dst_absolute_indices = b_idx.squeeze(-1).expand(n, -1)
         absolute_indices = torch.cat([unm_absolute_indices, dst_absolute_indices], dim=1)
